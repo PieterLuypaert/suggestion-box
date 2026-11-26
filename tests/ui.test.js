@@ -31,6 +31,8 @@ const answer = {
     { id: "h4", number: 8, title: "Rounding in totals", filed: { title: "Totals round each line instead of the sum" }, state: "filed", issue: { number: 812, url: "https://github.com/acme/shop/issues/812", closes: "Closes #812" }, board: { error: "run gh auth refresh -s project" }, fixError: { why: "the primary checkout has uncommitted work" }, age: "now", actions: ["fix"] },
     { id: "h6", number: 10, title: "Fee rounding on trials", state: "filed", issue: { number: 813, url: "u" }, fix: { branch: "fix/fee-rounding-trials", pane: "t9" }, age: "now", actions: [] },
     { id: "h7", number: 11, title: "Old cache header", state: "filed", issue: { number: 790, url: "u", closed: { at: "t" } }, age: "3d", actions: [] },
+    { id: "h8", number: 12, title: "A fix on its way", state: "filed", issue: { number: 814, url: "u" }, fix: { starting: true, at: "t" }, age: "now", actions: [] },
+    { id: "h9", number: 13, title: "A fix that never answered", state: "filed", issue: { number: 815, url: "u" }, fix: { starting: true, at: "t", isStale: true }, age: "1h", actions: ["fix"] },
   ],
   counts: { open: 2, toVerify: 1 },
 };

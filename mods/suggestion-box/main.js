@@ -12,8 +12,8 @@ import { SECTIONS } from "./notes.js";
 import { button, panel } from "./panel.js";
 import { buttonsFor, isWatched } from "./rules.js";
 
-// A filed note whose issue may still close: the watch looks for that too.
-const hasOpenIssue = (note) => note.state === "filed" && Boolean(note.issue) && !note.issue.closed;
+// A filed note whose issue may still close, or open again: the watch looks for that too.
+const hasOpenIssue = (note) => note.state === "filed" && Boolean(note.issue);
 
 const BLOCK = "suggestion-box";
 const MOD = "suggestion-box";
@@ -31,6 +31,8 @@ const CHECK_MS = 240000;
 // A lookup runs up to eight gh calls and a filing up to fourteen, each stopped after 20 s (GH_MS in
 // cli/file.js). A filing the panel gives up on is found again by the next Create issue.
 const FILE_MS = 330000;
+// Fix in new tab: issues branch (60 s at most), then issues launch (240 s at most).
+const FIX_MS = 330000;
 const LOOKUP_MS = 200000;
 const SHOWN_MS = 1000;
 // A fetch (20 s at most) and, per claim, git and gh for its PR (20 s at most).
@@ -253,8 +255,10 @@ export default class SuggestionBox extends View {
     if (!answer?.project || !history.some((note) => isWatched(note) || hasOpenIssue(note)) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
     this.watchedAt = Date.now();
     const folder = this.here().folder;
-    // A fetch, then per watched fix gh and git ls-remote, each 20 s at most.
-    const timeout = PROOFS_MS + (answer.history ?? []).filter(isWatched).length * 45000;
+    // One question per repo about its filed issues, a fetch, then per watched fix gh and git
+    // ls-remote, each 20 s at most.
+    const repos = new Set(history.filter(hasOpenIssue).map((note) => note.issue.repo)).size;
+    const timeout = PROOFS_MS + repos * 25000 + history.filter(isWatched).length * 45000;
     cx.spawn(async (cx) => {
       try {
         const result = await box(this.node, this.boxJs, ["watch", folder], timeout);
@@ -462,7 +466,7 @@ export default class SuggestionBox extends View {
     const folder = this.here().folder;
     cx.spawn(async (cx) => {
       try {
-        const answer = await box(this.node, this.boxJs, ["fix", folder, note.id, space], CHECK_MS);
+        const answer = await box(this.node, this.boxJs, ["fix", folder, note.id, space], FIX_MS);
         this.error = "";
         this.say(cx, `Fixing note ${note.number} in ${answer.branch}: its tab is open in this space.`);
       } catch (error) {
