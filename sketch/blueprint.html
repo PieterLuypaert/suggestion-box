@@ -1,0 +1,1606 @@
+<title>Suggestion Box</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Allerta+Stencil&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one column. Hero = title + a working mock of the box as a panel in a Herdr window. Then
+     the plan in its own order: parts, decisions, route, each part, data, install, build, review. */
+  :root {
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --raised: #f5f6f8;
+    --chrome: #e4e7ec;
+    --term: #fafbfc;
+    --term-fg: #2a2f37;
+    --fg: #1b1f26;
+    --muted: #59616d;
+    --dim: #8a919c;
+    --border: #d5d9df;
+    --accent: #2a62d4;
+    --accent-fg: #ffffff;
+    --crate: #a8640a;
+    --crate-soft: #f6ead8;
+    --ok: #1f7a45;
+    --ok-soft: #e2f2e8;
+    --del-soft: #fbe5e8;
+    --alarm: #c42639;
+    --code-bg: #f1f3f6;
+    --shadow: 0 14px 36px rgba(24, 34, 54, 0.16), 0 2px 6px rgba(24, 34, 54, 0.08);
+    --f-stencil: "Allerta Stencil", "Arial Narrow", Impact, sans-serif;
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101318; --surface: #171b21; --raised: #1d2229; --chrome: #14181d; --term: #0d1014; --term-fg: #d4d9df;
+      --fg: #e5e8ec; --muted: #9ca4af; --dim: #6c747f; --border: #2a3038; --accent: #7ea4f6; --accent-fg: #0c1220;
+      --crate: #e3a64a; --crate-soft: #2c2416; --ok: #55c487; --ok-soft: #16271d; --del-soft: #2d1519; --alarm: #ff7381; --code-bg: #1a1f26;
+      --shadow: 0 14px 36px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101318; --surface: #171b21; --raised: #1d2229; --chrome: #14181d; --term: #0d1014; --term-fg: #d4d9df;
+    --fg: #e5e8ec; --muted: #9ca4af; --dim: #6c747f; --border: #2a3038; --accent: #7ea4f6; --accent-fg: #0c1220;
+    --crate: #e3a64a; --crate-soft: #2c2416; --ok: #55c487; --ok-soft: #16271d; --del-soft: #2d1519; --alarm: #ff7381; --code-bg: #1a1f26;
+    --shadow: 0 14px 36px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.55; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 64px; display: flex; flex-direction: column; gap: 56px; }
+  h1, h2, h3, h4 { text-wrap: balance; margin: 0; }
+  h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-size: 16px; font-weight: 600; }
+  p { margin: 0; max-width: 66ch; }
+  code, .mono { font-family: var(--f-mono); font-size: 0.9em; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--crate); }
+  section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 16px; }
+  .section-head { display: flex; flex-direction: column; gap: 6px; }
+  .section-head p { color: var(--muted); }
+  .sub { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; scroll-margin-top: 16px; }
+
+  /* Hero */
+  .hero { display: flex; flex-direction: column; gap: 28px; }
+  .hero-text { display: flex; flex-direction: column; gap: 12px; }
+  .stencil { font-family: var(--f-stencil); font-weight: 400; font-size: clamp(38px, 7vw, 64px); line-height: 1; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg); }
+  .lede { font-size: 18px; color: var(--muted); max-width: 64ch; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-family: var(--f-mono); font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+  .chip.crate { border-color: var(--crate); color: var(--crate); background: var(--crate-soft); }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+  nav.toc a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--dim); }
+  nav.toc a:hover { color: var(--fg); }
+
+  /* Herdr window mock */
+  .app { background: var(--term); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .titlebar { display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 34px; background: var(--chrome); border-bottom: 1px solid var(--border); }
+  .lights { display: flex; gap: 6px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; background: var(--border); display: block; }
+  .tabs { display: flex; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
+  .tab { font-size: 12px; color: var(--muted); padding: 5px 10px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab.on { background: var(--surface); color: var(--fg); }
+  .tab .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-right: 6px; vertical-align: 1px; }
+  .barbtns { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+  .barbtn { font: 500 12px var(--f-body); color: var(--muted); background: transparent; border: 0; padding: 5px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .barbtn svg { width: 14px; height: 14px; }
+  button.barbtn { cursor: pointer; }
+  button.barbtn:hover, button.barbtn[aria-expanded="true"] { background: var(--surface); color: var(--fg); }
+  .count { font-family: var(--f-mono); font-size: 11px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--crate); color: var(--accent-fg); text-align: center; line-height: 17px; }
+  .count[hidden] { display: none; }
+  .count.verify { background: var(--ok); }
+  .switch { display: inline-flex; align-items: center; gap: 6px; font: 500 11.5px var(--f-body); color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; }
+  .switch .track { width: 26px; height: 15px; border-radius: 999px; background: var(--ok); position: relative; transition: background 0.15s; }
+  .switch .track::after { content: ""; position: absolute; top: 2px; left: 13px; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); transition: left 0.15s; }
+  .switch[aria-checked="false"] .track { background: var(--border); }
+  .switch[aria-checked="false"] .track::after { left: 2px; }
+  .head-right { display: flex; align-items: center; gap: 10px; }
+  .off-banner { font-size: 12px; color: var(--muted); background: var(--raised); border-bottom: 1px solid var(--border); padding: 6px 14px; }
+  .ico { position: relative; display: inline-flex; }
+  .ico.slash::after { content: ""; position: absolute; left: -1px; right: -1px; top: 50%; height: 1.5px; background: currentColor; transform: rotate(-35deg); }
+  .drop-sum { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .notice { font-size: 12.5px; color: var(--fg); background: var(--crate-soft); border: 1px solid var(--crate); border-radius: 8px; padding: 7px 10px; margin: 4px 2px; }
+  .off-why { font-size: 11.5px; color: var(--crate); text-align: right; }
+  @keyframes wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-9deg); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(3deg); } }
+  .wiggle { animation: wiggle 0.7s ease-in-out 1; }
+  @media (prefers-reduced-motion: reduce) { .wiggle { animation: none; } }
+  .hide-narrow { display: inline-flex; }
+  @media (max-width: 560px) { .hide-narrow { display: none; } }
+
+  .app-body { display: flex; height: 680px; }
+  .term { flex: 1; min-width: 0; overflow: hidden; font-family: var(--f-mono); font-size: 12.5px; color: var(--term-fg); padding: 14px 16px; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+  .term .dim { color: var(--dim); }
+  .term .acc { color: var(--accent); }
+  .term .crate { color: var(--crate); }
+
+  /* The panel: a full-height column on the right, like Quarterdeck and Chartroom */
+  .drop { width: 400px; flex-shrink: 0; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .drop[hidden] { display: none; }
+  @media (max-width: 760px) {
+    .app-body.panel-open .term { display: none; }
+    .drop { width: 100%; border-left: 0; }
+  }
+  .drop-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; gap: 8px; }
+  .drop > .drop-head { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .drop-title { font-family: var(--f-stencil); font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .drop-title span { color: var(--muted); }
+  .drop-list { overflow-y: auto; padding: 4px 6px 6px; display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; }
+  .group { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); padding: 10px 10px 4px; }
+  .note { border-radius: 8px; padding: 9px 8px 9px 10px; display: flex; flex-direction: column; gap: 5px; }
+  .note:hover { background: var(--raised); }
+  .note.fresh { background: var(--crate-soft); }
+  .note.verify { background: var(--raised); border: 1px solid var(--border); margin: 2px 0; }
+  .note-text { font-weight: 500; font-size: 14px; line-height: 1.35; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; background: none; border: 0; padding: 0; color: var(--fg); text-align: left; font-family: var(--f-body); }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--muted); align-items: center; }
+  .meta .link { font-family: var(--f-mono); color: var(--accent); }
+  .meta .spot { font-family: var(--f-mono); color: var(--crate); }
+  .tag-chip { font-family: var(--f-mono); color: var(--crate); border: 1px dashed var(--crate); border-radius: 999px; padding: 0 6px; }
+  .secs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; font-size: 13px; margin: 2px 0; border-left: 2px solid var(--border); padding-left: 8px; }
+  .secs dt { color: var(--dim); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; padding-top: 2px; }
+  .secs dd { margin: 0; color: var(--muted); }
+  .why { font-size: 13px; color: var(--muted); border-left: 2px solid var(--border); padding-left: 8px; }
+  .actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .btn { font: 500 12px var(--f-body); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); cursor: pointer; }
+  .btn:hover { background: var(--raised); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+  .btn.quiet { border-color: transparent; color: var(--muted); }
+  .undo { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 8px 10px; border-radius: 8px; background: var(--raised); }
+  .filed { color: var(--ok); font-weight: 500; font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--ok-soft); }
+  .drop-foot { border-top: 1px solid var(--border); padding: 8px 14px; display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .drop-foot button { background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; padding: 0; text-align: left; }
+  .drop-foot button:hover { color: var(--fg); }
+  .empty { padding: 18px 14px 22px; font-size: 13px; color: var(--muted); }
+
+  /* Proofs in To verify */
+  .proofs { display: flex; flex-direction: column; gap: 7px; margin: 4px 0; }
+  .proof { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: start; font-size: 12.5px; color: var(--muted); }
+  .proof b { color: var(--fg); font-weight: 500; }
+  .pn { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); font-family: var(--f-mono); font-size: 10.5px; display: grid; place-items: center; color: var(--muted); }
+  .diff { margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; font-family: var(--f-mono); font-size: 11.5px; background: var(--term); }
+  .dl { white-space: pre; padding: 0 8px; color: var(--term-fg); }
+  .dl.add { background: var(--ok-soft); }
+  .dl.del { background: var(--del-soft); }
+
+  /* Editor and check labels */
+  .editor { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 10px; }
+  .editor label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-top: 4px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .editor label .hint { text-transform: none; letter-spacing: 0; color: var(--crate); font-size: 11px; }
+  .field { font: 13px var(--f-body); color: var(--fg); background: var(--term); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+  .field.need { border-color: var(--crate); border-style: dashed; }
+  textarea.field { min-height: 48px; resize: vertical; line-height: 1.45; }
+  div.field { line-height: 1.45; }
+  .where { font-family: var(--f-mono); font-size: 11.5px; color: var(--dim); }
+  .target { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .target b { font-weight: 500; color: var(--fg); }
+  .label-chip { font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--crate-soft); color: var(--crate); border: 1px solid var(--crate); }
+  .board-chip { font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--raised); color: var(--fg); border: 1px solid var(--border); }
+  .similar { font-size: 12px; color: var(--muted); }
+  .chk { font-family: var(--f-mono); font-size: 10.5px; text-transform: none; letter-spacing: 0; padding: 0 7px; border-radius: 999px; border: 1px solid currentColor; line-height: 16px; white-space: nowrap; }
+  .chk.wait { color: var(--dim); }
+  .chk.checked { color: var(--ok); }
+  .chk.corrected { color: var(--accent); }
+  .chk.unsure { color: var(--crate); }
+  .chk-note { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+  .banner { font-size: 12.5px; padding: 8px 10px; border-radius: 6px; background: var(--crate-soft); color: var(--fg); border: 1px solid var(--crate); display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .try { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  .try .btn { font-size: 13px; padding: 6px 12px; }
+
+  /* Generic blocks */
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .grid > * { min-width: 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .card .tag { font-family: var(--f-mono); font-size: 12px; color: var(--crate); }
+  .card p { font-size: 14px; color: var(--muted); }
+  .card .loc { font-family: var(--f-mono); font-size: 12px; color: var(--dim); margin-top: auto; }
+
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); font-weight: 500; background: var(--raised); }
+  td:first-child { font-weight: 500; }
+  td.mono, td code { font-family: var(--f-mono); font-size: 12.5px; }
+  td.num { font-family: var(--f-mono); color: var(--crate); font-weight: 500; }
+  .exit { font-family: var(--f-mono); }
+
+  pre { margin: 0; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; overflow-x: auto; color: var(--fg); }
+  pre .c { color: var(--dim); }
+  pre .k { color: var(--crate); }
+
+  .route { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); counter-reset: step; }
+  .route li { counter-increment: step; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; min-width: 0; }
+  .route li::before { content: counter(step); font-family: var(--f-stencil); font-size: 22px; color: var(--crate); line-height: 1; }
+  .route li .who { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+
+  .two { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+  .two > * { min-width: 0; }
+
+  .states { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .state { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .state .bar { background: var(--chrome); border-radius: 6px; padding: 6px; display: flex; justify-content: flex-end; }
+  .state .barbtn.dimmed { opacity: 0.45; }
+  .state p { font-size: 13px; color: var(--muted); }
+
+  .mini { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+
+  .issue { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .issue h3 { font-size: 18px; }
+  .issue h3 span { color: var(--dim); font-weight: 400; }
+  .issue .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  .open-pill { background: var(--ok); color: var(--accent-fg); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+  .issue .body { border-top: 1px solid var(--border); padding-top: 12px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .issue h4 { font-size: 15px; font-weight: 600; padding-bottom: 4px; border-bottom: 1px solid var(--border); margin-top: 6px; }
+  .issue hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0 0; width: 100%; }
+  .snippet { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; font-family: var(--f-mono); font-size: 12px; }
+  .snippet .file { background: var(--raised); padding: 5px 10px; color: var(--accent); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .snippet .lines { display: grid; grid-template-columns: max-content minmax(0, 1fr); background: var(--term); overflow-x: auto; }
+  .snippet .ln { color: var(--dim); padding: 0 10px; text-align: right; user-select: none; }
+  .snippet .lc { padding-right: 10px; white-space: pre; color: var(--term-fg); }
+  .snippet .hl { background: var(--crate-soft); }
+
+  ol.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+  ol.steps li { padding-left: 4px; }
+  ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+  .callout { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+  .callout .filed { align-self: flex-start; }
+
+  .prs { display: flex; flex-direction: column; gap: 14px; }
+  .pr { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+  @media (max-width: 720px) { .pr { grid-template-columns: minmax(0, 1fr); } }
+  .pr-side { display: flex; flex-direction: column; gap: 8px; }
+  .pr-ver { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .pr-ver .n { font-family: var(--f-stencil); font-size: 20px; color: var(--crate); }
+  .pr-ver .v { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+  .pr-title { font-family: var(--f-mono); font-size: 14px; font-weight: 500; }
+  .pr-files { font-family: var(--f-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .pr-lines { font-family: var(--f-mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .pr-note { font-size: 13px; color: var(--muted); }
+  .done { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+  .done li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; }
+  .done li::before { content: ""; width: 12px; height: 12px; border: 1.5px solid var(--dim); border-radius: 3px; margin-top: 4px; }
+  .done-head { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+  .total { font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .q { background: var(--crate-soft); border: 1px solid var(--crate); border-radius: 10px; padding: 16px 18px; }
+  .q ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+
+  footer { font-size: 13px; color: var(--dim); border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="hero-text">
+      <span class="eyebrow">Herdr app mod · blueprint</span>
+      <h1 class="stencil">Suggestion box</h1>
+      <p class="lede">Agents may not fix unrelated code mid-ticket, so what they spot gets lost. With this, an agent drops a note in the project's box and carries on. Your own Claude checks each note against the code before you file it as a GitHub issue on the project's board, in one standard layout. A note an agent claims as solved waits until you have seen the proof. One more click opens an issue as a ticket tab where Claude fixes it.</p>
+      <div class="chips">
+        <span class="chip crate">Plan 16</span>
+        <span class="chip">26 Nov 2026</span>
+        <span class="chip">Reviewed twice</span>
+        <span class="chip">One open question</span>
+        <span class="chip">Nothing built yet</span>
+        <span class="chip">7 PRs · ~3,360 lines</span>
+      </div>
+      <nav class="toc" aria-label="Sections">
+        <a href="#parts">Parts</a><a href="#decisions">Decisions</a><a href="#route">Route of a note</a><a href="#command">The command</a><a href="#agents">Agent instructions</a><a href="#box">The box</a><a href="#solved">Solved and proven</a><a href="#states">Note states</a><a href="#filing">Filing</a><a href="#check">The check</a><a href="#target">Where it goes</a><a href="#fixing">Fixing</a><a href="#data">Data</a><a href="#install">Install</a><a href="#build">Build order</a><a href="#review">Review</a><a href="#questions">Questions</a>
+      </nav>
+    </div>
+
+    <div class="app" id="app">
+      <div class="titlebar">
+        <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="tabs">
+          <span class="tab on"><span class="dot"></span>#8504 group records</span>
+          <span class="tab hide-narrow">#8511 groups</span>
+          <span class="tab hide-narrow">main</span>
+        </div>
+        <div class="barbtns">
+          <span class="barbtn hide-narrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3h12v10H2z"/><path d="M2 7h12M8 3v10"/></svg>Chartroom</span>
+          <span class="barbtn hide-narrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M5 13c0-4 2-9 6-9 2 0 3 1 3 3-2 0-3 1-3 3l-3 3z"/></svg>Parrot</span>
+          <span class="barbtn hide-narrow"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3h10v10H3z"/><path d="M3 6.5h10M6.5 6.5V13"/></svg>Quarterdeck</span>
+          <button class="barbtn" id="boxBtn" aria-expanded="true" aria-controls="drop" title="Suggestion box (cmd-alt-s)">
+            <span class="ico" id="boxIcon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg></span>Box<span class="count" id="boxCount">2</span><span class="count verify" id="boxVerify" hidden></span>
+          </button>
+        </div>
+      </div>
+      <div class="app-body panel-open" id="appBody">
+        <div class="term" aria-hidden="true"><span class="dim">~/.herdr/worktrees/shop/feat-8504-group-records</span>
+<span class="acc">❯</span> claude
+<span class="dim">⏺ Reading src/groups/records.ts</span>
+<span class="dim">⏺ Running the tests for groups</span>
+<span class="dim">⏺</span> Bash(suggest list)
+  <span class="dim">6  1h  groups.ts:118  N+1 query in the group list  (#8511)</span>
+<span class="dim">⏺</span> Bash(suggest &lt;&lt;'EOF'
+        title: formatDate throws on a null date
+        at: src/invoices.ts:42
+        problem: Invoices without a due date crash the PDF export.
+        evidence: A fixture with `dueDate: null` made `exportPdf` throw a TypeError.
+        current: `formatDate(null)` throws, so the export answers with a 500.
+        desired: `formatDate(null)` returns a dash and the export works.
+        EOF)
+  <span class="crate">Dropped in shop's suggestion box as note 7 (2 open). Carry on with your task.</span>
+<span class="dim">⏺ Back to the group records: adding the pagination test</span></div>
+        <aside class="drop" id="drop" aria-label="Suggestion box for shop">
+          <div class="drop-head">
+            <span class="drop-title">Suggestion box <span>· shop</span></span>
+            <span class="head-right"><span class="drop-sum" id="dropSum">2 open</span><button class="switch" id="collect" role="switch" aria-checked="true" title="Collecting notes for shop">Collecting<span class="track"></span></button><span class="drop-sum" title="Settings: collecting for all projects">⚙</span></span>
+          </div>
+          <div class="off-banner" id="offBanner" hidden>Collecting off for shop: new sessions don't hear of the box; a running agent that tries is told to carry on.</div>
+          <div class="drop-list" id="dropList"></div>
+          <div class="drop-foot" id="dropFoot"></div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="try">
+      <span>Try it: this mock works.</span>
+      <button class="btn" id="simulate">Drop a note as an agent</button>
+      <button class="btn" id="claimAgent">Claim a solve as an agent</button>
+      <button class="btn quiet" id="reset">Reset</button>
+      <span>Turn Collecting off in the panel's header, then drop a note: the agent is told to carry on. Close the panel with its button to see the button wiggle on a drop. File issue runs the check; on the second note it finds the problem gone, so Create issue stays off. Mark solved and an agent's claim both land in To verify, where File issue no longer exists.</span>
+    </div>
+  </header>
+
+  <section id="parts">
+    <div class="section-head">
+      <span class="eyebrow">What we build</span>
+      <h2>Five parts</h2>
+      <p>Two for the agents, three for you. Each part has its own section below.</p>
+    </div>
+    <div class="grid">
+      <div class="card"><span class="tag">A · for agents</span><h3>The suggest command</h3><p>Drops a note with a title and four sections in the current project's box, lists them, and claims one solved. It fills in the project, branch, ticket and commit itself.</p><span class="loc">bin/suggest</span></div>
+      <div class="card"><span class="tag">B · for agents</span><h3>Agent instructions</h3><p>Tells an agent's main session when to drop a note, how to write it, and how to claim a solve, only while collecting is on for its project.</p><span class="loc">a session-start hook + settings.json</span></div>
+      <div class="card"><span class="tag">C · for you</span><h3>The box</h3><p>A button in the tab bar with the project's count, and a panel of its notes on the right, like Quarterdeck. Claimed solves wait there for your proof.</p><span class="loc">mods/suggestion-box/</span></div>
+      <div class="card"><span class="tag">D · for you</span><h3>Filing</h3><p>Your own Claude checks the four sections against the code. You edit, then create the issue in the project's repo, on its board, with its triage label.</p><span class="loc">mods/suggestion-box/</span></div>
+      <div class="card"><span class="tag">E · for you</span><h3>Fixing</h3><p>Opens a filed issue as a ticket tab exactly like your parallel tickets, with Claude running <code>/ship-issue</code>.</p><span class="loc">mods/suggestion-box/ + parallel-tickets</span></div>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <div class="section-head">
+      <span class="eyebrow">Settled</span>
+      <h2>Decisions</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Topic</th><th>Decision</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Name</td><td>Suggestion box, command <code>suggest</code></td><td>Says what it is; <code>suggest</code> is free on the PATH</td></tr>
+          <tr><td>Key</td><td><code>cmd-alt-s</code> opens and closes the panel</td><td>Free today; your default</td></tr>
+          <tr><td>Repo</td><td>Public, <code>PieterLuypaert/suggestion-box</code>, like parrot; created when PR 1 is ready, that push on your ok</td><td>Your default; examples are made up, so nothing of work leaks</td></tr>
+          <tr><td>Final report</td><td>Agents list the notes they dropped and the ones they claimed solved</td><td>Your default</td></tr>
+          <tr><td>Fix stack</td><td>The launcher's default: a full stack in repos with <code>wt</code></td><td>Your default; the fix can run its tests</td></tr>
+          <tr><td>After Fix</td><td>Stay in the box; <code>Fixing in …</code> jumps to the tab when you want</td><td>Your default; no tab switch you did not ask for</td></tr>
+          <tr><td>Scope</td><td>One box per project. It follows the focused space, and ticket worktrees share their repo's box</td><td>Your call: a clearer UI than one box holding every repo</td></tr>
+          <tr><td>Where it opens</td><td>A panel on the right, like Quarterdeck and Chartroom: a full-height column, opened and closed by its button or <code>cmd-alt-s</code></td><td>Your call: room for the editor and the check, and it stays open beside your work</td></tr>
+          <tr><td>One panel at a time</td><td>Whichever right-hand panel opened last stays; the others are hidden (<code>layout.hide</code>). The box's button watches the layout, so it works for every key and button</td><td>Side by side, box and Quarterdeck leave the tabs and panes about 460 px on a 1512-pt laptop, all three about 4 px</td></tr>
+          <tr><td>How agents pass text</td><td>On stdin, in a quoted heredoc (<code>&lt;&lt;'EOF'</code>), one <code>key: value</code> per field</td><td>In double-quoted arguments an agent's Markdown backticks run as shell commands</td></tr>
+          <tr><td>Who drops notes</td><td>Only an agent's main session on a task; subagents, reviewers and read-only tasks report to whoever asked them</td><td>Keeps the box from flooding with every review finding</td></tr>
+          <tr><td>Issue text</td><td>One standard: Problem, Evidence, Current situation, Desired situation</td><td>Your call: every issue reads the same way for the team</td></tr>
+          <tr><td>Who writes the sections</td><td>The agent, when it drops the note; all four are required</td><td>It knows the context best at that moment, so they are always filled in</td></tr>
+          <tr><td>Correct sections</td><td>When you open File issue, your own Claude checks the four sections against the code (read-only) and corrects what is wrong: Checked, Corrected or Unsure per section</td><td>Your call: filled in automatically, but correct</td></tr>
+          <tr><td>Check model</td><td>Sonnet</td><td>The check's whole job is to be right; it runs once per note you file, and you wait on it anyway</td></tr>
+          <tr><td>Filing</td><td>Edit, then create</td><td>You shape every issue the team sees</td></tr>
+          <tr><td>Complete issues only</td><td>The command refuses a note without all four sections; Create issue needs all four and a finished check</td><td>What reaches GitHub is always complete and checked</td></tr>
+          <tr><td>Where an issue goes</td><td>Read from the project's own <code>.ai-tooling/config.yml</code>: repo, triage label, board and its first column</td><td>The same file and the same way as the team's skills, so it lands where the team expects</td></tr>
+          <tr><td>Solved along the way</td><td>The agent claims a note solved when its own task fixes it after all; the box flags notes whose code changed; the check spots it before filing</td><td>A note never lingers, or becomes an issue for work that is already done</td></tr>
+          <tr><td>A solved note is never filed</td><td>Each note state allows a fixed set of actions. A note claimed or confirmed solved has no File issue, and when the check finds the problem gone, Create issue is off</td><td>Your call: filing done work makes noise for the team</td></tr>
+          <tr><td>Proof before it leaves</td><td>A claimed solve waits in To verify until you confirm it, with three proofs: the change itself, an independent check by your own Claude, and the fix landed in main</td><td>Your call: "an agent said so" is not proof; you see it before a note leaves the box</td></tr>
+          <tr><td>Fixing</td><td>Fix in new tab runs parallel-tickets' own <code>issues launch</code></td><td>The ticket starts exactly like your parallel tickets: a fresh branch, a hagent tab, plan first, no push, and it shows in <code>/parallel-tickets status</code></td></tr>
+          <tr><td>New note</td><td>Badge only: with the panel closed the count goes up and the button wiggles once; in an open panel the note appears at the top</td><td>Agents never pull you out of your flow</td></tr>
+          <tr><td>Collecting on or off</td><td>A switch per project in the panel's header, and one for all projects in its settings. Off: new sessions get no instructions, so agents work as before the mod; a running agent that still tries gets a calm answer; listing, claiming, checking and filing keep working. Only the box can flip it: there is no <code>suggest off</code></td><td>Your call: some projects and busy days need quiet; an agent must never be able to silence the box</td></tr>
+          <tr><td>Who files</td><td>Only you, from the box</td><td>The command only drops, lists and claims notes solved, all on this machine, so it is safe to allow without a prompt</td></tr>
+          <tr><td>Teaching agents</td><td>A Claude Code session-start hook adds the instructions to a session only when collecting is on for its project, and only in a git repo</td><td>Your call: with collecting off, a new session never hears of the box, exactly as before it was installed. A fixed CLAUDE.md block could not be switched off</td></tr>
+          <tr><td>Storage</td><td>One JSON file per note, on this machine. The command never rewrites a note: a drop creates a file, a repeat or claim adds an event file; only the box rewrites</td><td>Many agents can drop at once without clashing, no agent write can undo a filing, and there is no lock to go stale</td></tr>
+          <tr><td>Claude calls</td><td>One per note you check and one per solve you verify, on your own subscription, read-only; none while notes sit in the box, and a re-check only when the file's code changed</td><td>Correctness is worth the call; notes you bin cost nothing</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="route">
+    <div class="section-head">
+      <span class="eyebrow">End to end</span>
+      <h2>The route of a note</h2>
+    </div>
+    <ol class="route">
+      <li><span class="who">Agent</span>Working on ticket #8504 in a <code>shop</code> worktree, it sees a problem outside its ticket and runs <code>suggest list</code> to see if it is noted already.</li>
+      <li><span class="who">Agent</span>Runs <code>suggest</code> with the title, <code>src/invoices.ts:42</code> and the four sections on stdin.</li>
+      <li><span class="who">Command</span>Writes one note under the project's lock and answers <code>Dropped … as note 7 (3 open). Carry on.</code></li>
+      <li><span class="who">Box</span>In the Herdr app, shop's button goes from 2 to 3 and wiggles once.</li>
+      <li><span class="who">You</span>Click it. The panel opens on the right and lists shop's notes.</li>
+      <li><span class="who">You + your Claude</span>File issue: your Claude checks the four sections against the code and corrects what is off. You read them and press Create issue.</li>
+      <li><span class="who">GitHub</span>The issue lands in <code>acme/shop</code> with the triage label, on the board in Backlog. The note shows <code>Filed #812</code>.</li>
+      <li><span class="who">You, optional</span>Fix in new tab: the ticket starts like your parallel tickets, with Claude running <code>/ship-issue 812</code>. It posts its plan and waits for your go.</li>
+    </ol>
+  </section>
+
+  <section id="command">
+    <div class="section-head">
+      <span class="eyebrow">Part A</span>
+      <h2>The suggest command</h2>
+      <p>The text comes on stdin, in a quoted heredoc, one <code>key: value</code> per field. The shell runs nothing inside a quoted heredoc, so backticks, quotes and <code>$</code> in code are safe. A line starting with two spaces continues the field above. For a quick note by hand, the same fields work as flags.</p>
+    </div>
+    <pre><span class="c"># drop a note</span>
+<span class="k">suggest</span> &lt;&lt;'EOF'
+title: formatDate throws on a null date
+at: src/invoices.ts:42
+problem: Invoices without a due date crash the PDF export.
+evidence: A fixture with `dueDate: null` made `exportPdf` throw
+  `TypeError: Cannot read properties of null (reading 'getTime')`.
+current: `formatDate(null)` throws, so the export answers with a 500.
+desired: `formatDate(null)` returns a dash and the export works.
+EOF
+
+<span class="c"># the project's notes that are open or to verify</span>
+<span class="k">suggest</span> list
+
+<span class="c"># the agent's own task fixed a note after all</span>
+<span class="k">suggest</span> solved 7 &lt;&lt;'EOF'
+how: formatDate returns a dash for null now
+proof: invoices.test.ts: formats a missing due date as a dash
+EOF</pre>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Case</th><th>Output</th><th>Exit</th></tr></thead>
+        <tbody>
+          <tr><td>Dropped</td><td class="mono">Dropped in shop's suggestion box as note 7 (3 open). Carry on with your task.</td><td class="exit">0</td></tr>
+          <tr><td>Collecting is off</td><td class="mono">The suggestion box is off for shop. Do not drop notes for the rest of this task; name findings in your final report instead.</td><td class="exit">0</td></tr>
+          <tr><td>The same note is in the box</td><td class="mono">Already in shop's box as note 7 (spotted 2×). Carry on with your task.</td><td class="exit">0</td></tr>
+          <tr><td>The same note was filed or binned</td><td class="mono">Already filed as #812 (note 7, spotted 3×). Carry on with your task. · Already binned by the user (note 7). Carry on with your task.</td><td class="exit">0</td></tr>
+          <tr><td>The same note waits in To verify</td><td class="mono">Note 7 is claimed solved and waits for the user to verify. Carry on with your task.</td><td class="exit">0</td></tr>
+          <tr><td>The same note was confirmed solved</td><td class="mono">Note 7 was solved on feat/…; reopened it, as you see it again.</td><td class="exit">0</td></tr>
+          <tr><td>A section missing or empty</td><td class="mono">suggest: missing current, desired; the issue needs all four sections</td><td class="exit">2</td></tr>
+          <tr><td>File not found</td><td class="mono">The drop line, plus: warning: src/invoce.ts is not in the repo; kept as written</td><td class="exit">0</td></tr>
+          <tr><td>Not in a git repo</td><td class="mono">suggest: not in a git repo; the box is per project</td><td class="exit">2</td></tr>
+          <tr><td>Title too long or several lines</td><td class="mono">suggest: keep the title to one line of at most 100 characters; put the rest in the sections</td><td class="exit">2</td></tr>
+          <tr><td>Section too long</td><td class="mono">suggest: evidence is over 500 characters; keep it to the essentials</td><td class="exit">2</td></tr>
+          <tr><td>Claimed solved</td><td class="mono">Note 7 claimed solved on feat/8504-group-records (abc1234); it waits in the box for the user to verify.</td><td class="exit">0</td></tr>
+          <tr><td>how or proof missing</td><td class="mono">suggest: say what fixed it (how) and the test or check that shows it (proof)</td><td class="exit">2</td></tr>
+          <tr><td>No such note</td><td class="mono">suggest: shop's box has no open or filed note 7; suggest list shows them</td><td class="exit">2</td></tr>
+          <tr><td>Claiming a binned, claimed or solved note</td><td class="mono">suggest: note 7 is binned (or already claimed, already solved); nothing changes</td><td class="exit">2</td></tr>
+          <tr><td>Can't write</td><td class="mono">suggest: could not write the note: &lt;reason&gt;</td><td class="exit">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="plain">
+      <li><b>The same note</b> means the same project, the same title (ignoring case, extra spaces and a final full stop) and the same file, in any state the box keeps: open, to verify, solved, filed or binned. A repeat counts and keeps the state, so a note you binned or filed never comes back as a new one. The one exception: a note confirmed solved reopens, because seeing it again means the problem is back.</li>
+      <li><b>Note numbers</b> count up per project and are never reused: a drop claims its number by creating <code>numbers/&lt;n&gt;</code> with exclusive create, and a tombstone keeps each number after old notes are deleted.</li>
+      <li><b>Many agents at once:</b> the command never rewrites a note. A drop creates a new file; a repeat or a claim adds an event file beside it, also with exclusive create. Only the box folds events in and rewrites notes, with compare-and-swap. So drops never clash, no agent write can undo a filing, and there is no lock to go stale.</li>
+      <li><b><code>suggest list</code></b> shows notes that are open, to verify or filed (with their issue), so an agent can also claim a filed note.</li>
+      <li>With a line, the command also keeps the five lines around it, so the box can find them again after the code moves.</li>
+    </ul>
+  </section>
+
+  <section id="agents">
+    <div class="section-head">
+      <span class="eyebrow">Part B</span>
+      <h2>How agents know about the box</h2>
+      <p>Two entries in <code>~/.claude/settings.json</code>, both added by <code>install.sh</code> with a backup first, and taken out exactly by <code>uninstall.sh</code>. The instructions are tried in your safepath project before they go on your machine.</p>
+    </div>
+    <div class="two">
+      <div class="card">
+        <span class="tag">1 · the instructions, from a session-start hook</span>
+        <p>At the start of a session, after <code>/clear</code> and after a compaction, the hook runs <code>suggest session-start</code>. It prints this text only in a git repo where collecting is on; otherwise nothing, and the session never hears of the box, as before the mod. Subagents most likely don't get it, which keeps review agents out; PR 1 checks this.</p>
+        <pre>## Suggestion box
+
+When you notice a real problem outside your
+current task (a bug, a risky pattern, a missing
+test, dead code, wrong docs), do not fix it and
+do not let it pull you off course. Drop a note
+and carry on. Run `suggest list` first: dropping
+a note that is there already only counts.
+
+```sh
+suggest &lt;&lt;'EOF'
+title: &lt;what is wrong, one line&gt;
+at: &lt;file&gt;:&lt;line&gt;
+problem: &lt;what is wrong, who or what it hurts&gt;
+evidence: &lt;what you actually saw&gt;
+current: &lt;what the code does now; quote it&gt;
+desired: &lt;what should happen, from the code's
+  own types, tests, docs or the ticket&gt;
+EOF
+```
+
+All four sections are required and become the
+issue, so write only what you checked, no
+guesses. Not sure what should happen? Write
+"Unsure: &lt;the question&gt;" as desired. Write in
+plain English without any chat style, and leave
+out secrets, tokens, customer data and personal
+paths: teammates read it, and the repo may be
+public. If `suggest` says the box is off, drop no
+more notes in this task and name your findings in
+your final report instead.
+
+Only drop what a teammate would want an issue
+for: no style nits, nothing your own task should
+fix, at most a few per task. Only in your main
+session on a task: as a subagent, a reviewer or
+in a read-only task, report findings to whoever
+asked you instead. Never file an issue yourself;
+if `suggest` is missing or fails, name the
+finding in your report instead.
+
+Every drop answers with the note's number. If
+your own task ends up fixing a note after all,
+claim it, naming a real test or check; the user
+verifies it before the note is closed:
+
+```sh
+suggest solved &lt;number&gt; &lt;&lt;'EOF'
+how: &lt;what fixed it, one line&gt;
+proof: &lt;the test or check that shows it&gt;
+EOF
+```
+
+In your final report, list the notes you dropped
+and the ones you claimed solved.</pre>
+      </div>
+      <div class="card">
+        <span class="tag">2 · the permission rule</span>
+        <p><code>Bash(suggest:*)</code> goes into <code>permissions.allow</code> in <code>~/.claude/settings.json</code>, so a drop never stops an agent for a prompt.</p>
+        <p>That is safe because the command only drops, lists and claims notes solved, all in local files. It cannot file issues or confirm anything; only you can, in the box.</p>
+        <span class="tag" style="margin-top:8px">How it fits the team flow</span>
+        <p>ship-issue already puts out-of-scope things under "Risks and open questions" in its plan. The note keeps them after the ticket is done. No team skill changes.</p>
+        <span class="tag" style="margin-top:8px">Ruled out</span>
+        <p>A skill (may not trigger mid-task), an MCP server (more moving parts for one command), a hook (hooks see tool calls, not what an agent notices).</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="box">
+    <div class="section-head">
+      <span class="eyebrow">Part C</span>
+      <h2>The box</h2>
+      <p>The panel's list has one group per state that needs you, in this order: <b>To verify</b>, <b>Open</b> and <b>Just filed</b>, each with its count; the header sums them up, like <code>2 open · 1 to verify</code>. When a note leaves a group by itself, a one-line notice says where it went. The button sits at the end of the tab bar, after Quarterdeck's. Click it or press <code>cmd-alt-s</code> and the panel opens on the right: a full-height 400 px column, hidden until you open it. One right-hand panel shows at a time: whichever opened last stays, whether by its button or its key, and the others hide. The box's button watches the layout to do this, since the panel keys are plain toggles. It always shows the box of the project in the focused space; switching spaces switches it.</p>
+    </div>
+    <div class="states">
+      <div class="state">
+        <div class="bar"><span class="barbtn dimmed"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg>Box</span></div>
+        <h3>No project</h3><p>The space has no git repo, or is on another machine. Dimmed, with a tooltip saying why.</p>
+      </div>
+      <div class="state">
+        <div class="bar"><span class="barbtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg>Box</span></div>
+        <h3>Empty</h3><p>Nothing open and nothing to verify.</p>
+      </div>
+      <div class="state">
+        <div class="bar"><span class="barbtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg>Box<span class="count">2</span></span></div>
+        <h3>Notes waiting</h3><p>The count of the project's open notes.</p>
+      </div>
+      <div class="state">
+        <div class="bar"><span class="barbtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg>Box<span class="count">2</span><span class="count verify">✓1</span></span></div>
+        <h3>Proof waiting</h3><p>A green ✓ for notes in To verify: they need a different action, your proof.</p>
+      </div>
+      <div class="state">
+        <div class="bar"><span class="barbtn"><span class="ico slash"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg></span>Box<span class="count">2</span></span></div>
+        <h3>Collecting off</h3><p>A small slash through the icon while collecting is off for this project; the counts still show.</p>
+      </div>
+      <div class="state">
+        <div class="bar"><span class="barbtn" id="wiggleDemo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h12v8H2z"/><path d="M1.5 3.5h13V6h-13z"/><path d="M6 9h4"/></svg>Box<span class="count">3</span></span></div>
+        <h3>A note arrives</h3><p>Panel closed: the count goes up and the button wiggles once. Panel open: the note appears at the top, lit up for a moment. Never for another project.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>In the panel</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>To verify</td><td>Notes claimed solved, in their own group above the open notes, each with three proofs, until you confirm them.</td></tr>
+          <tr><td>Click a note</td><td>Its four sections open under it; click again to close them.</td></tr>
+          <tr><td><code>invoices.ts:42</code></td><td>Opens the file at that line in Cursor: in the ticket's worktree while it exists, else in the main checkout.</td></tr>
+          <tr><td><code>#8504</code></td><td>Jumps to the tab that dropped the note while it is open, else opens the ticket on GitHub.</td></tr>
+          <tr><td><code>2×</code></td><td>Shown when agents spotted the same note more than once.</td></tr>
+          <tr><td><code>spotted again after it was solved</code></td><td>A note confirmed solved that an agent dropped again: the problem is back, so it reopened.</td></tr>
+          <tr><td><code>changed on feat/…</code></td><td>The note's lines changed since it was dropped; Mark solved sends it to To verify.</td></tr>
+          <tr><td>File issue</td><td>The note turns into the editor (Part D), in place.</td></tr>
+          <tr><td>Bin</td><td>The note goes at once; an Undo stays in its place for 5 seconds. No confirm.</td></tr>
+          <tr><td>Filed 4 · Solved 2 · Binned 1</td><td>The last 30 days: filed notes link to their issue, solved ones show their proofs and whether the fix landed, binned and solved ones can be reopened.</td></tr>
+          <tr><td>Collecting</td><td>The switch in the header turns collecting off and on for this project; the ⚙ settings hold one switch for all projects. Off: new sessions get no instructions, so agents work as before the mod; a running agent that still tries is told to carry on. Everything else in the box keeps working.</td></tr>
+          <tr><td>The button, <code>cmd-alt-s</code></td><td>Closes the panel. An open editor or a running check is kept.</td></tr>
+          <tr><td>Keyboard</td><td>As in Quarterdeck, once the panel has the keyboard: ↑ ↓ pick a note, enter opens it, <code>f</code> File issue, <code>s</code> Mark solved, <code>x</code> Bin, <code>u</code> Undo, esc leaves the editor. In To verify: <code>c</code> Confirm solved, <code>n</code> Not solved, <code>d</code> the diff.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="two">
+      <div class="mini">
+        <div class="drop-head"><span class="drop-title">Suggestion box <span>· shop</span></span></div>
+        <p class="empty">Nothing in shop's box. Agents drop notes here when they spot a problem outside their ticket.</p>
+      </div>
+      <div class="mini">
+        <div class="drop-head"><span class="drop-title">History <span>· shop</span></span><span class="target">last 30 days</span></div>
+        <div class="drop-list">
+          <div class="note"><span class="note-text">Stale cache key after a currency change</span><div class="meta"><span class="link">Solved on feat/8490-currency · landed in main</span><span>2d</span></div><div class="actions"><span class="btn">Reopen</span></div></div>
+          <div class="note"><span class="note-text">README still documents the old env vars</span><div class="meta"><span class="link">Filed #799 ↗</span><span>6d</span></div></div>
+          <div class="note"><span class="note-text">Unused export in utils/money.ts</span><div class="meta"><span>Binned</span><span>1d</span></div><div class="actions"><span class="btn">Restore</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="solved">
+    <div class="section-head">
+      <span class="eyebrow">Part C · when the agent fixes it after all</span>
+      <h2>Solved along the way, and proven</h2>
+      <p>Sometimes the agent's own task ends up fixing what it noted. Then the note must not linger, or become an issue for work that is already done. But "an agent said so" is not proof. So a note claimed solved does not leave the box until you have seen the proof and confirmed it.</p>
+    </div>
+    <h3>Three ways a note gets claimed, one place it lands: To verify</h3>
+    <ol class="route">
+      <li><span class="who">The agent says so</span>It runs <code>suggest solved 7</code> with <code>how</code> and <code>proof</code>, naming a real test or check.</li>
+      <li><span class="who">The box sees the code move</span>Plain git maps the note's lines forward through <code>git diff -U0 -M</code>, anchored on its snippet, also through moves, renames and rebases. Changed on its branch or on main: a <code>changed on …</code> chip and Mark solved. No Claude.</li>
+      <li><span class="who">The check spots it</span>When you open File issue and the problem is gone, the banner offers Mark solved, so no issue is filed for done work.</li>
+    </ol>
+    <div class="two">
+      <div class="mini">
+        <div class="drop-head"><span class="drop-title">Suggestion box <span>· shop</span></span></div>
+        <div class="drop-list">
+          <div class="group">To verify · 1</div>
+          <div class="note verify">
+            <span class="note-text">formatDate throws on a null date</span>
+            <div class="meta"><span>note 7</span><span>claimed by an agent on feat/8504-group-records</span></div>
+            <div class="why">formatDate returns a dash for null now<br><span class="mono">proof: invoices.test.ts: formats a missing due date as a dash</span></div>
+            <div class="proofs">
+              <div class="proof"><span class="pn">1</span><div><b>The change</b> · 1 commit on these lines · <span class="linkbtn">Open in Cursor</span>
+                <div class="diff"><div class="dl">  export function formatDate(date: Date) {</div><div class="dl del">−   const ms = date.getTime();</div><div class="dl add">+   if (!date) return "–";</div><div class="dl add">+   const ms = date.getTime();</div></div></div><span class="chk checked">Changed</span></div>
+              <div class="proof"><span class="pn">2</span><div><b>Independent check</b><div class="chk-note">The null guard returns "–" before getTime, and the named test asserts exactly that.</div></div><span class="chk checked">Verified</span></div>
+              <div class="proof"><span class="pn">3</span><div><b>Landed</b> · <span class="link">PR #8530</span> open · not in main yet</div><span class="chk unsure">Waiting</span></div>
+            </div>
+            <div class="actions"><span class="btn">Not solved</span><span class="btn primary">Confirm solved</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Proof</th><th>What it shows</th><th>Green when</th></tr></thead>
+          <tbody>
+            <tr><td>1. The change</td><td>The commits since the drop whose diff touches the note's mapped lines, in red and green; Open in Cursor at the solving commit</td><td>A commit changed those lines</td></tr>
+            <tr><td>2. Independent check</td><td>A fresh session of your own Claude, not the agent that claimed it, reads the note, the change, the code on that branch and the named test. Read-only, Sonnet, on snapshots like the check. Verified, Partly or Not fixed, with its reason; again only when the file's diff changed</td><td>Verified</td></tr>
+            <tr><td>3. Landed</td><td>A merged PR counts first, whatever the merge style; else the solving commit in the fresh default branch; else the same patch there (<code>git cherry</code>), so squash and rebase merges count</td><td>The fix is in main</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Where the note is</th><th>What you see</th></tr></thead>
+        <tbody>
+          <tr><td>Claimed, not confirmed</td><td>In To verify, with the three proofs; nowhere else</td></tr>
+          <tr><td>Confirmed, not landed yet</td><td>In the history as <code>Solved on feat/… · waiting to land</code>, still watched</td></tr>
+          <tr><td>Confirmed and landed</td><td>In the history as <code>Solved · landed in main (9f3e21c)</code></td></tr>
+          <tr><td>The fix never landed</td><td>Only when the PR closed without a merge, or the branch is gone with no merged PR and no same patch in main: back in To verify with <code>the fix never landed</code></td></tr>
+          <tr><td>A filed note, claimed solved</td><td>The same three proofs, plus a hint to put <code>Closes #812</code> (the config's <code>pr.link_keyword</code>) in that branch's PR, which you open yourself, with a Copy button. Fix in new tab is gone</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><b>To verify</b> means the note has a claim you have not confirmed; its own state stays what it was underneath. <b>Confirm solved</b> is one click and works at any time; the box keeps watching until the fix lands. <b>Not solved</b> drops the claim, so the note is back exactly where it was: open, or filed, so a filed note can never be filed twice. <code>suggest solved</code> only adds an event file; only you confirm.</p>
+  </section>
+
+  <section id="states">
+    <div class="section-head">
+      <span class="eyebrow">Part C · the rules</span>
+      <h2>Note states: what you can do with each</h2>
+      <p>Every note is in exactly one state, and each state allows a fixed set of actions. The box shows only the buttons of the state and refuses any other action, also one that races in, like an agent's claim while you edit. A note claimed or confirmed solved can never be filed.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>State</th><th>Where</th><th>File issue</th><th>Mark solved</th><th>Bin</th><th>Confirm / Not solved</th><th>Fix in new tab</th><th>Reopen / Restore</th></tr></thead>
+        <tbody>
+          <tr><td>Open</td><td>Open group</td><td>yes</td><td>with a <code>changed on</code> chip</td><td>yes</td><td>no</td><td>no</td><td>no</td></tr>
+          <tr><td>Open, being edited</td><td>The editor</td><td>Create issue, unless the check finds the problem gone</td><td>from the check's banner</td><td>yes</td><td>no</td><td>no</td><td>no</td></tr>
+          <tr><td>Claimed</td><td>To verify</td><td><b>no</b></td><td>no</td><td>no</td><td>yes</td><td>no</td><td>no</td></tr>
+          <tr><td>Solved</td><td>History</td><td><b>no</b></td><td>no</td><td>no</td><td>no</td><td>no</td><td>Reopen</td></tr>
+          <tr><td>Filed</td><td>Open group until the panel closes, then history</td><td>no (filed)</td><td>no</td><td>no</td><td>no</td><td>yes, unless a fix runs</td><td>no</td></tr>
+          <tr><td>Filed, then claimed</td><td>To verify</td><td>no</td><td>no</td><td>no</td><td>yes</td><td>no</td><td>no</td></tr>
+          <tr><td>Filed, then solved</td><td>History, with the <code>Closes #812</code> hint</td><td>no</td><td>no</td><td>no</td><td>no</td><td>no</td><td>no</td></tr>
+          <tr><td>Binned</td><td>History</td><td>no</td><td>no</td><td>no</td><td>no</td><td>no</td><td>Restore</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="two">
+      <div class="callout">
+        <h3>Moves between states</h3>
+        <ul class="plain">
+          <li><b>Open → Claimed:</b> an agent runs <code>suggest solved</code>, you press Mark solved, or the check's banner says the problem is gone and you press Mark solved there.</li>
+          <li><b>Claimed → Solved:</b> Confirm solved. <b>Claimed → back where it was</b> (open, or filed): Not solved.</li>
+          <li><b>Solved → Open:</b> Reopen, or an agent drops the same note again, because the problem is back. The watch finding that the fix never landed sends it back to Claimed.</li>
+          <li><b>Open → Filed:</b> Create issue. <b>Open → Binned:</b> Bin. <b>Binned → Open:</b> Restore.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>The two races</h3>
+        <ul class="plain">
+          <li><b>The check finds the problem gone:</b> the banner shows and Create issue is off. You choose Mark solved, Bin, or <code>It is not solved</code> when you disagree with the check, which turns Create issue back on and keeps your reason in the note.</li>
+          <li><b>An agent claims the note while you edit it:</b> the editor closes with <code>An agent claimed this solved on feat/…; see To verify</code>, your draft is kept, and Create issue cannot go through.</li>
+          <li><b>Create issue is never off without a reason:</b> one line under the buttons says why: waiting for the check, the check says this is solved, a section to fill in, or a sensitive item in a public repo.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="filing">
+    <div class="section-head">
+      <span class="eyebrow">Part D</span>
+      <h2>Filing: edit, then create</h2>
+      <p>File issue turns the note into an editor in place: the title and one field per section, each with its check label. Create issue waits until all five have text, the check is done and nothing sensitive is left for a public repo. Your draft is kept in the note when you leave a field or close the panel.</p>
+    </div>
+    <div class="two">
+      <div class="mini">
+        <div class="drop-head"><span class="drop-title">File issue <span>· shop</span></span></div>
+        <div class="editor">
+          <label for="sTitle">Title</label>
+          <input class="field" id="sTitle" value="formatDate throws on a null date" readonly>
+          <label for="sProblem">Problem <span class="chk checked">Checked</span></label>
+          <textarea class="field" id="sProblem" readonly>Invoices without a due date crash the PDF export.</textarea>
+          <label for="sEvidence">Evidence <span class="chk checked">Checked</span></label>
+          <textarea class="field" id="sEvidence" readonly>A fixture with dueDate: null made exportPdf throw TypeError: Cannot read properties of null (reading 'getTime').</textarea>
+          <span class="where">+ code link: src/invoices.ts#L40-L44, found on main (added by the box)</span>
+          <label for="sCurrent">Current situation <span class="chk corrected">Corrected</span></label>
+          <textarea class="field" id="sCurrent" readonly>formatDate(null) throws a TypeError; exportPdf does not catch it, so GET /invoices/:id/pdf answers 500.</textarea>
+          <span class="chk-note">Agent wrote: “formatDate(null) throws, so the export answers with a 500.” · <span class="linkbtn">Use the agent's text</span></span>
+          <label for="sDesired">Desired situation <span class="chk checked">Checked</span></label>
+          <textarea class="field" id="sDesired" readonly>formatDate(null) returns a dash and the export works.</textarea>
+          <div class="target">→ <b>acme/shop</b> (public) <span class="label-chip">triage</span> <span class="board-chip">Shop › Backlog</span></div>
+          <div class="similar">Similar open: <a href="#filing">#456 Date crash in PDF export</a></div>
+          <div class="actions"><span class="btn quiet">Cancel</span><span class="btn primary">Create issue</span></div>
+        </div>
+      </div>
+      <div class="issue">
+        <h3>formatDate throws on a null date <span>#812</span></h3>
+        <div class="row"><span class="open-pill">Open</span><span>opened by you</span><span class="label-chip">triage</span><span class="board-chip">Shop › Backlog</span></div>
+        <div class="body">
+          <h4>Problem</h4>
+          <p>Invoices without a due date crash the PDF export.</p>
+          <h4>Evidence</h4>
+          <p>A fixture with <code>dueDate: null</code> made <code>exportPdf</code> throw <code>TypeError: Cannot read properties of null (reading 'getTime')</code>.</p>
+          <div class="snippet">
+            <div class="file">acme/shop · src/invoices.ts · lines 40 to 44 · 9a41c07</div>
+            <div class="lines">
+              <span class="ln">40</span><span class="lc">export function formatDate(date: Date) {</span>
+              <span class="ln">41</span><span class="lc">  const day = pad(date.getDate());</span>
+              <span class="ln hl">42</span><span class="lc hl">  const ms = date.getTime();</span>
+              <span class="ln">43</span><span class="lc">  return `${day}-${month(ms)}`;</span>
+              <span class="ln">44</span><span class="lc">}</span>
+            </div>
+          </div>
+          <h4>Current situation</h4>
+          <p><code>formatDate(null)</code> throws a TypeError; <code>exportPdf</code> does not catch it, so <code>GET /invoices/:id/pdf</code> answers 500.</p>
+          <h4>Desired situation</h4>
+          <p><code>formatDate(null)</code> returns a dash and the export works.</p>
+          <hr>
+          <p style="color:var(--muted)">Spotted while working on #8504.</p>
+        </div>
+      </div>
+    </div>
+    <ul class="plain">
+      <li><b>The code link</b> is added under Evidence by the box. It looks for the note's five-line snippet on the freshly fetched default branch and links those lines at that commit, on a line of its own, so GitHub shows the code (as on the right). Ticket commits are often not on GitHub yet, so the note's own commit is used only when GitHub has it and the snippet is gone from main. Neither: the file without a line.</li>
+      <li><b>Secrets and customer data:</b> known token shapes (GitHub, AWS, Slack, OpenAI and Anthropic keys, private key blocks, bearer tokens) block Create in any repo until they are gone. Other hits, like email addresses, home paths, IP addresses and long random strings, are highlighted, each with <code>Fine to publish</code>; in a public repo Create waits until each is removed or marked fine. SHAs, UUIDs, versions, <code>127.0.0.1</code> and <code>@example.com</code> never count.</li>
+      <li><b>Spotted while working on #8504</b> only when the note knows its ticket. No mention of Claude or agents, as in your commits.</li>
+      <li><b>Similar issues:</b> up to three open issues with matching titles show as links when the editor opens, so you can bin a duplicate instead.</li>
+      <li><b>After Create:</b> the note shows <code>Filed #812 ↗</code> with Fix in new tab and stays until you close the panel or switch project; then it moves to the history. A failure shows gh's message and keeps your draft.</li>
+    </ul>
+
+    <div class="sub" id="check">
+      <div class="section-head">
+        <span class="eyebrow">Part D · the check</span>
+        <h2>Filled in automatically, but correct</h2>
+        <p>The agent wrote the sections while it was busy with another ticket, and code moves on. So the moment you open File issue, the box asks your own Claude to check them against the code.</p>
+      </div>
+      <div class="two">
+        <div class="callout">
+          <h3>How it runs</h3>
+          <ul class="plain">
+            <li><code>claude -p</code> with the flags parrot already uses: <code>--model sonnet</code>, its own <code>--system-prompt</code>, <code>--json-schema</code> for the answer, <code>--setting-sources ""</code>, <code>--strict-mcp-config</code>, <code>--no-session-persistence</code>.</li>
+            <li>It reads snapshots, never the working tree, which can be stale, dirty or on another branch: the box fetches, exports <code>origin/&lt;default&gt;</code> and the note's branch into two temporary folders (<code>git archive</code>) and runs Claude there. A ticket worktree's uncommitted diff is passed in too; the folders are removed afterwards.</li>
+            <li>Its only tools are Read, Grep and Glob. No git and no shell: <code>git grep -O</code> can start a program and <code>--output</code> can write a file, and the check reads text that agents wrote.</li>
+            <li>Usually 10 to 30 seconds. After 90 seconds or on a failure, the labels say <code>Not checked</code>, Create issue works again, and Check again retries.</li>
+            <li>The result is kept in the note and reused until the diff of the note's file changes. A field you edit yourself loses its label.</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <div class="drop-head"><span class="drop-title">Two more outcomes</span></div>
+          <div class="editor">
+            <label>Desired situation <span class="chk unsure">Unsure</span></label>
+            <div class="field">Unsure: return a dash, or refuse invoices without a due date?</div>
+            <span class="chk-note">Claude: the code has no rule for a missing due date, but the PDF template prints "–" for other empty dates. You decide.</span>
+            <label style="margin-top:12px">Another note</label>
+            <div class="banner"><span>Looks solved on main (9f3e21c): formatDate returns "–" for null now. Create issue is off.</span><span class="actions"><span class="btn">Mark solved</span><span class="btn">Bin</span></span></div>
+            <span class="chk-note"><span class="linkbtn">It is not solved</span> turns Create issue back on and keeps your reason.</span>
+          </div>
+        </div>
+      </div>
+      <div class="two">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Section</th><th>Checked against</th></tr></thead>
+            <tbody>
+              <tr><td>Problem</td><td>Still a problem on the default branch and on the note's own branch</td></tr>
+              <tr><td>Evidence</td><td>The file, line, test or error it names exist and say what the note claims</td></tr>
+              <tr><td>Current situation</td><td>What the code at that place does now, read from the code</td></tr>
+              <tr><td>Desired situation</td><td>What the code's own types, tests, docs or callers expect; an agent's <code>Unsure:</code> gets an answer when the code settles it</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Verdict</th><th>Label</th><th>Field</th></tr></thead>
+            <tbody>
+              <tr><td>Matches the code</td><td><span class="chk checked">Checked</span></td><td>The agent's text, unchanged</td></tr>
+              <tr><td>Wrong or out of date</td><td><span class="chk corrected">Corrected</span></td><td>Claude's text; Use the agent's text swaps back</td></tr>
+              <tr><td>The code can't settle it</td><td><span class="chk unsure">Unsure</span></td><td>The agent's text, with Claude's question</td></tr>
+              <tr><td>Gone on main or its own branch</td><td>Banner</td><td>Create issue is off: Mark solved (to To verify), Bin, or It is not solved</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub" id="target">
+      <div class="section-head">
+        <span class="eyebrow">Part D · where it goes</span>
+        <h2>Repo, label and board</h2>
+        <p>The box reads the project's <code>.ai-tooling/config.yml</code> (or <code>.claude/project.yml</code> in a repo the team sync has not moved yet) from the freshly fetched <code>origin/&lt;default&gt;</code>, as the launcher does: the same file the team's skills read for ship-issue and create-pr. A missing <code>status.todo</code> means no column is set; a label the repo lacks is named in the target line and left off.</p>
+      </div>
+      <div class="two">
+        <pre>tracker:
+  kind: github                 <span class="c"># github: Create issue; monday, asana: Copy issue</span>
+  repo: acme/shop              <span class="c"># the repo the issue is created in</span>
+  project: { owner: acme, number: 41 }
+                               <span class="c"># the board it is put on</span>
+  status:
+    field: Status              <span class="c"># the board's column field</span>
+    todo: Backlog              <span class="c"># the column a new issue goes to</span>
+labels:
+  needs-triage: triage         <span class="c"># the label it gets</span>
+pr:
+  link_keyword: Closes         <span class="c"># for the Closes #812 hint</span></pre>
+        <div class="callout">
+          <h3>Create issue runs three steps</h3>
+          <ol class="steps">
+            <li><code>gh issue create</code> in the repo, with the title, the standard text and the label.</li>
+            <li><code>gh project item-add</code> puts it on the board.</li>
+            <li><code>gh project item-edit</code> sets the column to Backlog. Field and column ids are looked up by name each time, as the team's skills do.</li>
+          </ol>
+          <p style="color:var(--muted)">Steps 2 and 3 need the <code>project</code> scope on your gh login. If they fail, the issue still exists and the note says why:</p>
+          <div class="filed">Filed #812 ↗ · not on the board: run gh auth refresh -s project</div>
+          <div class="actions" style="justify-content:flex-start"><span class="btn">Add to board</span></div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>The project has</th><th>Repo</th><th>Label</th><th>Board</th></tr></thead>
+          <tbody>
+            <tr><td>The config, tracker on GitHub, with <code>project</code> and <code>status</code></td><td><code>tracker.repo</code></td><td>what <code>labels</code> maps <code>needs-triage</code> to</td><td><code>tracker.project</code>, column <code>tracker.status.todo</code></td></tr>
+            <tr><td>The config without <code>project</code> or <code>status</code></td><td><code>tracker.repo</code></td><td>as above</td><td>none; the editor says <code>no board in the config</code></td></tr>
+            <tr><td>The config, tracker on monday or asana</td><td colspan="3">None: Copy issue puts the title and text on the clipboard; the note stays open until you bin it</td></tr>
+            <tr><td>No config</td><td>the <code>origin</code> repo</td><td>none</td><td>none</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The editor's target line shows exactly this before you press Create issue, with the repo's visibility: <span class="target" style="display:inline-flex">→ <b>acme/shop</b> (public) <span class="label-chip">triage</span> <span class="board-chip">Shop › Backlog</span></span></p>
+    </div>
+  </section>
+
+  <section id="fixing">
+    <div class="section-head">
+      <span class="eyebrow">Part E</span>
+      <h2>Fixing in a new tab</h2>
+      <p>Fix in new tab starts the filed issue as a ticket exactly the way your parallel tickets start: through <code>issues launch</code> of the parallel-tickets skill. The branch, worktree and stack, the ticket prompt and the record behind <code>/parallel-tickets status</code> are all the ticketflow's own. The box builds nothing by hand.</p>
+    </div>
+    <div class="two">
+      <div class="mini">
+        <div class="drop-head"><span class="drop-title">Suggestion box <span>· shop</span></span></div>
+        <div class="drop-list">
+          <div class="note"><div class="filed">Filed #812 ↗ · on the board in Backlog</div><div class="actions"><span class="btn primary">Fix in new tab</span></div></div>
+          <div class="note"><div class="filed">Filed #813 ↗ · Fixing in fix/n1-query-group-list ↗</div></div>
+        </div>
+        <p class="empty" style="padding-top:4px">The first note can start a fix. The second already has one, so it links to its tab instead of starting twice.</p>
+      </div>
+      <div class="callout">
+        <h3>What one click does</h3>
+        <ol class="steps">
+          <li>Picks the branch the way parallel-tickets names them: <code>fix</code>, <code>docs</code> or <code>chore</code>, and three to five words from the title, no number. <code>issues branch</code> checks it: taken gets <code>-2</code>, <code>ci:</code> or invalid gets another name.</li>
+          <li>Runs the launcher in a background terminal of herdr-core, from the project's main checkout, with <code>--space</code>.</li>
+          <li>The launcher fetches origin, bases the branch on the fresh default branch, opens the tab through hagent and sends the ticket prompt, which starts with <code>/ship-issue 812</code>.</li>
+          <li>The note shows <code>Fixing in fix/… ↗</code>; a click jumps to that tab.</li>
+        </ol>
+      </div>
+    </div>
+    <pre>issues launch --space &lt;space&gt; --ticket 812 --branch fix/formatdate-throws-null-date</pre>
+    <p><code>--space</code> is new, and it has to reach hagent too: today the launcher reads the space only from the app terminal's label, which a background terminal lacks, and it unsets the <code>HERDR_ACTIVE_*</code> values hagent would read. So <code>--space</code> sets <code>HAGENT_HOST=app</code> and hands the space to hagent. Where the change goes is the open question below. The button shows only when the launcher and its hagent are there, the launcher knows <code>--space</code>, and the config has a GitHub tracker on the origin repo, since ship-issue stops on anything else. From there it is your normal ticket flow: ship-issue verifies the problem, posts its plan and waits for your go, and stops after the review without a push or a PR.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Case</th><th>What you see</th></tr></thead>
+        <tbody>
+          <tr><td>Started</td><td><code>Fixing in fix/… ↗</code> on the note; the new tab is in the space's tab bar</td></tr>
+          <tr><td>The launcher fails</td><td>Its last line in red on the note (for example uncommitted work in the primary checkout); Fix in new tab stays, to try again</td></tr>
+          <tr><td>Already fixing</td><td><code>Fixing in fix/… ↗</code> instead of the button, so it never starts twice</td></tr>
+          <tr><td>The issue gets closed</td><td>The note shows <code>Issue #812 closed</code> and moves to the history</td></tr>
+          <tr><td>No ticketflow, or monday or asana</td><td>No button: ship-issue needs a GitHub issue, and the tab needs the ticketflow</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="data">
+    <div class="section-head">
+      <span class="eyebrow">Under the hood</span>
+      <h2>Data</h2>
+      <p>One JSON file per note in <code>~/.suggestion-box/notes/&lt;project folder&gt;/</code>, next to <code>numbers/</code> (one empty file per number taken) and <code>events/&lt;note id&gt;/</code> (repeats and claims, each its own file, folded in by the box). A project is its repo's <code>origin</code>, so every worktree of a repo lands in the same box.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>origin</th><th>Project</th><th>Folder</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">git@github.com:Acme/shop.git</td><td class="mono">github.com/acme/shop</td><td class="mono">github.com__acme__shop</td></tr>
+          <tr><td class="mono">https://github.com/Acme/shop</td><td class="mono">github.com/acme/shop</td><td class="mono">github.com__acme__shop</td></tr>
+          <tr><td class="mono">none, checkout ~/code/scratch</td><td class="mono">local/Users/you/code/scratch</td><td class="mono">local__Users__you__code__scratch</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="two">
+      <pre>{
+  "id": "20261126-104512-k3f9",
+  "number": 7,
+  "project": "github.com/acme/shop",
+  "title": "formatDate throws on a null date",
+  "sections": {
+    "problem": "Invoices without a due date crash …",
+    "evidence": "A fixture with dueDate: null made …",
+    "current": "formatDate(null) throws, so …",
+    "desired": "formatDate(null) returns a dash …"
+  },
+  "at": { "path": "src/invoices.ts", "line": 42 },
+  "snippet": "export function formatDate(…",
+  "from": {
+    "branch": "feat/8504-group-records",
+    "ticket": 8504,
+    "sha": "abc1234",
+    "worktree": "~/.herdr/worktrees/shop/feat-8504-…",
+    "checkout": "~/code/shop",
+    "terminal": "t7",
+    "agent": "claude"
+  },
+  "spotted": 1,
+  "status": "open",
+  "check": null,
+  "draft": null,
+  "issue": null,
+  "solved": null,
+  "verify": null,
+  "created": "2026-11-26T10:45:12Z",
+  "updated": "2026-11-26T10:45:12Z"
+}</pre>
+      <ul class="plain">
+        <li><code>status</code>: open, filed, binned or solved (confirmed). A note is in To verify while it has a <code>solved</code> claim without <code>confirmed</code>; its status stays what it was, so Not solved puts it back exactly there.</li>
+        <li><code>ticket</code>: from parallel-tickets' record of the branch, else a <code>&lt;type&gt;/&lt;number&gt;-…</code> branch name, else null. Any other number in a branch name proves nothing (<code>chore/bump-node-20</code>).</li>
+        <li><code>snippet</code>: the five lines around the line at the drop, used to find them again after the code moves.</li>
+        <li><code>check</code>: the last check, against which default-branch commit, with a verdict per section. <code>solved</code>: branch, commit, how, proof, who. <code>verify</code>: the three proofs. <code>confirmed</code>: when you confirmed.</li>
+        <li><code>~/.suggestion-box/settings.json</code> holds the switches, <code>{ "collecting": true, "off": ["github.com/acme/shop"] }</code>. Only the box writes it; the command reads it on every drop.</li>
+        <li><code>terminal</code> comes from the Herdr app's <code>HC_TERMINAL_ID</code>; <code>agent</code> is claude when <code>CLAUDECODE</code> is set.</li>
+        <li><code>checkout</code> is the repo's main checkout, so a note still opens its file after the worktree is gone, and the box reads the config from there.</li>
+        <li>Filed, solved and binned notes are cut down to a tombstone after 30 days: number, normalised title, file, final state and issue. Tombstones stay, so a binned note never comes back and a number is never reused.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="section-head">
+      <span class="eyebrow">Setup</span>
+      <h2>Install and uninstall</h2>
+      <p><code>./install.sh</code> can run again any time, like parrot's. Every file it changes is kept beside it first. It runs on your machine only on your ok, because it changes what every agent does.</p>
+    </div>
+    <ol class="steps">
+      <li>Links the mod to <code>~/.config/herdr-app/mods/suggestion-box</code>.</li>
+      <li>Adds to your layout the button at the end of the tab bar, after Quarterdeck's, and the panel as a hidden 400 px column on the right next to Quarterdeck's and Chartroom's (a copy for Herdr's own layouts, as parrot does).</li>
+      <li>Binds <code>cmd-alt-s</code> to <code>layout.toggle:suggestion-box</code> in <code>keys.json</code> when it is free.</li>
+      <li>Links <code>bin/suggest</code> to <code>~/.local/bin/suggest</code>.</li>
+      <li>Adds the <code>SessionStart</code> hook (<code>suggest session-start</code>) to <code>~/.claude/settings.json</code>.</li>
+      <li>Adds <code>Bash(suggest:*)</code> to <code>~/.claude/settings.json</code>.</li>
+      <li>Runs <code>herdr-app check</code> on the mod.</li>
+    </ol>
+    <p><code>./uninstall.sh</code> undoes each step and keeps your notes and settings, unless you pass <code>--purge</code>.</p>
+  </section>
+
+  <section id="build">
+    <div class="section-head">
+      <span class="eyebrow">Build order</span>
+      <h2>Seven PRs, one version each</h2>
+      <p>Each is reviewed and merged before the next starts, built the way you work.</p>
+    </div>
+    <div class="two">
+      <div class="callout">
+        <h3>How each PR is built</h3>
+        <ul class="plain">
+          <li>The folder is not a git repo yet: on your go for PR 1 it becomes one, with this plan and the sketch as the first commit on <code>main</code>.</li>
+          <li>Built in its own worktree, opened as a ticket tab through hagent. The linked checkout that every agent's <code>suggest</code> and the live mod run from stays on <code>main</code>, so half-done code never reaches them.</li>
+          <li>Its plan is posted first in your format, <code>Single PR: [title] — [files] — ~[lines]</code>, and waits for your "go".</li>
+          <li>The branch is made before the first edit; nothing is edited on <code>main</code>.</li>
+          <li>Several logical conventional commits; no Claude in them, no <code>Co-Authored-By</code>.</li>
+          <li>Before the report: <code>bun test</code>, <code>herdr-app check</code> and a local review whose real findings are fixed.</li>
+          <li>Then a report, and stop. No push and no PR without your ok for that one; updating a branch is a rebase onto <code>origin/main</code>, and its force-push needs its own ok.</li>
+          <li>Merges, tags (<code>vX.Y.Z</code>, the number only in <code>package.json</code>) and releases on your ok, as with parrot; CHANGELOG in Keep a Changelog. After a merge <code>./install.sh</code> runs again.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>Tests and live checks</h3>
+        <ul class="plain">
+          <li>PR 2 starts with a short spike, as parrot's did, to prove what the mod API does not promise: writing and watching <code>~/.suggestion-box</code> from the mod, <code>exec</code> with a 90-second timeout, render running again when the layout changes, and the icon (one of Herdr's own, since icons through the install link do not draw).</li>
+          <li>PR 3 starts by checking that the check's <code>claude -p</code> call loads none of your CLAUDE.md, so no chat style reaches an issue.</li>
+          <li>Tests never touch your real setup: install and uninstall run against a temporary <code>HOME</code> and <code>HERDR_APP_HOME</code>; <code>claude</code>, <code>gh</code>, <code>hagent</code> and the launcher are stand-ins.</li>
+          <li>Live checks use this tool's own repo, with a test board of your own, and the safepath project. Never a work repo. Before a merge, <code>./install.sh</code> runs from the PR's worktree for the check, and again from <code>main</code> right after.</li>
+          <li>A live check in the Herdr app is announced first, makes sure the app is in front, and never changes zoom or appearance.</li>
+          <li>Examples use made-up projects like <code>acme/shop</code>, so the repo can be public. README screenshots from live data, light and dark, with text under each.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="prs">
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 1</span><span class="v">0.1.0</span></div>
+          <div class="pr-title">feat: drop notes with the suggest command</div>
+          <div class="pr-files">bin/suggest · mods/suggestion-box/{notes,project,events}.js · install.sh · uninstall.sh · tests · README · package.json · CHANGELOG</div>
+          <div class="pr-lines">~730 lines</div>
+          <p class="pr-note">Nothing in the Herdr app yet. Agents start filling boxes right away, so PR 2 is designed against real notes.</p>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>A drop with a title, <code>at</code> and the four sections writes one note and prints its number and the open count.</li>
+            <li>Text comes on stdin as <code>key: value</code> lines; backticks, quotes and <code>$</code> arrive unchanged; the same fields work as flags.</li>
+            <li>A section missing or empty is refused and the missing fields are named.</li>
+            <li>The same note twice gives one note, spotted 2×; a note that matches a binned or filed one only counts, and says so.</li>
+            <li>Twenty drops started at once give twenty notes with twenty different numbers; the command only creates files, never rewrites one.</li>
+            <li>The ticket comes from parallel-tickets' record for the branch, else a <code>&lt;type&gt;/&lt;n&gt;-</code> name, else none.</li>
+            <li>Outside git, a long title, a title on several lines or a section over 500 characters are refused with the messages above.</li>
+            <li>A worktree and the main checkout of one repo land in the same box; <code>suggest list</code> prints its notes with their numbers.</li>
+            <li>With collecting off, a drop answers calmly, exits 0 and writes nothing; list and solved still work; no subcommand changes the setting.</li>
+            <li>A repeat drop of a note confirmed solved reopens it; of one in To verify, filed or binned, only counts.</li>
+            <li><code>suggest solved &lt;n&gt;</code> with how and proof claims an open or filed note; a missing how or proof, an unknown number, or a binned, claimed or solved note is refused.</li>
+            <li>Install adds the command, the session-start hook and the permission rule with backups; rerun changes nothing; uninstall takes exactly those out.</li>
+            <li><code>suggest session-start</code> prints the instructions in a git repo with collecting on, and nothing outside git or with collecting off.</li>
+            <li><code>bun test</code> is green. Live: the instructions are tried in safepath; a session in a real ticket worktree drops a note without a permission prompt; with collecting off, a new session never mentions the box; a subagent does not get the instructions.</li>
+          </ul>
+        </div>
+      </article>
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 2</span><span class="v">0.2.0</span></div>
+          <div class="pr-title">feat: the box as a panel, with its button in the tab bar</div>
+          <div class="pr-files">mods/suggestion-box/{main,button,panel,store}.js · mod.json · box.svg · layout.jq · unlayout.jq · keys.json · install steps · tests</div>
+          <div class="pr-lines">~760 lines</div>
+          <p class="pr-note">Starts with the spike above.</p>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>The button sits after Quarterdeck's and shows the focused project's count.</li>
+            <li>The header's Collecting switch turns drops off and on for the project, the ⚙ switch for all; the icon gets its slash while off.</li>
+            <li>A drop shows within a second or two: the button wiggles with the panel closed; in an open panel the note appears at the top, lit up.</li>
+            <li>Dimmed outside a git repo and on another machine; switching spaces switches the box.</li>
+            <li>Click and <code>cmd-alt-s</code> open and close the panel, a full-height 400 px column; whichever right-hand panel opened last stays, whatever key or button opened it.</li>
+            <li>Notes newest first; the four sections open on click; the file opens in Cursor at its line; <code>#8504</code> jumps to its tab or opens the ticket.</li>
+            <li>Bin with a 5-second Undo; the history with Restore.</li>
+            <li>A note whose mapped lines changed shows the <code>changed on …</code> chip (or <code>file removed</code>) and Mark solved; renames and rebases are followed.</li>
+            <li>Claimed notes sit in To verify with Confirm solved and Not solved; the three proofs come in PR 5.</li>
+            <li>The list groups To verify, Open and Just filed with their counts; the header shows the summary; the button shows the open count and a green ✓ for notes to verify; a note that leaves a group by itself shows the notice.</li>
+            <li>Each state shows exactly the actions of the states table, and the store refuses any other, also a click that races an agent's claim; tests cover every row.</li>
+            <li>The keyboard works as in Quarterdeck. <code>herdr-app check</code> passes and <code>bun test</code> is green.</li>
+          </ul>
+        </div>
+      </article>
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 3</span><span class="v">0.3.0</span></div>
+          <div class="pr-title">feat: check a note against the code</div>
+          <div class="pr-files">mods/suggestion-box/{check,claude,snapshot}.js · main.js · tests</div>
+          <div class="pr-lines">~420 lines</div>
+          <p class="pr-note">Starts by proving no CLAUDE.md reaches the check. Filing comes next, so every issue that is ever filed has been checked.</p>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>Check, on an open note, fetches, exports the two snapshots and runs your own Claude there with Read, Grep and Glob only; the snapshots are removed afterwards.</li>
+            <li>Each section shows Checking…, then Checked, Corrected (Use the agent's text swaps back) or Unsure (with Claude's question).</li>
+            <li>A problem gone on main or on the note's own branch shows the Looks solved banner with Mark solved and Bin.</li>
+            <li>After 90 seconds or a failure the labels say Not checked, with Check again.</li>
+            <li>The result is kept and reused until the diff of the note's file changes.</li>
+            <li><code>bun test</code> covers the prompt, Claude's JSON answer (with a stand-in <code>claude</code>), the timeout and the reuse rule.</li>
+            <li>Live: a note with a wrong Current situation comes back Corrected, and one about code fixed since comes back with the banner.</li>
+          </ul>
+        </div>
+      </article>
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 4</span><span class="v">0.4.0</span></div>
+          <div class="pr-title">feat: file a checked note as a GitHub issue</div>
+          <div class="pr-files">mods/suggestion-box/{draft,issue,tracker,board,scan}.js · main.js · tests</div>
+          <div class="pr-lines">~680 lines</div>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>File issue runs the check and opens the editor with the title and the four checked sections; Create issue waits for the check; the draft survives closing the panel.</li>
+            <li>When Create issue is off, the line under it says why; while the check says the problem is gone, it stays off until you press It is not solved.</li>
+            <li>An agent's claim while the editor is open closes it, keeps the draft and moves the note to To verify. A field you edit loses its check label.</li>
+            <li>The issue text has the four headings in order, the code link under Evidence and the ticket line at the end.</li>
+            <li>Repo, label, board and column come from the config on the fresh default branch; the target line shows them with the repo's visibility.</li>
+            <li>A created issue is on the board in the todo column; without the project scope, the issue stays, the note says why, and Add to board retries.</li>
+            <li>Known token shapes block Create; other hits can be marked fine one by one; in a public repo Create waits for each.</li>
+            <li>The code link points at the snippet found on the fresh default branch, else at the note's commit when GitHub has it, else at the file.</li>
+            <li>Up to three similar open issues show as links. Just filed notes move to the history when the panel closes. monday and asana give Copy issue.</li>
+            <li><code>bun test</code> covers the issue text, the config targets, the scan and the link choice. Live: one note filed in this tool's own repo with a test board, never a work repo.</li>
+          </ul>
+        </div>
+      </article>
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 5</span><span class="v">0.5.0</span></div>
+          <div class="pr-title">feat: prove a solved note before it leaves the box</div>
+          <div class="pr-files">mods/suggestion-box/{verify,diff,landed}.js · main.js · tests</div>
+          <div class="pr-lines">~420 lines</div>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>A note in To verify shows who claimed it, the how, the named proof and the three proofs, each with its state.</li>
+            <li>The change: the commits since the drop whose diff touches the note's mapped lines, in red and green; Open in Cursor at the solving commit.</li>
+            <li>The independent check: a fresh read-only Sonnet session answers Verified, Partly or Not fixed with its reason and whether the named test asserts the fix.</li>
+            <li>Landed: a merged PR counts first, whatever the merge style; else the commit in main; else the same patch (<code>git cherry</code>).</li>
+            <li>Confirm solved and Not solved work as described; Not solved puts a filed note back as filed. A confirmed note is watched until it lands, and comes back with <code>the fix never landed</code> only when its PR closes unmerged or its branch is gone with no same patch in main.</li>
+            <li><code>bun test</code> covers mapping lines (moves, renames, deletes, a rebase), the landed rules (merge, squash, rebase, closed unmerged) and the check's answer, with stand-ins.</li>
+            <li>Live: a note solved on a branch shows its diff, gets Verified, shows waiting to land, then landed in main after the merge.</li>
+          </ul>
+        </div>
+      </article>
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 6</span><span class="v">0.6.0</span></div>
+          <div class="pr-title">feat: fix a filed issue in a new tab</div>
+          <div class="pr-files">mods/suggestion-box/{fix,background}.js · main.js · tests</div>
+          <div class="pr-lines">~250 lines</div>
+          <p class="pr-note">Needs first: <code>issues launch --space</code>, handing the space to hagent. Where it goes is open question 7.</p>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>Fix in new tab shows on filed GitHub issues only, and only when the launcher and its hagent are there, the launcher knows <code>--space</code>, and the config has a GitHub tracker on the origin repo.</li>
+            <li>One click runs <code>issues launch --space … --ticket … --branch …</code> in a background terminal from the main checkout.</li>
+            <li>The note shows <code>Fixing in &lt;branch&gt; ↗</code>, which jumps to the tab; a second start is not offered.</li>
+            <li>A failing launch shows its last line on the note and opens nothing.</li>
+            <li><code>bun test</code> covers the branch name from a title and the launch arguments, with a stand-in launcher.</li>
+            <li>Live: a note filed in this tool's own repo opens as a tab where Claude posts the ship-issue plan, and the ticket shows in <code>/parallel-tickets status</code>.</li>
+          </ul>
+        </div>
+      </article>
+      <article class="pr">
+        <div class="pr-side">
+          <div class="pr-ver"><span class="n">PR 7</span><span class="v">1.0.0</span></div>
+          <div class="pr-title">docs: README with screenshots</div>
+          <div class="pr-files">README.md · docs/screenshots/ · CHANGELOG</div>
+          <div class="pr-lines">~100 lines</div>
+        </div>
+        <div>
+          <div class="done-head">Done when</div>
+          <ul class="done">
+            <li>Light and dark screenshots of the button, the panel, the editor with its check labels, a note in To verify with its three proofs, and a fix starting, with text under each.</li>
+            <li>Tag v1.0.0 and a GitHub release, on your ok.</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+    <p class="total">Total ~3,360 lines, plus the small <code>--space</code> change in the launcher</p>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Later</span>
+      <h2>Not in v1</h2>
+    </div>
+    <ul class="plain">
+      <li>Spaces on another machine: notes dropped there stay there, and the button is dimmed.</li>
+      <li>Board fields other than the column: priority, iteration, assignee. Filing to monday or asana (Copy issue only).</li>
+      <li>Following a repo's own issue template (<code>.github/ISSUE_TEMPLATE</code>) instead of the standard one.</li>
+      <li>A Sharpen button where your own Claude rewrites a whole issue from scratch (the check only corrects what is wrong).</li>
+      <li>Codex and other agents (their <code>AGENTS.md</code>), and a count in the Quarterdeck.</li>
+      <li>Dropping a note by hand from the box. <code>suggest</code> in a terminal works meanwhile.</li>
+    </ul>
+  </section>
+
+  <section id="review">
+    <div class="section-head">
+      <span class="eyebrow">Fresh eyes</span>
+      <h2>Review</h2>
+      <p>An independent review of plan 9 against the real code: the Herdr mod rules, your layout, parrot, htf-ticket, the parallel-tickets launcher, ship-issue and your CLAUDE.md. Each finding was checked against the code, then handled.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Finding</th><th>Handled by</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Fix in new tab could not find its space: the launcher reads it only from the app terminal's label</td><td><code>issues launch --space</code>, a small PR in herdr-ticketflow before PR 6; the gate is the launcher's own dry run</td></tr>
+          <tr><td class="num">2</td><td>Box plus Quarterdeck leave about 460 px on a 1512-pt laptop; all three about 4 px</td><td>One right-hand panel at a time</td></tr>
+          <tr><td class="num">3</td><td>Backticks in double-quoted arguments run as shell commands</td><td>Text on stdin in a quoted heredoc</td></tr>
+          <tr><td class="num">4</td><td>Ticket numbers from branch digits are mostly wrong: parallel-tickets branches carry no number</td><td>parallel-tickets' records first, then only the <code>&lt;type&gt;/&lt;n&gt;-</code> shape</td></tr>
+          <tr><td class="num">5</td><td>Two drops at once could get the same number; an agent's write could undo a filing</td><td>Counter file, a lock both sides take, temp file and rename</td></tr>
+          <tr><td class="num">6</td><td>Binned or filed notes came back as new ones</td><td>The same-note check covers every state the box keeps</td></tr>
+          <tr><td class="num">7</td><td>A global block reaches subagents, reviewers and read-only tasks</td><td>Main session only; <code>suggest list</code> first; never file yourself</td></tr>
+          <tr><td class="num">8</td><td>The check read a working tree that may be stale, dirty or on another branch</td><td>Fetch first; read through revisions only; the worktree's diff passed in</td></tr>
+          <tr><td class="num">9</td><td>Line numbers drift between the drop and filing</td><td>A five-line snippet, found again on the fresh default branch</td></tr>
+          <tr><td class="num">10</td><td>Secrets or customer data could reach a public issue</td><td>Visibility in the target line; a scan; Create waits in public repos; agents told to redact</td></tr>
+          <tr><td class="num">11</td><td>Mod writes outside <code>~/.config/herdr-app</code>, the 30-second exec default and a watch on a missing folder are unproven</td><td>A spike at the start of PR 2</td></tr>
+          <tr><td class="num">12</td><td>The linked checkout is live for every agent and the mod</td><td>Each PR in its own hagent worktree; the checkout stays on <code>main</code></td></tr>
+          <tr><td class="num">13</td><td>Smaller: a contradiction about filed notes, <code>pr.link_keyword</code>, asana, branch types</td><td>Fixed in the sections above</td></tr>
+          <tr><td class="num">14</td><td>Found by you: a note the check found solved could still be filed</td><td>Note states: a fixed set of actions per state; Create issue is off while the check says the problem is gone</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A second independent review of plan 10, also checked against the code, found these:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Finding</th><th>Handled by</th></tr></thead>
+        <tbody>
+          <tr><td class="num">15</td><td>The launcher lives in a local repo without a remote; <code>--space</code> must also reach hagent; the dry run does not check hagent; ship-issue needs a GitHub tracker on the origin repo</td><td>The space handed to hagent, a stricter gate, open question 7</td></tr>
+          <tr><td class="num">16</td><td>The landed proof failed on squash and rebase merges</td><td>A merged PR counts first; <code>git cherry</code> as the fallback</td></tr>
+          <tr><td class="num">17</td><td><code>git log -L</code> cannot tell what changed since the drop</td><td>Lines mapped forward through <code>git diff -U0 -M</code>, anchored on the snippet</td></tr>
+          <tr><td class="num">18</td><td>The lock and compare-and-swap disagreed; a stale lock could be broken twice</td><td>The command only creates files; only the box rewrites</td></tr>
+          <tr><td class="num">19</td><td>Nothing triggered one panel at a time: the panel keys are plain toggles</td><td>The box's button watches the layout; the last one opened stays</td></tr>
+          <tr><td class="num">20</td><td>A filed note that got claimed had no clear state; Not solved could file it twice</td><td>To verify means an unconfirmed claim; the state underneath stays</td></tr>
+          <tr><td class="num">21</td><td>The secret scan could block Create forever</td><td>Only known token shapes block; other hits can be marked fine</td></tr>
+          <tr><td class="num">22</td><td>The check was not read-only: <code>git grep -O</code> runs a program, <code>--output</code> writes a file</td><td>Snapshots via <code>git archive</code>; only Read, Grep and Glob</td></tr>
+          <tr><td class="num">23</td><td>Smaller: the permission rule with a heredoc, tombstones, snippet search, optional config keys, a second Claude call, live checks before a merge, a closed issue, the icon; PR 3 filing before the check existed</td><td>Handled in the sections above; check and filing swapped, so the check is built first</td></tr>
+          <tr><td class="num">24</td><td>Found by you: with collecting off, agents still knew about the box, because a CLAUDE.md block is always read</td><td>The instructions come from a session-start hook, only while collecting is on: off works as if the mod was not installed</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Checked and fine: <code>cmd-alt-s</code> is free, the config keys exist in the team's schema, and parrot already keeps clear of any panel on the right, so it needs no change.</p>
+  </section>
+
+  <section id="questions">
+    <div class="section-head">
+      <span class="eyebrow">Before the go</span>
+      <h2>Questions</h2>
+      <p>You took the defaults on all six. The second review raised one new question. Nothing is built yet: PR 1 starts only on your "go".</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Question</th><th>Settled as</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Key for the box</td><td><code>cmd-alt-s</code></td></tr>
+          <tr><td class="num">2</td><td>Agents list their notes in the final report</td><td>Yes: dropped and claimed solved</td></tr>
+          <tr><td class="num">3</td><td>Public repo</td><td><code>PieterLuypaert/suggestion-box</code>, created when PR 1 is ready; that push on your ok</td></tr>
+          <tr><td class="num">4</td><td>Fix in new tab: stack or <code>--light</code></td><td>The launcher's default: a full stack in repos with <code>wt</code></td></tr>
+          <tr><td class="num">5</td><td>After Fix: switch tab or stay</td><td>Stay in the box; <code>Fixing in …</code> jumps when you want</td></tr>
+          <tr><td class="num">6</td><td>Panels on the right</td><td>One at a time</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="q">
+      <ol start="7">
+        <li><b>Open:</b> where does the launcher's <code>--space</code> change go? The launcher that runs today is <code>~/.claude/skills/parallel-tickets</code>, a local repo without a remote; herdr-ticketflow keeps an older copy that its install.sh links over that folder. Recommended: a local commit in the running launcher now, and the same change in herdr-ticketflow's copy when that one catches up. Only PR 6 needs it.</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>Plan 16 · the same plan as PLAN.md in the repo. Every name, ticket, repo and board in the examples is made up.</footer>
+</div>
+
+<script>
+(() => {
+  const SECTIONS = [["problem", "Problem"], ["evidence", "Evidence"], ["current", "Current situation"], ["desired", "Desired situation"]];
+  const LABELS = { wait: "Checking…", checked: "Checked", corrected: "Corrected", unsure: "Unsure" };
+  const START = [
+    { id: 1, num: 7, title: "formatDate throws on a null date", at: "invoices.ts:42", ticket: 8504, age: "2m", spotted: 2,
+      s: { problem: "Invoices without a due date crash the PDF export.", evidence: "A fixture with dueDate: null made exportPdf throw a TypeError.", current: "formatDate(null) throws, so the export answers with a 500.", desired: "formatDate(null) returns a dash and the export works." },
+      diff: [["ctx", "export function formatDate(date: Date) {"], ["del", "  const ms = date.getTime();"], ["add", "  if (!date) return \"–\";"], ["add", "  const ms = date.getTime();"]] },
+    { id: 2, num: 6, title: "N+1 query in the group list", at: "groups.ts:118", ticket: 8511, age: "1h", spotted: 1, changed: "feat/8511-groups",
+      s: { problem: "The group list gets slow as groups grow.", evidence: "One members query per group; 40 groups took 1.8 s in the test log.", current: "listGroups runs one members query per group.", desired: "Unsure: load members in one query, or page the list?" },
+      diff: [["del", "  for (const g of groups) g.members = await members(g.id);"], ["add", "  const all = await membersFor(groups.map((g) => g.id));"], ["add", "  for (const g of groups) g.members = all[g.id] ?? [];"]] },
+  ];
+  // What the stand-in check answers per note; any section not named here comes back Checked.
+  const CHECKS = {
+    1: { current: { v: "corrected", text: "formatDate(null) throws a TypeError; exportPdf does not catch it, so GET /invoices/:id/pdf answers 500." } },
+    2: { desired: { v: "unsure", q: "Claude: the code has no limit on groups today, and the list endpoint already takes page and size. Paging may be enough; you decide." },
+         gone: "Looks solved on feat/8511-groups (4c1d2e0): listGroups loads all members in one query now." },
+  };
+  const CLAIMS = {
+    agent: { by: "an agent", branch: "feat/8504-group-records", how: "formatDate returns a dash for null now", proof: "invoices.test.ts: formats a missing due date as a dash", verdict: "verified", reason: "The null guard returns \"–\" before getTime, and the named test asserts exactly that." },
+    you: { by: "you", how: "Marked solved from the changed lines.", proof: "none named", verdict: "partly", reason: "One query loads all members now, but no test covers the group list." },
+  };
+  const POOL = [
+    { title: "Retry loop never backs off on 429", at: "sync/client.ts:77", ticket: 8504, s: { problem: "A rate-limited sync hammers the API.", evidence: "The sync test retried 30 times in one second.", current: "Retries at once, without waiting.", desired: "Backs off and honours Retry-After." }, diff: [["del", "  return retry(request);"], ["add", "  return retry(request, { backoff: retryAfter(response) });"]] },
+    { title: "Migration 0042 has no down step", at: "db/migrations/0042.sql", ticket: 8511, s: { problem: "A rollback of this release would fail.", evidence: "0042.sql has only an up section.", current: "No way back past 0042.", desired: "A down step that drops the new column." }, diff: [["add", "-- down"], ["add", "ALTER TABLE records DROP COLUMN group_id;"]] },
+    { title: "Test for refunds is skipped since March", at: "tests/refunds.test.ts:12", ticket: 8504, s: { problem: "The refund path has no running test.", evidence: "it.skip with a TODO on line 12.", current: "The suite reports the refund test as skipped.", desired: "The test runs and passes." }, diff: [["del", "it.skip(\"refunds a partial order\", async () => {"], ["add", "it(\"refunds a partial order\", async () => {"]] },
+  ];
+  let notes, history, view, open, filedCount, binnedCount, solvedCount, nextId, nextNum, poolAt, freshId, timers, notice, collecting = true;
+
+  const $ = (id) => document.getElementById(id);
+  const btn = $("boxBtn"), drop = $("drop"), list = $("dropList"), foot = $("dropFoot");
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const missing = (n) => SECTIONS.filter(([k]) => !String(n.s[k] || "").trim()).length;
+  const chk = (cls, text) => `<span class="chk ${cls}">${text}</span>`;
+
+  function reset() {
+    (timers || []).forEach(clearTimeout);
+    timers = [];
+    notes = START.map((n) => ({ ...n, s: { ...n.s }, state: "open", expanded: false }));
+    history = [
+      { title: "Stale cache key after a currency change", solved: "feat/8490-currency", how: "The key includes the currency now.", landed: true, age: "2d" },
+      { title: "README still documents the old env vars", issue: 799, age: "6d" },
+      { title: "Unused export in utils/money.ts", binned: true, age: "1d" },
+    ];
+    view = "list"; open = true; notice = null; filedCount = 4; binnedCount = 1; solvedCount = 2; nextId = 10; nextNum = 8; poolAt = 0; freshId = null;
+    render();
+  }
+
+  function openCount() { return notes.filter((n) => ["open", "editing", "undo"].includes(n.state)).length; }
+  function verifyCount() { return notes.filter((n) => n.state === "claimed").length; }
+  // Why Create issue is off, in one line; empty when it is on.
+  function offReason(n) {
+    if (n.check === "running") return "Waiting for the check";
+    if (n.gone && !n.overrode) return "The check says this is solved";
+    const empty = SECTIONS.filter(([k]) => !String(n.s[k] || "").trim()).map(([, label]) => label);
+    if (!n.title.trim()) return "Fill in: Title";
+    if (empty.length) return `Fill in: ${empty.join(", ")}`;
+    return "";
+  }
+  function later(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function find(id) { return notes.find((n) => n.id === Number(id)); }
+
+  function secsHtml(n) {
+    return `<dl class="secs">${SECTIONS.map(([k, label]) => `<dt>${label}</dt><dd>${esc(n.s[k] || "")}</dd>`).join("")}</dl>`;
+  }
+
+  function diffHtml(n) {
+    return `<div class="diff">${(n.diff || []).map(([k, t]) => `<div class="dl ${k === "ctx" ? "" : k}">${k === "add" ? "+" : k === "del" ? "−" : " "} ${esc(t)}</div>`).join("")}</div>`;
+  }
+
+  function verifyHtml(n) {
+    const c = n.claim;
+    const second = n.check2 === "running" ? chk("wait", "Checking…") : n.check2 === "verified" ? chk("checked", "Verified") : chk("unsure", "Partly");
+    return `<div class="note verify">
+      <span class="note-text">${esc(n.title)}</span>
+      <div class="meta"><span>note ${n.num}</span><span>claimed by ${esc(c.by)} on ${esc(c.branch)}</span></div>
+      <div class="why">${esc(c.how)}<br><span class="mono">proof: ${esc(c.proof)}</span></div>
+      <div class="proofs">
+        <div class="proof"><span class="pn">1</span><div><b>The change</b> · 1 commit on these lines · <button class="linkbtn" data-act="diff" data-id="${n.id}">${n.showDiff ? "Hide" : "Show"} diff</button>${n.showDiff ? diffHtml(n) : ""}</div>${chk("checked", "Changed")}</div>
+        <div class="proof"><span class="pn">2</span><div><b>Independent check</b>${n.check2 !== "running" ? `<div class="chk-note">${esc(c.reason)}</div>` : ""}</div>${second}</div>
+        <div class="proof"><span class="pn">3</span><div><b>Landed</b> · <span class="link">PR #8530</span> open · not in main yet</div>${chk("unsure", "Waiting")}</div>
+      </div>
+      <div class="actions"><button class="btn" data-act="notsolved" data-id="${n.id}">Not solved</button><button class="btn primary" data-act="confirm" data-id="${n.id}">Confirm solved</button></div>
+    </div>`;
+  }
+
+  function editorHtml(n) {
+    const fields = SECTIONS.map(([k, label]) => {
+      const v = String(n.s[k] || "");
+      const need = !v.trim();
+      const c = n.check === "running" ? { v: "wait" } : (n.check && n.check[k]) || null;
+      const chip = c ? ` ${chk(c.v, LABELS[c.v])}` : "";
+      const under = c?.v === "corrected" ? `<span class="chk-note">Agent wrote: “${esc(c.agent)}” · <button class="linkbtn" data-act="agent" data-id="${n.id}" data-key="${k}">Use the agent's text</button></span>`
+        : c?.v === "unsure" ? `<span class="chk-note">${esc(c.q)}</span>` : "";
+      const where = k === "evidence" ? `<span class="where">+ code link: src/${esc(n.at.replace(/:(\d+)$/, (_, l) => `#L${Math.max(1, l - 2)}-L${+l + 2}`))}, found on main (added by the box)</span>` : "";
+      return `<label for="f${n.id}-${k}">${label}${chip}${need ? ' <span class="hint">Fill this in before creating</span>' : ""}</label><textarea class="field${need ? " need" : ""}" id="f${n.id}-${k}" data-sec="${k}" data-id="${n.id}">${esc(v)}</textarea>${under}${where}`;
+    }).join("");
+    const checking = n.check === "running";
+    const blocked = n.gone && !n.overrode;
+    const why = offReason(n);
+    const ready = !why;
+    const banner = blocked ? `<div class="banner"><span>${esc(n.gone)} Create issue is off.</span><span class="actions"><button class="btn" data-act="solve" data-id="${n.id}">Mark solved</button><button class="btn" data-act="bin" data-id="${n.id}">Bin</button></span></div><span class="chk-note"><button class="linkbtn" data-act="notgone" data-id="${n.id}">It is not solved</button> turns Create issue back on.</span>` : "";
+    return `<div class="note"><div class="editor">
+      ${banner}
+      <label for="f${n.id}-title">Title</label><input class="field" id="f${n.id}-title" data-sec="title" data-id="${n.id}" value="${esc(n.title)}">
+      ${fields}
+      <div class="target">→ <b>acme/shop</b> (public) <span class="label-chip">triage</span> <span class="board-chip">Shop › Backlog</span></div>
+      <div class="similar">${n.id === 1 ? 'Similar open: <a href="#filing">#456 Date crash in PDF export</a>' : "No similar open issues."}</div>
+      <div class="actions"><button class="btn quiet" data-act="cancel" data-id="${n.id}">Cancel</button><button class="btn primary" data-act="create" data-id="${n.id}" id="create${n.id}" ${ready ? "" : "disabled"}>${checking ? "Checking…" : "Create issue"}</button></div>
+      <div class="off-why" id="why${n.id}">${esc(why)}</div>
+    </div></div>`;
+  }
+
+  function noteHtml(n) {
+    if (n.state === "claimed") return verifyHtml(n);
+    if (n.state === "undo") return `<div class="undo"><span>Binned: ${esc(n.title)}</span><button class="btn" data-act="undo" data-id="${n.id}">Undo</button></div>`;
+    if (n.state === "filed") {
+      const slug = n.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((w) => !["a", "an", "the", "on", "in", "of", "for", "to"].includes(w)).slice(0, 5).join("-");
+      if (n.fixing === "starting") return `<div class="note"><div class="filed">Filed #${n.issue} ↗ · starting fix/${esc(slug)}…</div></div>`;
+      if (n.fixing) return `<div class="note"><div class="filed">Filed #${n.issue} ↗ · Fixing in ${esc(n.fixing)} ↗</div></div>`;
+      return `<div class="note"><div class="filed">Filed #${n.issue} ↗ · on the board in Backlog</div><div class="actions"><button class="btn primary" data-act="fix" data-id="${n.id}" data-branch="fix/${esc(slug)}">Fix in new tab</button></div></div>`;
+    }
+    if (n.state === "editing") return editorHtml(n);
+    return `<div class="note${n.id === freshId ? " fresh" : ""}">
+      <button class="note-text" data-act="expand" data-id="${n.id}" aria-expanded="${n.expanded}">${esc(n.title)}</button>
+      <div class="meta"><span class="link">${esc(n.at)}</span><span>#${n.ticket}</span><span>${n.age}</span>${n.spotted > 1 ? `<span class="spot">${n.spotted}×</span>` : ""}${n.changed ? `<span class="tag-chip">changed on ${esc(n.changed)}</span>` : ""}${n.notVerified ? `<span class="tag-chip">claimed on ${esc(n.notVerified)}, not verified</span>` : ""}</div>
+      ${n.expanded ? secsHtml(n) : ""}
+      <div class="actions">${n.changed ? `<button class="btn" data-act="solve" data-id="${n.id}">Mark solved</button>` : ""}<button class="btn" data-act="file" data-id="${n.id}">File issue</button><button class="btn" data-act="bin" data-id="${n.id}">Bin</button></div>
+    </div>`;
+  }
+
+  function historyHtml(h) {
+    const what = h.binned ? "<span>Binned</span>"
+      : h.solved ? `<span class="link">Solved on ${esc(h.solved)}${h.landed ? " · landed in main" : " · waiting to land"}</span>`
+      : `<span class="link">Filed #${h.issue} ↗</span>`;
+    const action = h.binned || h.solved ? `<div class="actions"><button class="btn" data-act="restore" data-title="${esc(h.title)}">${h.binned ? "Restore" : "Reopen"}</button></div>` : "";
+    return `<div class="note"><span class="note-text">${esc(h.title)}</span><div class="meta">${what}<span>${h.age}</span></div>${h.how ? `<div class="why">${esc(h.how)}</div>` : ""}${action}</div>`;
+  }
+
+  function render() {
+    const count = openCount(), toCheck = verifyCount();
+    $("boxCount").textContent = count; $("boxCount").hidden = count === 0;
+    $("boxVerify").textContent = `✓${toCheck}`; $("boxVerify").hidden = toCheck === 0;
+    $("dropSum").textContent = [count ? `${count} open` : "", toCheck ? `${toCheck} to verify` : ""].filter(Boolean).join(" · ") || "empty";
+    drop.hidden = !open;
+    $("collect").setAttribute("aria-checked", String(collecting));
+    $("offBanner").hidden = collecting;
+    $("boxIcon").classList.toggle("slash", !collecting);
+    $("appBody").classList.toggle("panel-open", open);
+    btn.setAttribute("aria-expanded", String(open));
+    if (view === "history") {
+      list.innerHTML = history.map(historyHtml).join("");
+      foot.innerHTML = `<button data-act="back">◂ Back to the notes</button><span>last 30 days</span>`;
+      return;
+    }
+    const shown = notes.filter((n) => n.state !== "gone");
+    const groups = [
+      ["To verify", shown.filter((n) => n.state === "claimed")],
+      ["Open", shown.filter((n) => ["open", "editing", "undo"].includes(n.state))],
+      ["Just filed", shown.filter((n) => n.state === "filed")],
+    ].filter(([, items]) => items.length);
+    let html = notice ? `<div class="notice">${esc(notice)}</div>` : "";
+    html += groups.map(([name, items]) => `<div class="group">${name} · ${items.filter((n) => n.state !== "undo").length}</div>${items.map(noteHtml).join("")}`).join("");
+    if (!groups.length) html += `<p class="empty">Nothing in shop's box. Agents drop notes here when they spot a problem outside their ticket.</p>`;
+    list.innerHTML = html;
+    foot.innerHTML = `<button data-act="history">Filed ${filedCount} · Solved ${solvedCount} · Binned ${binnedCount} ▸</button><span>cmd-alt-s closes</span>`;
+  }
+
+  function claim(n, who) {
+    const c = CLAIMS[who];
+    n.state = "claimed";
+    n.claim = { by: c.by, branch: who === "you" ? (n.changed || "main") : c.branch, how: c.how, proof: c.proof, verdict: c.verdict, reason: c.reason };
+    n.check2 = "running"; n.showDiff = false;
+    later(1800, () => { n.check2 = n.claim.verdict; render(); });
+  }
+
+  drop.addEventListener("input", (e) => {
+    const el = e.target.closest("[data-sec]");
+    if (!el) return;
+    const n = find(el.dataset.id);
+    if (el.dataset.sec === "title") n.title = el.value; else n.s[el.dataset.sec] = el.value;
+    if (el.dataset.sec !== "title") {
+      const need = !el.value.trim();
+      el.classList.toggle("need", need);
+      const hint = el.previousElementSibling?.querySelector(".hint");
+      if (hint) hint.hidden = !need;
+      // A field you edit yourself loses its check label.
+      if (n.check && n.check !== "running" && n.check[el.dataset.sec]) {
+        delete n.check[el.dataset.sec];
+        el.previousElementSibling?.querySelector(".chk")?.remove();
+        if (el.nextElementSibling?.classList.contains("chk-note")) el.nextElementSibling.remove();
+      }
+    }
+    const create = $("create" + n.id);
+    const why = offReason(n);
+    if (create) create.disabled = Boolean(why);
+    const whyLine = $("why" + n.id);
+    if (whyLine) whyLine.textContent = why;
+  });
+
+  drop.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-act]");
+    if (!el) return;
+    const n = find(el.dataset.id), act = el.dataset.act;
+    if (act === "expand") n.expanded = !n.expanded;
+    if (act === "file") {
+      notes.forEach((m) => { if (m.state === "editing") m.state = "open"; });
+      n.state = "editing";
+      if (!n.check) {
+        n.check = "running";
+        later(1800, () => {
+          const answer = CHECKS[n.id] || {};
+          n.gone = answer.gone || null;
+          n.check = {};
+          SECTIONS.forEach(([k]) => {
+            const r = answer[k];
+            if (r?.v === "corrected") { n.check[k] = { v: "corrected", agent: n.s[k] }; n.s[k] = r.text; }
+            else n.check[k] = r ? { ...r } : { v: "checked" };
+          });
+          if (n.state === "editing") render();
+        });
+      }
+    }
+    if (act === "agent") { const k = el.dataset.key; n.s[k] = n.check[k].agent; delete n.check[k]; }
+    if (act === "cancel") n.state = "open";
+    if (act === "bin") {
+      n.state = "undo";
+      later(5000, () => { if (n.state === "undo") { n.state = "gone"; binnedCount++; history.unshift({ title: n.title, binned: true, age: "now" }); render(); } });
+    }
+    if (act === "undo") n.state = "open";
+    if (act === "solve") claim(n, "you");
+    if (act === "notgone") n.overrode = true;
+    if (act === "diff") n.showDiff = !n.showDiff;
+    if (act === "confirm") { n.state = "gone"; solvedCount++; history.unshift({ title: n.title, solved: n.claim.branch, how: n.claim.how, landed: false, age: "now" }); }
+    if (act === "notsolved") { n.state = "open"; n.notVerified = n.claim.branch; n.changed = null; }
+    if (act === "create") {
+      if (el.disabled) return;
+      n.issue = 812 + filedCount - 4; n.state = "filed"; filedCount++;
+      history.unshift({ title: n.title, issue: n.issue, age: "now" });
+    }
+    if (act === "fix") {
+      n.fixing = "starting";
+      const branch = el.dataset.branch;
+      later(1200, () => { n.fixing = branch; render(); });
+    }
+    if (act === "history") view = "history";
+    if (act === "back") view = "list";
+    if (act === "restore") {
+      const i = history.findIndex((h) => h.title === el.dataset.title);
+      if (i >= 0) {
+        const h = history.splice(i, 1)[0];
+        if (h.binned) binnedCount--; else if (h.solved) solvedCount--;
+        notes.unshift({ id: nextId++, num: nextNum++, title: h.title, at: "utils/money.ts:3", ticket: 8511, age: "1d", spotted: 1, state: "open", expanded: false,
+          s: { problem: "Dead code that looks used.", evidence: "No import of toCents anywhere in src.", current: "toCents is exported but never imported.", desired: "toCents is removed, or used where cents are computed by hand." } });
+        view = "list";
+      }
+    }
+    render();
+  });
+
+  // Esc leaves the editor; the panel itself closes only with its button, as Quarterdeck's does.
+  drop.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const editing = notes.find((n) => n.state === "editing");
+    if (editing) { editing.state = "open"; render(); }
+  });
+
+  function wiggle() { btn.classList.remove("wiggle"); void btn.offsetWidth; btn.classList.add("wiggle"); }
+
+  // Filed notes stay in the list until the panel closes; then they live in the history.
+  function close() { open = false; notes.forEach((n) => { if (n.state === "filed") n.state = "gone"; }); render(); }
+  btn.addEventListener("click", () => { if (open) close(); else { open = true; render(); } });
+  btn.addEventListener("animationend", () => btn.classList.remove("wiggle"));
+
+  $("collect").addEventListener("click", () => { collecting = !collecting; render(); });
+
+  $("simulate").addEventListener("click", () => {
+    if (!collecting) {
+      notice = "An agent tried to drop a note: the box is off for shop, so it was told to carry on and name the finding in its report.";
+      later(6000, () => { notice = null; render(); });
+      render();
+      return;
+    }
+    const p = POOL[poolAt++ % POOL.length];
+    const n = { ...p, s: { ...p.s }, id: nextId++, num: nextNum++, age: "now", spotted: 1, state: "open", expanded: false };
+    notes.unshift(n);
+    freshId = open ? n.id : null;
+    render();
+    if (!open) wiggle();
+  });
+
+  $("claimAgent").addEventListener("click", () => {
+    const n = notes.find((m) => m.id === 1 && (m.state === "open" || m.state === "editing")) || notes.find((m) => m.state === "open" || m.state === "editing");
+    if (!n) return;
+    if (n.id !== 1) { CLAIMS.agent.how = "Fixed while working on the group records."; CLAIMS.agent.proof = "the suite for this file passes"; }
+    const wasEditing = n.state === "editing";
+    claim(n, "agent");
+    notice = `Note ${n.num} moved to To verify: an agent claimed it solved on ${n.claim.branch}.${wasEditing ? " Your draft is kept." : ""}`;
+    later(6000, () => { notice = null; render(); });
+    render();
+    if (!open) wiggle();
+  });
+  $("reset").addEventListener("click", () => { collecting = true; CLAIMS.agent.how = "formatDate returns a dash for null now"; CLAIMS.agent.proof = "invoices.test.ts: formats a missing due date as a dash"; reset(); });
+
+  const demo = $("wiggleDemo");
+  if (demo && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setInterval(() => { demo.classList.remove("wiggle"); void demo.offsetWidth; demo.classList.add("wiggle"); }, 3000);
+  }
+
+  reset();
+})();
+</script>
