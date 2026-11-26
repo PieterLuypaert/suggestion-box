@@ -1,6 +1,7 @@
 // What must not go out in an issue. Known token shapes always block Create; other hits (emails,
 // home paths, IP addresses, long random strings) can each be marked fine to publish. Commit SHAs,
-// UUIDs, version numbers, 127.0.0.1 and example addresses never count. Pure.
+// UUIDs, version numbers, 127.0.0.1, example addresses and macOS's shared folder /Users/Shared
+// never count. Pure.
 
 // A real key mixes letters and digits; a placeholder such as YOUR_ACCESS_TOKEN or a slug that
 // happens to start with sk- does not, and is not a token.
@@ -18,7 +19,7 @@ const TOKENS = [
 
 const OTHERS = [
   ["an email address", /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, (m) => /@(?:example\.(?:com|org|net)|[\w.-]*\.test|users\.noreply\.github\.com)$/i.test(m)],
-  ["a home path", /(?:\/Users|\/home)\/[A-Za-z0-9._-]+/g, (m) => /\/(?:you|user|me|runner|USER|name)$/.test(m)],
+  ["a home path", /(?:\/Users|\/home)\/[A-Za-z0-9._-]+/g, (m) => /\/(?:you|user|me|runner|USER|name|Shared)$/.test(m)],
   ["an IP address", /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, (m, text, index) => m === "127.0.0.1" || m === "0.0.0.0" || /v$/i.test(text.slice(Math.max(0, index - 1), index)) || m.split(".").some((n) => Number(n) > 255)],
   ["a long random string", /\b[A-Za-z0-9+/_-]{32,}={0,2}/g, (m) => /^[0-9a-f]{40}$/i.test(m) || /^[0-9a-f]{64}$/i.test(m) || !(/[A-Z]/.test(m) && /[a-z]/.test(m) && /\d/.test(m))],
 ];
