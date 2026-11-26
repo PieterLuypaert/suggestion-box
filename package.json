@@ -1,0 +1,11 @@
+{
+  "name": "suggestion-box",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A suggestion box for coding agents in the Herdr app: out-of-scope findings become checked GitHub issues.",
+  "license": "MIT",
+  "scripts": {
+    "test": "bun test"
+  }
+}

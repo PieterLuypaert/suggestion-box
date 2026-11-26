@@ -1,0 +1,44 @@
+#!/usr/bin/env node
+// The suggest command. A dynamic import, so this extensionless file runs the same as CommonJS or
+// as a module, also through the link install.sh makes in ~/.local/bin.
+import("../cli/main.js")
+  .then(({ main }) =>
+    main({
+      args: process.argv.slice(2),
+      stdin: () => readStdin(),
+      env: process.env,
+      cwd: process.cwd(),
+      out: (text) => process.stdout.write(text),
+      err: (text) => process.stderr.write(text),
+    }),
+  )
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((error) => {
+    process.stderr.write(`suggest: ${error.message}\n`);
+    process.exitCode = 1;
+  });
+
+// Stdin as text: empty from a terminal. A writer gets five seconds to start and then as long as it
+// keeps writing; only a stdin left open and silent is given up on, so a caller that never closes
+// it does not hang the command.
+function readStdin() {
+  if (process.stdin.isTTY) return Promise.resolve("");
+  return new Promise((resolve) => {
+    let text = "";
+    const silence = setTimeout(() => finish(), 5000);
+    function finish() {
+      clearTimeout(silence);
+      process.stdin.destroy();
+      resolve(text);
+    }
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      text += chunk;
+      silence.refresh();
+    });
+    process.stdin.on("end", finish);
+    process.stdin.on("error", finish);
+  });
+}
