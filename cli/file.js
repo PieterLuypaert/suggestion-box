@@ -132,6 +132,18 @@ export function issueSince(repo, title, since, env) {
   return found ? { number: found.number, url: found.url } : null;
 }
 
+// The boards an issue is on, as GitHub says: [{ title, column }], also when a board's own auto-add
+// workflow put it there. null when gh could not say.
+export function boardsOf(repo, number, env) {
+  const answer = gh(["issue", "view", String(number), "--repo", repo, "--json", "projectItems"], { env });
+  if (answer.code !== 0) return null;
+  try {
+    return (JSON.parse(answer.stdout).projectItems ?? []).map((item) => ({ title: item.title, column: item.status?.name ?? null }));
+  } catch {
+    return null;
+  }
+}
+
 // Creates the issue: { number, url } or { error } with gh's own words.
 export function createIssue({ repo, title, body, label }, env) {
   const args = ["issue", "create", "--repo", repo, "--title", title, "--body-file", "-"];

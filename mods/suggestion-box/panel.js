@@ -262,6 +262,7 @@ function filedLines(s, note) {
       .child(link(t, `issue:${note.id}`, `Filed #${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
       .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
     .when(Boolean(note.issue?.closed), (el) => el.child(div().text_color(t.muted).child(`Issue #${issue.number} closed`)))
+    .when(Boolean(issue.boards?.length), (el) => el.child(div().text_color(t.muted).whitespace_normal().child(`On board ${issue.boards.map((b) => (b.column ? `${b.title} › ${b.column}` : b.title)).join(", ")}`)))
     .when(Boolean(note.fix?.branch) && !note.issue?.closed, (el) => el.child(link(t, `fixing:${note.id}`, `Fixing in ${note.fix.branch} ↗`, (_e, cx) => s.act("jump-fix", note, cx))))
     .when(Boolean(note.fix?.starting) && !note.fix?.isStale, (el) => el.child(div().text_color(t.muted).child("A fix is starting in a new tab…")))
     .when(Boolean(note.fix?.isStale), (el) => el.child(div().text_color(t.working).whitespace_normal().child("A fix was starting but never reported back. Look for its tab before you start it again.")))

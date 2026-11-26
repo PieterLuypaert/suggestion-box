@@ -106,10 +106,11 @@ export function recordFix(view, now, fix) {
   return note;
 }
 
-// A filed note after a look at its issue on GitHub: closed (with when), or open again.
-export function recordClosed(view, now, closedAt) {
+// A filed note after a look at its issue on GitHub: closed (with when) or open again, and the
+// boards it is on.
+export function recordIssueState(view, now, { closedAt, boards }) {
   const note = JSON.parse(JSON.stringify(view));
-  note.issue = { ...note.issue, closed: closedAt ? { at: closedAt } : null };
+  note.issue = { ...note.issue, closed: closedAt ? { at: closedAt } : null, boards: boards ?? note.issue?.boards ?? null };
   note.updated = now;
   return note;
 }
@@ -173,7 +174,7 @@ const change = {
   file(note, now, details) {
     note.status = "filed";
     note.binned = null;
-    note.issue = { number: details.issue.number, url: details.issue.url, repo: details.repo ?? null, closes: details.closes ?? null, at: now };
+    note.issue = { number: details.issue.number, url: details.issue.url, repo: details.repo ?? null, closes: details.closes ?? null, boards: details.issue.boards ?? null, at: now };
     note.filed = { title: details.title, sections: details.sections, notGone: details.notGone ?? null };
     note.board = details.board ?? null;
     note.draft = null;
