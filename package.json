@@ -1,6 +1,6 @@
 {
   "name": "suggestion-box",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "A suggestion box for coding agents in the Herdr app: out-of-scope findings become checked GitHub issues.",
