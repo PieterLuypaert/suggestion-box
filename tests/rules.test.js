@@ -16,7 +16,7 @@ const rows = {
 
 describe("the actions each state allows", () => {
   const table = {
-    open: ["mark-solved", "file", "bin"],
+    open: ["mark-solved", "check", "file", "bin"],
     "to verify": ["confirm", "not-solved"],
     solved: ["reopen"],
     filed: ["fix"],
@@ -37,15 +37,15 @@ describe("the actions each state allows", () => {
   });
 
   test("the list shows Mark solved only while the code changed", () => {
-    expect(shownFor(rows.open)).toEqual(["file", "bin"]);
-    expect(shownFor({ ...rows.open, changed: { on: "main", kind: "changed" } })).toEqual(["mark-solved", "file", "bin"]);
+    expect(shownFor(rows.open)).toEqual(["check", "file", "bin"]);
+    expect(shownFor({ ...rows.open, changed: { on: "main", kind: "changed" } })).toEqual(["mark-solved", "check", "file", "bin"]);
   });
 });
 
 test("the buttons leave out what the box does not do yet", () => {
-  expect(buttonsFor(rows.open)).toEqual(["bin"]);
+  expect(buttonsFor(rows.open)).toEqual(["check", "bin"]);
   expect(buttonsFor(rows.filed)).toEqual([]);
-  expect(buttonsFor({ ...rows.open, changed: { on: "main" } })).toEqual(["mark-solved", "bin"]);
+  expect(buttonsFor({ ...rows.open, changed: { on: "main" } })).toEqual(["mark-solved", "check", "bin"]);
 });
 
 describe("what each action does", () => {
@@ -82,5 +82,6 @@ describe("what each action does", () => {
     expect(applyAction(rows["to verify"], "bin", NOW).error).toBe("note 2 is to verify; bin is not one of its actions");
     expect(applyAction(rows.solved, "confirm", NOW).error).toContain("not one of its actions");
     expect(applyAction(rows.binned, "mark-solved", NOW).error).toContain("not one of its actions");
+    expect(applyAction(rows.open, "check", NOW).error).toBe("check does not change a note's state");
   });
 });
