@@ -148,6 +148,7 @@ const QUIET = ["bin"];
 function actionsRow(s, note, { primary = null, isBusy = () => false, leave = [] } = {}) {
   const { t } = s;
   const actions = note.actions.filter((a) => !leave.includes(a));
+  if (!actions.length) return div();
   const rest = actions.filter((a) => !QUIET.includes(a));
   const ordered = [...rest.filter((a) => a !== primary), ...rest.filter((a) => a === primary)];
   return h_flex().gap(6).items_center().pt(2)
@@ -477,7 +478,7 @@ function changeState(t, found) {
   if (change.why) return [t.dim, change.why];
   const count = change.commits.length + (change.more ?? 0);
   if (count) return [t.ansi2, `${count === 1 ? "1 commit" : `${count} commits`} since the drop changed the note's lines`];
-  if (change.elsewhere?.length) return [t.working, "The note's lines did not change; the branch changed other files (below). The independent check reads them too."];
+  if (change.elsewhere?.length) return [t.working, "The note's lines did not change; these are the branch's other changes, which the independent check reads too."];
   return [t.working, "No commit since the drop changed the note's lines"];
 }
 
@@ -523,7 +524,9 @@ function commitList(s, note, change) {
 function elsewhereList(s, change) {
   const { t } = s;
   const short = (path) => path.split("/").slice(-2).join("/");
-  return v_flex().gap(4).pl(15).pt(2).children(change.elsewhere.map((commit) => v_flex().gap(1).text_size(11.5)
+  const shown = change.elsewhere.slice(-3);
+  const more = change.elsewhere.length - shown.length + (change.elsewhereMore ?? 0);
+  return v_flex().gap(4).pl(15).pt(2).when(more > 0, (el) => el.child(div().text_size(11.5).text_color(t.dim).child(`and ${more} earlier ${more === 1 ? "change" : "changes"} on the branch`))).children(shown.map((commit) => v_flex().gap(1).text_size(11.5)
     .child(h_flex().gap(8).items_center()
       .child(div().flex_none().font_family(s.mono).text_color(t.muted).child(commit.sha.slice(0, 7)))
       .child(div().flex_1().min_w(0).truncate().child(commit.subject)))
@@ -578,7 +581,7 @@ function footer(s) {
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
       .tooltip(s.view !== "list" ? "Back to the notes" : `${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned in the last 30 days`)
-      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.length} ▸`))
+      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.filter((n) => !s.justFiled?.has(n.id)).length} ▸`))
     .child(div().flex_1().min_w(0).truncate().text_right().child(hintsFor(s)));
 }
 

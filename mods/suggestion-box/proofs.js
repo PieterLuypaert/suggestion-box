@@ -114,7 +114,7 @@ export const VERIFY_SCHEMA = {
 export const VERIFY_SYSTEM = [
   "You verify a claim that a problem in a code base was fixed, before the person confirms it. Another agent made the claim; do not take its word.",
   "The folder you are in holds a read-only snapshot: branch/ is the code on the branch the claim was made on.",
-  "You get the note that described the problem, the claim (how it was fixed, and the test or check it names as proof), the commits that changed the note's lines, and the branch's other commits with the files they changed: a fix is often in another file than the one the note names.",
+  "You get the note that described the problem, the claim (how it was fixed, and the test or check it names as proof), the commits that changed the note's lines, and the branch's other changes with the files they touched: a fix is often in another file, or another part of the file, than the lines the note names.",
   "Read the code with your tools. Answer verified when the problem the note describes is gone on that branch; partly when part of it remains;",
   "not_fixed when it is still there. Say in why what in the code shows it.",
   "For test: found when the named test or check exists in the snapshot; asserts_fix when it would fail without the fix and passes with it.",

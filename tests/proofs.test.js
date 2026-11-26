@@ -251,6 +251,35 @@ describe("proof 1: the change", () => {
     expect(change.elsewhere.map((c) => c.subject)).toEqual(["fix: the real fix"]);
   });
 
+  test("a fix in another file stays the change after its branch is merged into main", () => {
+    const s = setup();
+    writeFileSync(join(s.repo, "src", "fix.ts"), "fixed\n");
+    git(s.repo, "add", "src/fix.ts");
+    git(s.repo, "commit", "-qm", "fix: in another file");
+    const fix = git(s.repo, "rev-parse", "HEAD");
+    git(s.repo, "switch", "-q", "main");
+    git(s.repo, "merge", "-q", "--no-ff", "--no-edit", BRANCH);
+    git(s.repo, "push", "-q", "origin", "main");
+    git(s.repo, "fetch", "-q", "origin");
+    git(s.repo, "switch", "-q", BRANCH);
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    expect(change.elsewhere.map((c) => c.sha)).toEqual([fix]);
+    expect(landedProof(s.repo, "github.com/acme/shop", { branch: BRANCH }, change, { SUGGESTION_BOX_GH: "/usr/bin/false" })).toMatchObject({ state: "landed", how: `in main (${fix.slice(0, 7)})` });
+  });
+
+  test("more than ten other changes: the newest kept, and how many more", () => {
+    const s = setup();
+    for (let i = 0; i < 12; i++) {
+      writeFileSync(join(s.repo, "src", `f${i}.ts`), `${i}\n`);
+      git(s.repo, "add", `src/f${i}.ts`);
+      git(s.repo, "commit", "-qm", `chore: ${i}`);
+    }
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    expect(change.elsewhere).toHaveLength(10);
+    expect(change.elsewhere.at(-1).subject).toBe("chore: 11");
+    expect(change.elsewhereMore).toBe(2);
+  });
+
   test("on the default branch other files are teammates' work, never the fix", () => {
     const s = setup();
     git(s.repo, "switch", "-q", "main");

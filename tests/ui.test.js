@@ -131,10 +131,13 @@ export default class Scene extends View {
     const a = new JustFiled(store);
     a.clear();
     a.add("github.com/acme/shop", "n1");
+    a.add("github.com/acme/billing", "b1");
     a.add("github.com/acme/shop", "n2");
     const b = new JustFiled(store);
-    const found = [[...b.for("github.com/acme/shop")].join(","), [...b.for("github.com/acme/billing")].join(",")];
-    localStorage.setItem(store, JSON.stringify({ key: "github.com/acme/shop", items: [{ id: "old", at: Date.now() - 3 * 3600000 }, { id: "new", at: Date.now() }] }));
+    const found = [[...b.for("github.com/acme/shop")].join(","), [...b.for("github.com/acme/billing")].join(","), [...b.for("github.com/acme/other")].join(",")];
+    b.clear("github.com/acme/shop");
+    found.push([...b.for("github.com/acme/shop")].join(",") + "|" + [...b.for("github.com/acme/billing")].join(","));
+    localStorage.setItem(store, JSON.stringify({ "github.com/acme/shop": [{ id: "old", at: Date.now() - 3 * 3600000 }, { id: "new", at: Date.now() }] }));
     found.push([...b.for("github.com/acme/shop")].join(","));
     localStorage.setItem(store, JSON.stringify({ key: "github.com/acme/shop", ids: 5, at: Date.now() }));
     found.push([...b.for("github.com/acme/shop")].join(","));
@@ -146,7 +149,8 @@ export default class Scene extends View {
 }
 `);
     const result = spawnSync(HERDR, ["check", dir], { encoding: "utf8" });
-    // Kept across a reload, per project, each note for two hours, any other shape as nothing, cleared.
-    expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","","new","",""]');
+    // Kept across a reload and per project (filing in one never wipes another), one project cleared on
+    // leaving it, each note for two hours, any other shape as nothing, everything cleared on closing.
+    expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","b1","","|b1","new","",""]');
   }, 30000);
 });
