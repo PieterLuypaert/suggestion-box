@@ -33,7 +33,7 @@ export const BOX = [
   "..KKKKKKKKKKKKKK..",
 ].map((row) => row.slice(1, 17));
 
-// The grid made square: 16 rows, the box low in it with room above for the note.
+// The grid made square: 16 rows, the note at the top and an empty row under the box.
 export function grid() {
   const rows = [...BOX, ".".repeat(16)];
   return rows.map((row) => [...row].map((cell) => (cell === "." ? null : cell)));

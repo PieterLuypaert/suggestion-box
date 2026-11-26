@@ -39,6 +39,8 @@ const SHOWN_MS = 1000;
 const PROOFS_MS = 90000;
 // Confirmed fixes are looked at again this often until they land.
 const WATCH_MS = 300000;
+// How long a space's last read shows after you move to another of its tabs, while the new one comes in.
+const STALE_MS = 4000;
 const UNDO_MS = 5000;
 const NOTICE_MS = 6000;
 const WIGGLE_MS = 700;
@@ -96,10 +98,19 @@ const JUST_FILED = "suggestion-box.just-filed";
 const JUST_FILED_MS = 2 * 3600000;
 
 export class JustFiled {
+  // `storageKey`: the tests keep theirs apart from the app's own.
+  constructor(storageKey = JUST_FILED) {
+    this.storageKey = storageKey;
+  }
+
+  // What is kept, as { key, items: [{ id, at }] } with only the items under two hours old; a value
+  // in any other shape counts as nothing kept, so it can never stop the panel from drawing.
   read() {
     try {
-      const kept = JSON.parse(localStorage.getItem(JUST_FILED) ?? "null");
-      return kept && Date.now() - kept.at < JUST_FILED_MS ? kept : null;
+      const kept = JSON.parse(localStorage.getItem(this.storageKey) ?? "null");
+      if (!kept || typeof kept.key !== "string" || !Array.isArray(kept.items)) return null;
+      const items = kept.items.filter((item) => typeof item?.id === "string" && typeof item.at === "number" && Date.now() - item.at < JUST_FILED_MS);
+      return { key: kept.key, items };
     } catch (error) {
       console.log(`suggestion box: no just-filed notes kept: ${error}`);
       return null;
@@ -109,14 +120,14 @@ export class JustFiled {
   // The ids for a project, as a Set the panel draws from.
   for(key) {
     const kept = this.read();
-    return new Set(kept && key && kept.key === key ? kept.ids : []);
+    return new Set(kept && key && kept.key === key ? kept.items.map((item) => item.id) : []);
   }
 
   add(key, id) {
     if (!key) return;
     const kept = this.read();
-    const ids = kept?.key === key ? kept.ids : [];
-    this.write({ key, ids: [...new Set([...ids, id])], at: Date.now() });
+    const items = (kept?.key === key ? kept.items : []).filter((item) => item.id !== id);
+    this.write({ key, items: [...items, { id, at: Date.now() }] });
   }
 
   clear() {
@@ -125,8 +136,8 @@ export class JustFiled {
 
   write(value) {
     try {
-      if (value) localStorage.setItem(JUST_FILED, JSON.stringify(value));
-      else localStorage.removeItem(JUST_FILED);
+      if (value) localStorage.setItem(this.storageKey, JSON.stringify(value));
+      else localStorage.removeItem(this.storageKey);
     } catch (error) {
       console.log(`suggestion box: could not keep the just-filed notes: ${error}`);
     }
@@ -209,15 +220,26 @@ export default class SuggestionBox extends View {
   }
 
   // The last read of the focused space's box. Moving to another tab of the space (Main and its
-  // ticket worktrees: other folders, the same project) shows that read until the read for the new
-  // folder is in, so the panel never flashes empty or closes what you opened. Another space starts
-  // empty: its box is another project's.
+  // ticket worktrees: other folders, the same project) shows that read for a few seconds, until the
+  // read for the new folder is in, so the panel never flashes empty or closes what you opened. It is
+  // never shown longer, as a tab of the space may hold another repo; another space starts empty.
+  // While it shows, every button acts on it (shownFolder), never on the folder you moved to.
   answer() {
     const data = shared(DATA);
     if (!data) return null;
     const here = this.here();
+    if (here.folder !== this.lastFolder) {
+      this.lastFolder = here.folder;
+      this.movedAt = Date.now();
+    }
     if (data.folder === here.folder) return data.answer;
-    return data.space && data.space === here.space ? data.answer : null;
+    return data.space && data.space === here.space && Date.now() - (this.movedAt ?? 0) < STALE_MS ? data.answer : null;
+  }
+
+  // The folder of the box the panel shows, which every button acts on.
+  shownFolder() {
+    const data = shared(DATA);
+    return data && data.answer === this.answer() ? data.folder : this.here().folder;
   }
 
   // What a new answer changes: the button wiggles when a note arrives while the panel is shut; the
@@ -308,7 +330,7 @@ export default class SuggestionBox extends View {
     const history = answer?.history ?? [];
     if (!answer?.project || !history.some((note) => isWatched(note) || hasOpenIssue(note)) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
     this.watchedAt = Date.now();
-    const folder = this.here().folder;
+    const folder = this.shownFolder();
     // One question per repo about its filed issues, a fetch, then per watched fix gh and git
     // ls-remote, each 20 s at most.
     const repos = new Set(history.filter(hasOpenIssue).map((note) => note.issue.repo)).size;
@@ -336,7 +358,7 @@ export default class SuggestionBox extends View {
     if (Date.now() - last < DAY_MS) return;
     cx.spawn(async () => {
       try {
-        await box(this.node, this.boxJs, ["prune", this.here().folder]);
+        await box(this.node, this.boxJs, ["prune", this.shownFolder()]);
         localStorage.setItem(key, String(Date.now()));
       } catch (error) {
         console.log(`suggestion box: prune failed: ${error.message}`);
@@ -406,6 +428,8 @@ export default class SuggestionBox extends View {
     this.fixing = new Set();
     // Notes filed while the panel is open stay in sight until it closes (JustFiled below).
     this.justFiled = new JustFiled();
+    // An app that starts with the panel hidden starts with nothing just filed.
+    if (!checking() && !isShown(BLOCK)) this.justFiled.clear();
     this.handle = cx.focus_handle();
     if (checking()) return;
     cx.spawn(async (cx) => {
@@ -446,7 +470,7 @@ export default class SuggestionBox extends View {
   }
 
   async actOn(name, note, cx) {
-    const where = this.here().folder;
+    const where = this.shownFolder();
     if (name === "close") return this.close();
     if (name === "settings") {
       this.view = this.view === "settings" ? "list" : "settings";
@@ -497,7 +521,7 @@ export default class SuggestionBox extends View {
     if (!this.boxJs || this.proofs.get(note.id)?.isLoading) return;
     if (this.proofs.has(note.id) && !this.proofs.get(note.id).error) return;
     this.proofs.set(note.id, { isLoading: true });
-    const folder = this.here().folder;
+    const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         const answer = await box(this.node, this.boxJs, ["proofs", folder, note.id], PROOFS_MS);
@@ -513,7 +537,7 @@ export default class SuggestionBox extends View {
   verifyClaim(cx, note, { again = false } = {}) {
     if (!this.boxJs || this.verifying.has(note.id)) return;
     this.verifying.add(note.id);
-    const folder = this.here().folder;
+    const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         await box(this.node, this.boxJs, ["verify", folder, note.id, ...(again ? ["--again"] : [])], CHECK_MS);
@@ -534,7 +558,7 @@ export default class SuggestionBox extends View {
     if (!this.boxJs || this.fixing.has(note.id) || !space) return;
     this.fixing.add(note.id);
     this.mine.set(note.id, Date.now() + 15000);
-    const folder = this.here().folder;
+    const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         const answer = await box(this.node, this.boxJs, ["fix", folder, note.id, space], FIX_MS);
@@ -566,7 +590,7 @@ export default class SuggestionBox extends View {
   // The note's file as the solving commit has it, in the editor at the note's line there.
   async openAt({ sha, path, line }) {
     try {
-      const shown = await box(this.node, this.boxJs, ["show", this.here().folder, sha, path, String(line ?? "")]);
+      const shown = await box(this.node, this.boxJs, ["show", this.shownFolder(), sha, path, String(line ?? "")]);
       const target = shown.line ? `${shown.file}:${shown.line}` : shown.file;
       for (const editor of EDITORS) {
         const opened = await exec(editor, ["-g", target]).catch(() => null);
@@ -582,7 +606,7 @@ export default class SuggestionBox extends View {
     const extra = action === "mark-solved" ? ["--branch", branch ?? ""] : action === "not-solved" ? ["--reason", notSolvedReason(note)] : [];
     this.mine.set(note.id, Date.now() + 15000);
     if (action === "bin") this.showUndo(cx, note);
-    return this.write(cx, ["act", this.here().folder, note.id, action, ...extra]);
+    return this.write(cx, ["act", this.shownFolder(), note.id, action, ...extra]);
   }
 
   // The check runs beside the queued writes: it can take a minute and a half, and a Bin meanwhile
@@ -593,7 +617,7 @@ export default class SuggestionBox extends View {
     this.checking.add(note.id);
     this.expanded.add(note.id);
     this.selected = note.id;
-    const folder = this.here().folder;
+    const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       let ran = true;
       try {
@@ -621,7 +645,7 @@ export default class SuggestionBox extends View {
     if (this.editor?.id === note.id) return this.editor.fields.title.focus();
     this.closeEditor(cx);
     const texts = startTexts(note);
-    const editor = { id: note.id, number: note.number, title: note.title, folder: this.here().folder, project: this.answer()?.project?.key ?? null, typing: null, target: null, similar: [], link: null, error: "", isFiling: false };
+    const editor = { id: note.id, number: note.number, title: note.title, folder: this.shownFolder(), project: this.answer()?.project?.key ?? null, typing: null, target: null, similar: [], link: null, error: "", isFiling: false };
     editor.auto = Object.fromEntries(SECTIONS.map((name) => [name, checkedText(note, name)]));
     editor.fine = new Set(note.draft?.fine ?? []);
     editor.notGone = note.draft?.notGone ?? null;
@@ -873,7 +897,7 @@ export default class SuggestionBox extends View {
     const id = this.undo?.id;
     this.undo = null;
     if (!id) return cx.notify();
-    return this.write(cx, ["act", this.here().folder, id, "restore"]);
+    return this.write(cx, ["act", this.shownFolder(), id, "restore"]);
   }
 
   // The projects of the open spaces and every project with notes, each with its switch.
@@ -991,10 +1015,14 @@ export default class SuggestionBox extends View {
     const here = this.here();
     this.watchMoves(cx);
     const key = this.answer()?.project?.key ?? here.none ?? null;
+    // Another project sends what was just filed to the history, also through a moment without a
+    // project in between (another space being read); the first draw after a reload is no switch.
+    const project = this.answer()?.project?.key ?? null;
+    if (project) {
+      if (this.shownProject && project !== this.shownProject) this.justFiled.clear();
+      this.shownProject = project;
+    }
     if (key !== this.panelKey) {
-      // Only a real switch to another project sends what was just filed to the history: not the
-      // first draw after a reload, and not a read that is missing for a moment.
-      if (this.panelKey && key && this.panelKey.includes("/") && key.includes("/")) this.justFiled.clear();
       this.panelKey = key;
       this.expanded.clear();
       this.selected = null;

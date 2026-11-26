@@ -126,13 +126,16 @@ describe.skipIf(!HERDR)("Just filed in the app's storage", () => {
 import { JustFiled } from "./box-main.js";
 export default class Scene extends View {
   render() {
-    const a = new JustFiled();
+    const store = "suggestion-box.just-filed.test";
+    const a = new JustFiled(store);
     a.clear();
     a.add("github.com/acme/shop", "n1");
     a.add("github.com/acme/shop", "n2");
-    const b = new JustFiled();
+    const b = new JustFiled(store);
     const found = [[...b.for("github.com/acme/shop")].join(","), [...b.for("github.com/acme/billing")].join(",")];
-    localStorage.setItem("suggestion-box.just-filed", JSON.stringify({ key: "github.com/acme/shop", ids: ["old"], at: Date.now() - 3 * 3600000 }));
+    localStorage.setItem(store, JSON.stringify({ key: "github.com/acme/shop", items: [{ id: "old", at: Date.now() - 3 * 3600000 }, { id: "new", at: Date.now() }] }));
+    found.push([...b.for("github.com/acme/shop")].join(","));
+    localStorage.setItem(store, JSON.stringify({ key: "github.com/acme/shop", ids: 5, at: Date.now() }));
     found.push([...b.for("github.com/acme/shop")].join(","));
     b.add("github.com/acme/shop", "n3");
     b.clear();
@@ -142,6 +145,7 @@ export default class Scene extends View {
 }
 `);
     const result = spawnSync(HERDR, ["check", dir], { encoding: "utf8" });
-    expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","","",""]');
+    // Kept across a reload, per project, each note for two hours, any other shape as nothing, cleared.
+    expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","","new","",""]');
   }, 30000);
 });
