@@ -16,6 +16,7 @@ const reopened = { ...open, id: "n3", number: 3, title: "A note that came back",
 const claimed = { ...open, id: "n1", number: 1, title: "N+1 query in the group list", state: "to verify", solved: { by: "agent", branch: "feat/8511-groups", how: "One query loads all members now.", proof: "groups.test.ts: loads members once" }, actions: ["confirm", "not-solved"] };
 const checkedNote = { ...open, id: "n4", number: 4, title: "A checked note", changed: null, actions: ["check", "bin"], check: { sections: { problem: { verdict: "checked" }, evidence: { verdict: "checked" }, current: { verdict: "corrected", text: "It throws a TypeError, and the export answers 500." }, desired: { verdict: "unsure", question: "A dash, or refuse the invoice?" } }, gone: { on: "main", why: "formatDate returns a dash now" } } };
 const failedNote = { ...open, id: "n5", number: 5, title: "A note whose check failed", changed: null, actions: ["check", "bin"], check: { error: "Claude took longer than 90 seconds, so the box stopped waiting. Check again." } };
+const checkedNoteTitle = "A checked note";
 const answer = {
   project: { key: "github.com/acme/shop", name: "shop", dir: "/tmp/box" },
   collecting: { all: true, project: true },
@@ -23,7 +24,8 @@ const answer = {
   history: [
     { id: "h1", number: 4, title: "Unused export in utils/money.ts", state: "binned", age: "1d", actions: ["restore"] },
     { id: "h2", number: 5, title: "Stale cache key", state: "solved", age: "2d", solved: { branch: "feat/c", how: "The key has the currency now." }, actions: ["reopen"] },
-    { id: "h3", number: 6, title: "README env vars", state: "filed", issue: { number: 799 }, age: "6d", actions: [] },
+    { id: "h3", number: 6, title: "README env vars", state: "filed", issue: { number: 799, url: "https://github.com/acme/shop/issues/799", closes: "Closes #799" }, solved: { branch: "feat/d", how: "Documented.", confirmed: { at: "t" } }, age: "6d", actions: [] },
+    { id: "h4", number: 8, title: "Rounding in totals", filed: { title: "Totals round each line instead of the sum" }, state: "filed", issue: { number: 812, url: "https://github.com/acme/shop/issues/812", closes: "Closes #812" }, board: { error: "run gh auth refresh -s project" }, age: "now", actions: [] },
   ],
   counts: { open: 2, toVerify: 1 },
 };
@@ -36,6 +38,10 @@ const scenes = {
   "panel with collecting off": `panel({ ...base, collecting: { all: false, project: false } })`,
   "panel history": `panel({ ...base, view: "history" })`,
   "panel empty": `panel({ ...base, answer: { ...answer, notes: [], history: [], counts: { open: 0, toVerify: 0 } } })`,
+  "panel with the editor: labels, the scan, the target, similar issues": `panel({ ...base, expanded: new Set(["n4"]), justFiled: new Set(["h4"]), editor: editor({ hits: [{ kind: "a GitHub token", text: "ghp_abcdefghijklmnopqrstuvwxyz0123456789", blocking: true }, { kind: "an email address", text: "jan@acme.be", blocking: false, isFine: false }, { kind: "a home path", text: "/Users/jan", blocking: false, isFine: true }], similar: [{ number: 12, title: "PDF export crashes", url: "u" }], off: "Remove a GitHub token: ghp_abcdefgh…", canStartOver: true }) })`,
+  "panel with the editor: checking, the gone banner, a failed filing": `panel({ ...base, editor: editor({ isChecking: true, labels: { problem: { label: "checking" }, evidence: { label: "checking" }, current: { label: "checking" }, desired: { label: "checking" } }, gone: { on: "main", why: "formatDate returns a dash now" }, similar: null, off: "Waiting for the check", error: "gh could not create the issue: HTTP 410" }) })`,
+  "panel with the editor: not solved after all, copy for monday, not checked": `panel({ ...base, editor: editor({ gone: { on: "main", why: "it looks fixed" }, notGone: { reason: "" }, reason, canCopy: true, checkError: "Claude took longer than 90 seconds", line: "This project's tracker is monday: Copy issue puts it on your clipboard", off: null }) })`,
+  "panel history with filed notes": `panel({ ...base, view: "history" })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
 };
 
@@ -47,13 +53,27 @@ function sceneMod(name, draw) {
   }
   writeFileSync(join(dir, "mod.json"), '{ "place": "none", "title": "scene" }\n');
   writeFileSync(join(dir, "main.js"), `import { View } from "gpui-kit";
+import { InputState, TextareaState } from "gpui-base";
 import { theme } from "herdr";
 import { button, panel } from "./panel.js";
 const answer = ${JSON.stringify(answer)};
+const texts = ${JSON.stringify({ title: checkedNoteTitle, sections })};
 export default class Scene extends View {
+  init() {
+    this.fields = { title: InputState.new({ value: texts.title }) };
+    for (const [name, value] of Object.entries(texts.sections)) {
+      this.fields[name] = TextareaState.new({ value });
+      this.fields[name].set_auto_grow(2, 10);
+    }
+    this.reason = InputState.new({ placeholder: "Why it is not solved (kept with the note)" });
+  }
   render() {
     const t = theme();
-    const base = { t, answer, view: "list", expanded: new Set(), selected: null, undo: null, checking: new Set(), notice: null, error: "", showSettings: false, collecting: answer.collecting, noProject: null, act: () => {} };
+    const fields = this.fields;
+    const reason = this.reason;
+    const labels = { problem: { label: "checked" }, evidence: { label: "agent", swap: "claude" }, current: { label: "corrected", swap: "agent" }, desired: { label: "unsure", question: "A dash, or refuse the invoice?" } };
+    const editor = (over) => ({ id: "n4", fields, reason: null, texts, labels, hits: [], isChecking: false, target: { kind: "github" }, line: "→ acme/shop (public) · triage · board Shop › Backlog", similar: [], off: null, error: "", isFiling: false, notGone: null, gone: null, checkError: null, canCopy: false, canStartOver: false, ...over });
+    const base = { t, answer, view: "list", expanded: new Set(), selected: null, undo: null, checking: new Set(), editor: null, justFiled: new Set(), notice: null, error: "", showSettings: false, collecting: answer.collecting, noProject: null, act: () => {} };
     return ${draw};
   }
 }

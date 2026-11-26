@@ -1,7 +1,7 @@
 // How the suggestion box looks: the tab bar's button and the panel on the right. Only drawing; what
 // a click does comes in as `act`, from main.js.
 import { div, svg } from "gpui-kit";
-import { h_flex, v_flex } from "gpui-base";
+import { Input, Textarea, h_flex, v_flex } from "gpui-base";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
 
 export const ICON = "mods/workspace-chrome/archive.svg";
@@ -87,7 +87,7 @@ function groups(s) {
   if (!answer.project) return div().px(8).py(10).text_size(12).text_color(t.dim).child(s.noProject ?? "No git repo in this space, so there is no box here.");
   const toVerify = answer.notes.filter((n) => n.state === "to verify");
   const open = answer.notes.filter((n) => n.state === "open");
-  const filed = answer.notes.filter((n) => n.state === "filed" && s.justFiled?.has(n.id));
+  const filed = (answer.history ?? []).filter((n) => n.state === "filed" && s.justFiled?.has(n.id));
   if (!toVerify.length && !open.length && !filed.length && !s.undo) {
     return div().px(8).py(10).text_size(12).text_color(t.dim).child(`Nothing in ${answer.project.name}'s box. Agents drop notes here when they spot a problem outside their ticket.`);
   }
@@ -97,8 +97,8 @@ function groups(s) {
   return v_flex().gap(4).children([
     ...group("To verify", toVerify, (n) => verifyCard(s, n)),
     ...(s.undo ? [undoRow(s, s.undo)] : []),
-    ...group("Open", open, (n) => noteCard(s, n)),
-    ...group("Just filed", filed, (n) => noteCard(s, n)),
+    ...group("Open", open, (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : noteCard(s, n))),
+    ...group("Just filed", filed, (n) => filedCard(s, n)),
   ]);
 }
 
@@ -115,6 +115,19 @@ function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
     .hover((st) => st.bg(isPrimary ? t.solid : t.hover))
     .on_click((_e, cx) => act(action, note, cx))
     .child(label);
+}
+
+// A small text button: Start over, Use the agent's text, Fine to publish, Copy.
+function link(t, id, text, onClick, color = t.accent) {
+  return div().id(id).flex_none().text_size(11.5).text_color(color).cursor_pointer().hover((st) => st.underline()).on_click(onClick).child(text);
+}
+
+function plainButton(t, id, text, onClick, { isPrimary = false, isOff = false } = {}) {
+  return div().id(id).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium()
+    .bg(isPrimary ? t.solid : t.background).text_color(isPrimary ? t.solid_foreground : t.foreground).border(1).border_color(isPrimary ? t.solid : t.border)
+    .when(isOff, (el) => el.opacity(0.45))
+    .when(!isOff, (el) => el.cursor_pointer().hover((st) => st.bg(isPrimary ? t.solid : t.hover)).on_click(onClick))
+    .child(text);
 }
 
 function chip(t, text, color) {
@@ -145,6 +158,113 @@ function noteCard(s, note) {
 }
 
 const isChecking = (s, note) => Boolean(s.checking?.has(note.id));
+
+const FIELD_LABELS = { checking: "Checking…", "not-checked": "Not checked", checked: "Checked", corrected: "Corrected", agent: "The agent's text", unsure: "Unsure" };
+
+// File issue: the note as an editor in place. The title and the four sections as fields with the
+// check's label on each, what the scan found, where the issue goes, similar open issues, and Create
+// issue with the one line that says why it is off.
+function editorCard(s, note, ed) {
+  const { t } = s;
+  const act = (name, what = note) => (_e, cx) => s.act(`editor-${name}`, what, cx);
+  return v_flex().id(`editor:${note.id}`).px(10).py(10).gap(8).rounded(8).border(1).border_color(t.input).bg(t.raised)
+    .child(h_flex().gap(8).items_center().text_size(11.5).text_color(t.muted)
+      .child(div().flex_1().min_w(0).truncate().child(`Filing note ${note.number}`))
+      .when(ed.canStartOver, (el) => el.child(link(t, `start-over:${note.id}`, "Start over", act("start-over")))))
+    .when(ed.isChecking, (el) => el.child(h_flex().gap(6).items_center().text_size(12).text_color(t.muted)
+      .child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child("Checking the note against the code…")))
+    .when(Boolean(ed.checkError), (el) => el.child(h_flex().gap(8).items_start().text_size(12)
+      .child(div().flex_1().whitespace_normal().text_color(t.blocked).child(`Not checked: ${ed.checkError}`))
+      .child(link(t, `check-again:${note.id}`, "Check again", (_e, cx) => s.act("check", note, cx)))))
+    .when(Boolean(ed.gone), (el) => el.child(editorGone(s, note, ed)))
+    .child(field(t, "Title", Input.new(ed.fields.title).h(30).px(8).rounded(6).border(1).border_color(t.border).bg(t.background).text_size(13), null, !ed.texts.title.trim()))
+    .children(SECTIONS.map((name) => sectionField(s, note, ed, name)))
+    .when(ed.hits.length > 0, (el) => el.child(hitList(s, note, ed)))
+    .child(div().text_size(11.5).text_color(t.muted).whitespace_normal().child(ed.line))
+    .when(ed.similar === null, (el) => el.child(div().text_size(11.5).text_color(t.dim).child("Could not look for similar issues")))
+    .when(Boolean(ed.similar?.length), (el) => el.child(v_flex().gap(2).text_size(11.5)
+      .child(div().text_color(t.dim).child("Similar open issues"))
+      .children((ed.similar ?? []).map((issue) => link(t, `similar:${issue.number}`, `#${issue.number} ${issue.title} ↗`, (_e, cx) => s.act("open-url", issue, cx), t.foreground)))))
+    .child(h_flex().gap(6).justify_end()
+      .child(plainButton(t, `cancel:${note.id}`, "Cancel", act("cancel")))
+      .child(ed.canCopy
+        ? plainButton(t, `copy-issue:${note.id}`, "Copy issue", act("copy"), { isPrimary: true, isOff: Boolean(ed.off) })
+        : plainButton(t, `create:${note.id}`, ed.isFiling ? "Creating…" : "Create issue", act("create"), { isPrimary: true, isOff: Boolean(ed.off) })))
+    .when(Boolean(ed.off), (el) => el.child(div().text_size(11.5).text_color(t.dim).whitespace_normal().text_right().child(ed.off)))
+    .when(Boolean(ed.error), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(ed.error)));
+}
+
+function field(t, label, input, chipEl, isEmpty) {
+  return v_flex().gap(3)
+    .child(h_flex().gap(6).items_center().child(div().text_size(10.5).font_medium().text_color(t.dim).child(label.toUpperCase())).when(Boolean(chipEl), (el) => el.child(chipEl)))
+    .child(input)
+    .when(isEmpty, (el) => el.child(div().text_size(11.5).text_color(t.working).child("Fill this in before creating")));
+}
+
+function sectionField(s, note, ed, name) {
+  const { t } = s;
+  const label = ed.labels[name];
+  const colors = { checking: t.dim, "not-checked": t.dim, checked: t.ansi2, corrected: t.accent, agent: t.muted, unsure: t.working };
+  const input = Textarea.new(ed.fields[name]).w_full().px(8).py(6).rounded(6).border(1).border_color(t.border).bg(t.background).text_size(12.5);
+  return field(t, SECTION_LABELS[name], input, label ? chip(t, FIELD_LABELS[label.label], colors[label.label]) : null, !ed.texts.sections[name].trim())
+    .when(Boolean(label?.swap), (el) => el.child(link(t, `swap:${note.id}:${name}`, label.swap === "agent" ? "Use the agent's text" : "Use Claude's text", (_e, cx) => s.act("editor-swap", { section: name, to: label.swap }, cx))))
+    .when(Boolean(label?.question), (el) => el.child(div().text_size(11.5).text_color(t.working).whitespace_normal().child(label.question)));
+}
+
+// The check says the problem is gone: no issue for done work, unless you say it is not solved.
+function editorGone(s, note, ed) {
+  const { t } = s;
+  const gone = ed.gone;
+  if (ed.notGone) {
+    return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.border)
+      .child(h_flex().gap(8).items_center().text_size(12)
+        .child(div().flex_1().whitespace_normal().text_color(t.muted).child(`The check said it looks solved on ${gone.on}; you said it is not.`))
+        .child(link(t, `take-back:${note.id}`, "Take back", (_e, cx) => s.act("editor-take-back", note, cx))))
+      .when(Boolean(ed.reason), (el) => el.child(Input.new(ed.reason).h(28).px(8).rounded(6).border(1).border_color(t.border).bg(t.background).text_size(12)));
+  }
+  return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.working).bg(t.chrome)
+    .child(div().text_size(12.5).whitespace_normal().child(`Looks solved on ${gone.on}: ${gone.why}`))
+    .child(h_flex().gap(6).justify_end()
+      .child(plainButton(t, `editor-gone-solved:${note.id}`, "Mark solved", (_e, cx) => s.act("mark-solved-gone", note, cx), { isPrimary: true }))
+      .child(plainButton(t, `editor-gone-bin:${note.id}`, "Bin", (_e, cx) => s.act("bin", note, cx)))
+      .child(plainButton(t, `not-gone:${note.id}`, "It is not solved", (_e, cx) => s.act("editor-not-gone", note, cx))));
+}
+
+// What the scan found: a token must go; anything else can be marked fine to publish.
+function hitList(s, note, ed) {
+  const { t } = s;
+  return v_flex().gap(3).px(10).py(8).rounded(6).border(1).border_color(t.blocked).text_size(12)
+    .child(div().text_size(10.5).font_medium().text_color(t.dim).child("BEFORE THIS GOES OUT"))
+    .children(ed.hits.map((hit, i) => h_flex().gap(8).items_center()
+      .child(div().flex_1().min_w(0).truncate().text_color(hit.blocking ? t.blocked : t.foreground).child(`${hit.blocking ? "Remove " : ""}${hit.kind}: ${hit.text}`))
+      .when(!hit.blocking && hit.isFine, (el) => el.child(chip(t, "fine", t.ansi2)))
+      .when(!hit.blocking && !hit.isFine, (el) => el.child(link(t, `fine:${note.id}:${i}`, "Fine to publish", (_e, cx) => s.act("editor-fine", { hit: hit.text }, cx))))));
+}
+
+// A filed note: its issue, how the board step went, and once solved the words that close it.
+function filedLines(s, note) {
+  const { t } = s;
+  const issue = note.issue ?? {};
+  const isSolved = Boolean(note.solved?.confirmed) || note.state === "to verify";
+  return v_flex().gap(4).text_size(12)
+    .child(h_flex().gap(8).items_center()
+      .child(link(t, `issue:${note.id}`, `Filed #${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
+      .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(`solved on ${note.solved.branch ?? "a branch"}`))))
+    .when(Boolean(note.board?.error), (el) => el.child(h_flex().gap(8).items_center()
+      .child(div().flex_1().min_w(0).whitespace_normal().text_color(t.working).child(`Not on the board: ${note.board.error}`))
+      .child(plainButton(t, `board:${note.id}`, "Add to board", (_e, cx) => s.act("board", note, cx)))))
+    .when(isSolved && Boolean(issue.closes), (el) => el.child(h_flex().gap(8).items_center()
+      .child(div().flex_1().min_w(0).whitespace_normal().text_color(t.muted).child(`Put "${issue.closes}" in the fix's PR so the issue closes with it.`))
+      .child(link(t, `closes:${note.id}`, "Copy", (_e, cx) => s.act("copy", note, cx)))));
+}
+
+function filedCard(s, note) {
+  const { t } = s;
+  return v_flex().id(`filed:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1).border_color(t.chrome).bg(t.chrome)
+    .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
+    .child(filedLines(s, note))
+    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act)))));
+}
 
 const VERDICT_LABELS = { checked: "Checked", corrected: "Corrected", unsure: "Unsure" };
 
@@ -186,6 +306,7 @@ function verifyCard(s, note) {
   return v_flex().id(`note:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1).border_color(isSelected ? t.input : t.border).bg(t.raised)
     .child(div().font_medium().whitespace_normal().child(note.title))
     .child(div().text_size(11.5).text_color(t.muted).child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
+    .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
     .child(v_flex().gap(2).pl(8).border_l(2).border_color(t.border).text_size(12)
       .child(div().whitespace_normal().child(claim.how ?? ""))
       .when(Boolean(claim.proof), (el) => el.child(div().whitespace_normal().text_color(t.muted).child(`proof: ${claim.proof}`))))
@@ -202,13 +323,14 @@ function undoRow(s, note) {
 
 function history(s) {
   const { t, answer } = s;
-  const notes = answer?.history ?? [];
+  const notes = (answer?.history ?? []).filter((note) => !s.justFiled?.has(note.id));
   if (!notes.length) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Nothing filed, solved or binned in the last 30 days.");
   return v_flex().gap(4).children(notes.map((note) => {
-    const what = note.state === "binned" ? "Binned" : note.state === "solved" ? `Solved on ${note.solved?.branch ?? "a branch"}` : `Filed #${note.issue?.number}`;
+    const what = note.state === "binned" ? "Binned" : note.state === "solved" ? `Solved on ${note.solved?.branch ?? "a branch"}` : null;
     return v_flex().id(`past:${note.id}`).px(10).py(8).gap(4).rounded(8).hover((st) => st.bg(t.hover))
-      .child(div().font_medium().whitespace_normal().child(note.title))
-      .child(h_flex().gap(8).text_size(11.5).text_color(t.muted).child(what).child(note.age))
+      .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
+      .when(note.state === "filed", (el) => el.child(filedLines(s, note)))
+      .child(h_flex().gap(8).text_size(11.5).text_color(t.muted).when(Boolean(what), (row) => row.child(what)).child(note.age))
       .when(Boolean(note.solved?.how), (el) => el.child(div().pl(8).border_l(2).border_color(t.border).text_size(12).text_color(t.muted).whitespace_normal().child(note.solved.how)))
       .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act)))));
   }));
@@ -218,7 +340,7 @@ function footer(s) {
   const { t, answer } = s;
   const past = answer?.history ?? [];
   const count = (state) => past.filter((n) => n.state === state).length;
-  const hints = s.view === "history" ? "esc back" : "↑↓ pick · enter open · k check · s solved · x bin · u undo · c confirm · n not solved";
+  const hints = s.view === "history" ? "esc back" : s.editor ? "esc leaves a field, then closes the editor; the draft is kept" : "↑↓ pick · enter open · f file · k check · s solved · x bin · u undo · c confirm · n not solved";
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
       .child(s.view === "history" ? "◂ Back to the notes" : `Filed ${count("filed")} · Solved ${count("solved")} · Binned ${count("binned")} ▸`))
