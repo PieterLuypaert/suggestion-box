@@ -16,7 +16,8 @@
 //   node cli/box.js watch <folder>
 //   node cli/box.js show <folder> <sha> <path> [line]
 //   node cli/box.js fix <folder> <note id> <space id>
-//   node cli/box.js collecting <folder> on|off [--all]
+//   node cli/box.js collecting <folder> on|off [--all | --key <project key>]
+//   node cli/box.js projects <folder> [<space folder>...]
 //   node cli/box.js prune <folder>
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -46,6 +47,9 @@ export async function run(args, env = process.env, now = new Date()) {
   const [command, folder, ...rest] = args;
   const project = projectAt(folder, env);
   if (command === "read") return read(project, rest.includes("--changes"), now, env);
+  if (command === "projects") return projects(project, rest, env);
+  // A switch by key or for every project needs no repo here; one for the project here does.
+  if (command === "collecting" && ["--key", "--all"].includes(rest[1])) return switchCollecting(project, rest, env);
   if (!project.dir) return { error: project.why };
   if (command === "act") return act(project, rest, now, env);
   if (command === "check") return check(project, rest[0], env, now, rest.includes("--again"));
@@ -440,20 +444,85 @@ function writeOver(file, expected, value) {
 function switchCollecting(project, rest, env) {
   const [value, scope] = rest;
   if (value !== "on" && value !== "off") return { error: "say on or off" };
+  if (scope !== undefined && scope !== "--all" && scope !== "--key") return { error: `unknown ${scope}; use --all or --key <project>` };
+  // A key is a project as the box names it: a path-like name, such as github.com/acme/shop.
+  const key = scope === "--key" ? rest[2] : project.key;
+  if (scope === "--key" && !(typeof key === "string" && key.trim() === key && /\S\/\S/.test(key))) return { error: "--key needs a project, such as github.com/acme/shop" };
   const root = boxRoot(env);
   mkdirSync(root, { recursive: true });
   const settings = readSettings(root);
   const off = new Set(settings.off ?? []);
   if (scope === "--all") settings.collecting = value === "on";
-  else if (value === "on") off.delete(project.key);
-  else off.add(project.key);
+  else if (value === "on") off.delete(key);
+  else off.add(key);
   settings.off = [...off].sort();
   if (settings.collecting === undefined) settings.collecting = true;
   const file = join(root, "settings.json");
   const temporary = `${file}.${process.pid}.tmp`;
   writeFileSync(temporary, `${JSON.stringify(settings, null, 2)}\n`);
   renameSync(temporary, file);
-  return { ok: true, collecting: { all: settings.collecting !== false, project: collecting(settings, project.key) } };
+  return { ok: true, collecting: { all: settings.collecting !== false, project: collecting(settings, key) } };
+}
+
+// The projects the settings view lists, each with its own switch: the projects of the given space
+// folders (the open spaces of the Herdr app) and every project that has notes, the focused one
+// first. `isOn` is the project's own switch; collecting everywhere being off overrules it.
+function projects(here, folders, env) {
+  const root = boxRoot(env);
+  const settings = readSettings(root);
+  const off = new Set(settings.off ?? []);
+  const found = new Map();
+  const add = (key, name, dir) => {
+    if (!key || found.has(key)) return;
+    const notes = countable(dir);
+    const count = (state) => notes.filter((note) => stateOf(note) === state).length;
+    found.set(key, { key, name, isHere: key === here.key, isOn: !off.has(key), counts: { open: count("open"), toVerify: count("to verify"), filed: count("filed") }, hasSpace: false });
+  };
+  for (const folder of folders) {
+    const repo = repoAt(folder);
+    if (!repo) continue;
+    const key = projectKey(repo.origin, repo.checkout);
+    add(key, projectName(key), join(root, "notes", projectFolder(key)));
+    found.get(key).hasSpace = true;
+  }
+  const notesRoot = join(root, "notes");
+  const noteFolders = existsSync(notesRoot) ? readdirSync(notesRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()) : [];
+  for (const { name } of noteFolders) {
+    const key = projectOf(join(notesRoot, name));
+    if (key) add(key, projectName(key), join(notesRoot, name));
+  }
+  if (here.key) add(here.key, here.name, here.dir);
+  for (const key of off) if (!found.has(key)) add(key, projectName(key), join(notesRoot, projectFolder(key)));
+  const list = [...found.values()].sort((a, b) => Number(b.isHere) - Number(a.isHere) || a.name.localeCompare(b.name));
+  return { ok: true, all: settings.collecting !== false, projects: list };
+}
+
+// A project's notes for its counts; one that cannot be read counts as none, and says so on stderr,
+// so one broken note never takes the whole list down.
+function countable(dir) {
+  if (!dir || !existsSync(dir)) return [];
+  try {
+    return notesOf(dir);
+  } catch (error) {
+    process.stderr.write(`box.js: could not count the notes in ${dir}: ${error.message}\n`);
+    return [];
+  }
+}
+
+// The project a notes folder belongs to, as its notes (or tombstones) say.
+function projectOf(dir) {
+  for (const sub of [dir, join(dir, "tombstones")]) {
+    if (!existsSync(sub)) continue;
+    for (const name of readdirSync(sub).filter((one) => one.endsWith(".json"))) {
+      try {
+        const key = JSON.parse(readFileSync(join(sub, name), "utf8")).project;
+        if (key) return key;
+      } catch (error) {
+        process.stderr.write(`box.js: skipped ${join(sub, name)}: ${error.message}\n`);
+      }
+    }
+  }
+  return null;
 }
 
 // Filed, solved and binned notes untouched for 30 days become tombstones: what the same-note check

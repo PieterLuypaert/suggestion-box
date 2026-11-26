@@ -40,11 +40,15 @@ const answer = {
 const scenes = {
   button: `button({ t, counts: { open: 2, toVerify: 1 }, isOn: true, isOff: false, isDim: false, why: "Suggestion box", isWiggling: true, onToggle: () => {} })`,
   "button off and dim": `button({ t, counts: null, isOn: false, isOff: true, isDim: true, why: "No git repo", isWiggling: false, onToggle: () => {} })`,
-  "panel with every kind of note": `panel({ ...base, expanded: new Set(["n2", "n3"]), selected: "n2", undo: { id: "u", title: "A binned note" }, notice: "Note 7 moved to To verify.", error: "Could not read the box", showSettings: true })`,
+  "panel with every kind of note": `panel({ ...base, expanded: new Set(["n2", "n3"]), selected: "n2", undo: { id: "u", title: "A binned note" }, notice: "Note 7 moved to To verify.", error: "Could not read the box" })`,
   "panel with the check: verdicts, the gone banner, a failure, one running": `panel({ ...base, expanded: new Set(["n4"]), checking: new Set(["n2"]) })`,
   "panel with collecting off": `panel({ ...base, collecting: { all: false, project: false } })`,
   "panel history": `panel({ ...base, view: "history" })`,
   "panel empty": `panel({ ...base, answer: { ...answer, notes: [], history: [], counts: { open: 0, toVerify: 0 } } })`,
+  "panel settings: collecting everywhere and per project": `panel({ ...base, view: "settings", projects })`,
+  "panel settings: off everywhere": `panel({ ...base, view: "settings", projects: { ...projects, all: false } })`,
+  "panel settings: still looking": `panel({ ...base, view: "settings", projects: null })`,
+  "panel settings: could not list": `panel({ ...base, view: "settings", projects: { error: "node was not found" } })`,
   "panel with the editor: labels, the scan, the target, similar issues": `panel({ ...base, expanded: new Set(["n4"]), justFiled: new Set(["h4"]), editor: editor({ hits: [{ kind: "a GitHub token", text: "ghp_abcdefghijklmnopqrstuvwxyz0123456789", blocking: true }, { kind: "an email address", text: "jan@acme.be", blocking: false, isFine: false }, { kind: "a home path", text: "/Users/jan", blocking: false, isFine: true }], similar: [{ number: 12, title: "PDF export crashes", url: "u" }], off: "Remove a GitHub token: ghp_abcdefgh…", canStartOver: true }) })`,
   "panel with the editor: checking, the gone banner, a failed filing": `panel({ ...base, editor: editor({ isChecking: true, labels: { problem: { label: "checking" }, evidence: { label: "checking" }, current: { label: "checking" }, desired: { label: "checking" } }, gone: { on: "main", why: "formatDate returns a dash now" }, similar: null, off: "Waiting for the check", error: "gh could not create the issue: HTTP 410" }) })`,
   "panel with the editor: not solved after all, copy for monday, not checked": `panel({ ...base, editor: editor({ gone: { on: "main", why: "it looks fixed" }, notGone: { reason: "" }, reason, canCopy: true, checkError: "Claude took longer than 90 seconds", line: "This project's tracker is monday: Copy issue puts it on your clipboard", off: null }) })`,
@@ -68,6 +72,11 @@ import { theme } from "herdr";
 import { button, panel } from "./panel.js";
 const answer = ${JSON.stringify(answer)};
 const proofsFound = ${JSON.stringify(proofsFound)};
+const projects = ${JSON.stringify({ all: true, projects: [
+  { key: "github.com/acme/shop", name: "shop", isHere: true, isOn: true, hasSpace: true, counts: { open: 2, toVerify: 1, filed: 3 } },
+  { key: "github.com/acme/billing", name: "billing", isHere: false, isOn: false, hasSpace: true, counts: { open: 0, toVerify: 0, filed: 0 } },
+  { key: "github.com/acme/a-project-with-a-very-long-name-indeed", name: "a-project-with-a-very-long-name-indeed", isHere: false, isOn: true, hasSpace: false, counts: { open: 1, toVerify: 0, filed: 0 } },
+] })};
 const texts = ${JSON.stringify({ title: checkedNoteTitle, sections })};
 export default class Scene extends View {
   init() {
@@ -84,7 +93,7 @@ export default class Scene extends View {
     const reason = this.reason;
     const labels = { problem: { label: "checked" }, evidence: { label: "agent", swap: "claude" }, current: { label: "corrected", swap: "agent" }, desired: { label: "unsure", question: "A dash, or refuse the invoice?" } };
     const editor = (over) => ({ id: "n4", fields, reason: null, texts, labels, hits: [], isChecking: false, target: { kind: "github" }, line: "→ acme/shop (public) · triage · board Shop › Backlog", similar: [], off: null, error: "", isFiling: false, notGone: null, gone: null, checkError: null, canCopy: false, canStartOver: false, ...over });
-    const base = { t, answer, view: "list", expanded: new Set(), selected: null, undo: null, checking: new Set(), editor: null, justFiled: new Set(), proofs: new Map(), verifying: new Set(), fixing: new Set(), mono: "Menlo", notice: null, error: "", showSettings: false, collecting: answer.collecting, noProject: null, act: () => {} };
+    const base = { t, answer, view: "list", expanded: new Set(), selected: null, undo: null, checking: new Set(), editor: null, justFiled: new Set(), proofs: new Map(), verifying: new Set(), fixing: new Set(), mono: "Menlo", notice: null, error: "", projects: null, collecting: answer.collecting, noProject: null, act: () => {} };
     return ${draw};
   }
 }

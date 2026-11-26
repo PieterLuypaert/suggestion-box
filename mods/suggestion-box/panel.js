@@ -36,10 +36,9 @@ export function panel(s) {
   return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13).text_color(t.foreground)
     .child(header(s))
     .when(Boolean(s.collecting && !s.collecting.project), (el) => el.child(offLine(s)))
-    .when(s.showSettings, (el) => el.child(settingsLine(s)))
     .when(Boolean(s.notice), (el) => el.child(div().flex_none().mx(10).mt(8).px(10).py(7).rounded(8).text_size(12).bg(t.raised).border(1).border_color(t.border).child(s.notice)))
     .when(Boolean(s.error), (el) => el.child(div().flex_none().px(14).py(6).text_size(12).text_color(t.blocked).child(s.error)))
-    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(6).child(s.view === "history" ? history(s) : groups(s)))
+    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(6).child(s.view === "history" ? history(s) : s.view === "settings" ? settingsView(s) : groups(s)))
     .child(footer(s));
 }
 
@@ -53,7 +52,7 @@ function header(s) {
     .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(name ? `· ${name}` : ""))
     .child(div().flex_none().text_size(11.5).text_color(t.dim).child(sum))
     .when(Boolean(s.collecting), (el) => el.child(toggle(t, "collect", "Collecting", s.collecting.project, `Collecting notes for ${name}`, (_e, cx) => s.act("collect", null, cx))))
-    .child(iconButton(t, "settings", svg("mods/workspace-chrome/settings.svg").size(14), "Collecting for all projects", (_e, cx) => s.act("settings", null, cx)))
+    .child(iconButton(t, "settings", svg("mods/workspace-chrome/settings.svg").size(14), s.view === "settings" ? "Back to the notes" : "Settings: which projects use the box", (_e, cx) => s.act("settings", null, cx), s.view === "settings"))
     .child(iconButton(t, "close", svg("mods/workspace-chrome/x.svg").size(14), "Close (⌥⌘S)", (_e, cx) => s.act("close", null, cx)));
 }
 
@@ -64,8 +63,8 @@ function toggle(t, id, label, isOn, tip, onClick) {
     .tooltip(tip).on_click(onClick).child(label).child(track);
 }
 
-function iconButton(t, id, icon, tip, onClick) {
-  return div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.muted)
+function iconButton(t, id, icon, tip, onClick, isOn = false) {
+  return div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(isOn ? t.foreground : t.muted).when(isOn, (el) => el.bg(t.selected))
     .hover((st) => st.bg(t.hover).text_color(t.foreground)).cursor_pointer().tooltip(tip).on_click(onClick).child(icon);
 }
 
@@ -75,11 +74,43 @@ function offLine(s) {
     .child(`Collecting off for ${s.answer?.project?.name}: new sessions don't hear of the box; a running agent that tries is told to carry on.`);
 }
 
-function settingsLine(s) {
+// Settings: whether agents hear of the box at all, and per project. Every switch says On or Off in
+// words, and what it does is written above the switches.
+function settingsView(s) {
   const { t } = s;
-  return h_flex().flex_none().px(14).py(8).gap(8).items_center().bg(t.raised).border_b(1).border_color(t.border)
-    .child(div().flex_1().text_size(12).text_color(t.muted).child("Collecting for all projects"))
-    .child(toggle(t, "collect-all", s.collecting?.all ? "On" : "Off", Boolean(s.collecting?.all), "Turn collecting off or on everywhere", (_e, cx) => s.act("collect-all", null, cx)));
+  const found = s.projects;
+  if (!found) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Looking at your spaces…");
+  if (found.error) return div().px(8).py(10).text_size(12).text_color(t.blocked).whitespace_normal().child(`Could not list the projects: ${found.error}`);
+  const isAll = found.all !== false;
+  return v_flex().gap(10).px(6).py(6)
+    .child(v_flex().gap(6).px(10).py(10).rounded(8).bg(t.raised)
+      .child(h_flex().gap(8).items_center()
+        .child(div().flex_1().font_medium().child("Collecting everywhere"))
+        .child(toggle(t, "collect-all", isAll ? "On" : "Off", isAll, "Turn the box on or off for every project", (_e, cx) => s.act("collect-all", null, cx))))
+      .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(isAll
+        ? "When a project is on, its new Claude sessions get the box's instructions, and agents drop the problems they find outside their task. When it is off, its agents never hear of the box, as if it were not installed."
+        : "Off everywhere: no project's agents hear of the box. The switches below keep what you chose, for when you turn it back on.")))
+    .child(div().px(4).pt(4).text_size(10.5).font_medium().text_color(t.dim).child(`PROJECTS · ${found.projects.length}`))
+    .children(found.projects.length ? found.projects.map((project) => projectRow(s, project, isAll)) : [div().px(8).text_size(12).text_color(t.dim).child("No projects yet: open a space with a git repo.")])
+    .child(div().px(4).pt(4).text_size(11.5).text_color(t.dim).whitespace_normal()
+      .child("A switch counts for new sessions at once. An agent that is already running hears that the box is off on its next note, and names what it found in its final report instead."));
+}
+
+function projectRow(s, project, isAll) {
+  const { t } = s;
+  const counts = project.counts ?? {};
+  const words = [counts.open ? `${counts.open} open` : "", counts.toVerify ? `${counts.toVerify} to verify` : "", counts.filed ? `${counts.filed} filed` : ""].filter(Boolean).join(" · ") || "no notes";
+  const isOn = isAll && project.isOn;
+  return h_flex().id(`project:${project.key}`).px(10).py(8).gap(10).items_center().rounded(8).border(1).border_color(project.isHere ? t.input : t.border)
+    .when(!isAll, (el) => el.opacity(0.5))
+    .child(v_flex().flex_1().min_w(0).gap(2)
+      .child(h_flex().gap(6).items_center()
+        .child(div().min_w(0).truncate().font_medium().child(project.name))
+        .when(project.isHere, (el) => el.child(chip(t, "this space", t.accent))))
+      .child(div().text_size(11.5).text_color(t.muted).truncate().child(`${words} · ${project.key}`)))
+    .child(isAll
+      ? toggle(t, `collect:${project.key}`, isOn ? "On" : "Off", isOn, isOn ? `Agents in ${project.name} hear of the box` : `Agents in ${project.name} never hear of the box`, (_e, cx) => s.act("collect-project", project, cx))
+      : div().flex_none().text_size(11.5).text_color(t.dim).child("off everywhere"));
 }
 
 function groups(s) {
@@ -437,10 +468,10 @@ function footer(s) {
   const { t, answer } = s;
   const past = answer?.history ?? [];
   const count = (state) => past.filter((n) => n.state === state).length;
-  const hints = s.view === "history" ? "esc back" : s.editor ? "esc leaves a field, then closes the editor; the draft is kept" : "↑↓ pick · enter open · f file · k check · s solved · x bin · u undo · c confirm · n not solved";
+  const hints = s.view !== "list" ? "esc back" : s.editor ? "esc leaves a field, then closes the editor; the draft is kept" : "↑↓ pick · enter open · f file · k check · s solved · x bin · u undo · c confirm · n not solved";
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
-      .child(s.view === "history" ? "◂ Back to the notes" : `Filed ${count("filed")} · Solved ${count("solved")} · Binned ${count("binned")} ▸`))
+      .child(s.view !== "list" ? "◂ Back to the notes" : `Filed ${count("filed")} · Solved ${count("solved")} · Binned ${count("binned")} ▸`))
     .child(div().flex_1())
     .child(div().flex_none().truncate().child(hints));
 }

@@ -350,7 +350,8 @@ export default class SuggestionBox extends View {
     this.selected = null;
     this.undo = null;
     this.checking = new Set();
-    this.showSettings = false;
+    // The settings view's projects, each with its switch, read when the view opens.
+    this.projects = null;
     // The note being filed, with its fields; one at a time.
     this.editor = null;
     // Proofs 1 and 3 of each claim opened since the panel showed, and the claims Claude is checking.
@@ -402,8 +403,12 @@ export default class SuggestionBox extends View {
   async actOn(name, note, cx) {
     const where = this.here().folder;
     if (name === "close") return this.close();
-    if (name === "settings") this.showSettings = !this.showSettings;
-    if (name === "history") this.view = this.view === "history" ? "list" : "history";
+    if (name === "settings") {
+      this.view = this.view === "settings" ? "list" : "settings";
+      this.projects = null;
+      if (this.view === "settings") this.loadProjects(cx);
+    }
+    if (name === "history") this.view = this.view === "list" ? "history" : "list";
     if (name === "expand") this.toggleExpanded(note, cx);
     if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
     if (name === "open-at") return this.openAt(note);
@@ -411,8 +416,9 @@ export default class SuggestionBox extends View {
     if (name === "jump-fix") return this.jumpToFix(note);
     if (name === "open-file") return this.openFile(note);
     if (name === "jump") return this.jump(note);
-    if (name === "collect") return this.write(cx, ["collecting", where, this.answer()?.collecting?.project ? "off" : "on"]);
-    if (name === "collect-all") return this.write(cx, ["collecting", where, this.answer()?.collecting?.all ? "off" : "on", "--all"]);
+    if (name === "collect") return this.write(cx, ["collecting", where, this.answer()?.collecting?.project ? "off" : "on"], (cx) => this.view === "settings" && this.loadProjects(cx));
+    if (name === "collect-all") return this.write(cx, ["collecting", where, this.projects?.all ?? this.answer()?.collecting?.all ? "off" : "on", "--all"], (cx) => this.loadProjects(cx));
+    if (name === "collect-project") return this.write(cx, ["collecting", where, note.isOn ? "off" : "on", "--key", note.key], (cx) => this.loadProjects(cx));
     if (name === "undo") return this.unbin(cx);
     if (name === "check") return this.check(cx, note);
     if (name === "file") return this.openEditor(cx, note);
@@ -825,8 +831,25 @@ export default class SuggestionBox extends View {
     return this.write(cx, ["act", this.here().folder, id, "restore"]);
   }
 
-  // A write through box.js, after the ones before it, then a fresh read for every copy.
-  write(cx, args) {
+  // The projects of the open spaces and every project with notes, each with its switch.
+  loadProjects(cx) {
+    if (!this.boxJs) return;
+    // Without a folder here (a remote space, no space open) the list still comes, just with no
+    // project marked as this space's.
+    const here = this.here().folder ?? "";
+    const folders = spaces().filter((space) => !space.machine && space.folder).map((space) => space.folder);
+    cx.spawn(async (cx) => {
+      try {
+        this.projects = await box(this.node, this.boxJs, ["projects", here, ...folders]);
+      } catch (error) {
+        this.projects = { error: error.message };
+      }
+      cx.notify();
+    });
+  }
+
+  // A write through box.js, after the ones before it, then a fresh read for every copy, and `after`.
+  write(cx, args, after = null) {
     if (!this.boxJs) return;
     const run = async () => {
       try {
@@ -841,6 +864,7 @@ export default class SuggestionBox extends View {
     cx.spawn(async (cx) => {
       await done;
       this.read(cx, false);
+      after?.(cx);
       cx.notify();
     });
     cx.notify();
@@ -890,6 +914,13 @@ export default class SuggestionBox extends View {
     }
     const m = e.modifiers ?? {};
     if (m.platform || m.control || m.alt) return;
+    // Settings and the history show no notes: their keys do nothing there, but esc goes back.
+    if (this.view !== "list") {
+      if (e.key !== "escape") return;
+      this.view = "list";
+      cx.stop_propagation();
+      return cx.notify();
+    }
     const notes = this.ordered();
     const at = notes.findIndex((n) => n.id === this.selected);
     const note = notes[at] ?? null;
@@ -905,7 +936,6 @@ export default class SuggestionBox extends View {
     else if (k === "c" && can("confirm")) this.act("confirm", note, cx);
     else if (k === "n" && can("not-solved")) this.act("not-solved", note, cx);
     else if (k === "escape" && this.editor) this.closeEditor(cx);
-    else if (k === "escape" && this.view === "history") this.view = "list";
     else if (k === "escape") this.close();
     else return;
     cx.stop_propagation();
@@ -922,6 +952,10 @@ export default class SuggestionBox extends View {
       this.selected = null;
       this.justFiled.clear();
       this.proofs.clear();
+      if (this.view === "settings") {
+        this.projects = null;
+        cx.spawn(async (cx) => this.loadProjects(cx));
+      }
     }
     // The note being filed left Open (claimed, binned) or you went to another project: the editor
     // closes, and its draft stays in the note. A read that is missing for a moment closes nothing.
@@ -950,7 +984,7 @@ export default class SuggestionBox extends View {
       justFiled: this.justFiled,
       notice: this.notice,
       error: this.error,
-      showSettings: this.showSettings,
+      projects: this.projects,
       collecting: this.answer()?.collecting ?? null,
       noProject: here.none,
       act: (name, note, cx) => this.act(name, note, cx),
