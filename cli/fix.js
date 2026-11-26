@@ -21,24 +21,39 @@ export function launcherPath(env = process.env) {
   return env.SUGGESTION_BOX_LAUNCHER || join(homedir(), ".claude", "skills", "parallel-tickets", "scripts", "issues");
 }
 
-// { can, why } for a project, before any button shows.
+// { can, why } for a project, before any button shows. A launcher that cannot be read is no
+// launcher: the rest of the box never depends on it.
 export function gateFor(top, key, env = process.env) {
   const launcher = launcherPath(env);
-  const hasLauncher = existsSync(launcher);
-  const text = hasLauncher ? readFileSync(launcher, "utf8") : "";
+  const text = readable(launcher);
+  const hasLauncher = text !== null;
   const config = filingTarget(configText(top, defaultRef(top)));
   return fixGate({
     hasLauncher,
     hasHagent: existsSync(join(dirname(launcher), "hagent")),
-    knowsSpace: /--space\)/.test(text),
+    knowsSpace: /--space\)/.test(text ?? ""),
     originRepo: githubRepo(key),
     tracker: config ? { kind: config.kind, repo: config.repo } : null,
   });
 }
 
+function readable(file) {
+  try {
+    return existsSync(file) ? readFileSync(file, "utf8") : null;
+  } catch {
+    return null;
+  }
+}
+
+// The person's login shell when it speaks sh ("$0" and "$@"), else zsh, macOS's own.
+export function loginShell(env = process.env) {
+  const shell = env.SHELL || process.env.SHELL || "";
+  return /\/(?:sh|bash|zsh|dash|ksh)$/.test(shell) ? shell : "/bin/zsh";
+}
+
 // The launcher with these arguments, from the project's folder, through the person's login shell.
 function launch(top, args, env, timeout) {
-  const shell = env.SHELL || process.env.SHELL || "/bin/zsh";
+  const shell = loginShell(env);
   const clean = { ...process.env, ...env };
   // A panel's own context is not where the tab goes: --space says that.
   for (const name of ["HERDR_ACTIVE_WORKSPACE_ID", "HERDR_ACTIVE_PANE_CWD", "HERDR_WORKSPACE_ID", "HERDR_TAB_ID", "HERDR_ENV"]) delete clean[name];

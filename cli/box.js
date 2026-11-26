@@ -25,7 +25,7 @@ import { fold, stateOf } from "../mods/suggestion-box/events.js";
 import { age } from "../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName } from "../mods/suggestion-box/project.js";
 import { stillHolds } from "../mods/suggestion-box/check.js";
-import { ACTS, allows, applyAction, buttonsFor, isWatched, recordClosed, recordFix, recordIssue, recordLanded } from "../mods/suggestion-box/rules.js";
+import { ACTS, allows, applyAction, buttonsFor, isWatched, recordClosed, recordFix, recordIssue, recordLanded, startFix, withStaleFix } from "../mods/suggestion-box/rules.js";
 import { freeBranch, gateFor, launchFix } from "./fix.js";
 import { verifyHolds } from "../mods/suggestion-box/proofs.js";
 import { changeProof, fileAt, landedProof, runVerify } from "./proofs.js";
@@ -79,8 +79,10 @@ function read(project, withChanges, now, env) {
   mkdirSync(join(project.root, "notes"), { recursive: true });
   const settings = readSettings(project.root);
   const mainRef = withChanges ? defaultRef(project.repo.top) : null;
-  const fixing = gateFor(project.repo.top, project.key, env);
-  const views = (existsSync(project.dir) ? notesOf(project.dir) : []).map((note) => describe(project, note, withChanges, mainRef, now, fixing));
+  const notes = existsSync(project.dir) ? notesOf(project.dir) : [];
+  // Whether the launcher can start a fix here matters only once a note is filed.
+  const fixing = notes.some((note) => stateOf(note) === "filed") ? gateFor(project.repo.top, project.key, env) : null;
+  const views = notes.map((note) => describe(project, withStaleFix(note, now.toISOString()), withChanges, mainRef, now, fixing));
   // A filed note is history; the panel keeps the ones it just filed in sight until it closes.
   const live = views.filter((v) => ["open", "to verify"].includes(v.state));
   // A fix still watched stays in sight, however long it waits to land.
@@ -322,39 +324,63 @@ function fix(project, id, space, env, now) {
   const loaded = loadNote(project.dir, id);
   if (!loaded) return { error: `there is no note ${id}` };
   const view = fold(loaded.note, loaded.events.map((e) => e.event));
-  if (!allows(view, "fix")) return { error: `note ${view.number} is ${stateOf(view)}${view.fix ? `, already fixing in ${view.fix.branch}` : ""}; nothing started` };
   if (String(view.issue?.repo ?? "").toLowerCase() !== githubRepo(project.key)) return { error: `issue #${view.issue?.number} is not in this repo, so a ticket cannot start here` };
   const gate = gateFor(project.repo.top, project.key, env);
   if (!gate.can) return { error: gate.why };
   if (!space) return { error: "say which space of the Herdr app the tab opens in" };
+  // The marker goes on with the state checked under the same write, so a second start, from
+  // another panel or window, finds it and stops.
+  const at = now.toISOString();
+  const started = update(project, id, ({ view: fresh }) => {
+    const current = withStaleFix(fresh, at);
+    if (!allows(current, "fix")) return { error: refusedFix(current) };
+    return { note: startFix(current, at, space) };
+  }, { foldEvents: true });
+  if (started.error) return started;
   const named = freeBranch(project.repo.top, view.filed?.title ?? view.title, env);
   const opened = named.error ? named : launchFix(project.repo.top, { space, ticket: view.issue.number, branch: named.branch }, env);
   update(project, id, ({ view: fresh }) => ({ note: recordFix(fresh, now.toISOString(), { ...opened, space }) }), { foldEvents: true });
   return opened.error ? { error: opened.error } : { ok: true, ...opened };
 }
 
-// Filed notes whose issue is still open on GitHub: one look per repo at its closed issues.
-function closedIssues(project, env, now) {
-  const open = notesOf(project.dir).filter((note) => stateOf(note) === "filed" && note.issue?.repo && !note.issue.closed);
-  let closed = 0;
-  for (const repo of [...new Set(open.map((note) => note.issue.repo))]) {
-    const answer = gh(["issue", "list", "--repo", repo, "--state", "closed", "--limit", "200", "--json", "number,closedAt"], { env });
-    if (answer.code !== 0) continue;
-    const found = new Map(closedList(answer.stdout).map((issue) => [issue.number, issue.closedAt]));
-    for (const note of open.filter((one) => one.issue.repo === repo && found.has(one.issue.number))) {
-      update(project, note.id, ({ view }) => ({ note: recordClosed(view, now.toISOString(), found.get(note.issue.number)) }), { foldEvents: true });
-      closed++;
-    }
-  }
-  return closed;
+function refusedFix(view) {
+  if (view.fix?.starting) return `a fix for note ${view.number} is starting already; nothing started`;
+  if (view.fix) return `note ${view.number} is already fixing in ${view.fix.branch}; nothing started`;
+  return `note ${view.number} is ${stateOf(view)}${view.issue?.closed ? ` and issue #${view.issue.number} is closed` : ""}; nothing started`;
 }
 
-function closedList(text) {
+// Filed notes learn whether their issue is closed, or open again: per repo, one question to
+// GitHub about exactly those issue numbers.
+function closedIssues(project, env, now) {
+  const filed = notesOf(project.dir).filter((note) => stateOf(note) === "filed" && note.issue?.repo && note.issue?.number);
+  let changed = 0;
+  for (const repo of [...new Set(filed.map((note) => note.issue.repo))]) {
+    const notes = filed.filter((note) => note.issue.repo === repo);
+    const states = issueStates(repo, notes.map((note) => note.issue.number), env);
+    if (!states) continue;
+    for (const note of notes) {
+      const state = states.get(note.issue.number);
+      if (!state) continue;
+      const closedAt = state.state === "CLOSED" ? state.closedAt ?? now.toISOString() : null;
+      if (Boolean(closedAt) === Boolean(note.issue.closed)) continue;
+      update(project, note.id, ({ view }) => ({ note: recordClosed(view, now.toISOString(), closedAt) }), { foldEvents: true });
+      changed++;
+    }
+  }
+  return changed;
+}
+
+// The state of each of these issues of a repo, from one GraphQL query, or null when gh could not ask.
+function issueStates(repo, numbers, env) {
+  const [owner, name] = repo.split("/");
+  const fields = numbers.map((n) => `i${n}: issue(number: ${Number(n)}) { number state closedAt }`).join(" ");
+  const answer = gh(["api", "graphql", "-f", `query=query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, "-F", `owner=${owner}`, "-F", `name=${name}`], { env });
+  if (answer.code !== 0) return null;
   try {
-    const list = JSON.parse(text || "[]");
-    return Array.isArray(list) ? list : [];
+    const found = Object.values(JSON.parse(answer.stdout).data?.repository ?? {}).filter(Boolean);
+    return new Map(found.map((issue) => [issue.number, issue]));
   } catch {
-    return [];
+    return null;
   }
 }
 

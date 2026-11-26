@@ -20,7 +20,7 @@ export function actionsFor(view) {
   const state = stateOf(view);
   if (state === "to verify") return ["confirm", "not-solved"];
   if (state === "open") return ["mark-solved", "check", "file", "bin"];
-  if (state === "filed") return view.solved?.confirmed || view.fix || view.issue?.closed ? [] : ["fix"];
+  if (state === "filed") return view.solved?.confirmed || (view.fix && !view.fix.isStale) || view.issue?.closed ? [] : ["fix"];
   if (state === "solved") return ["reopen"];
   if (state === "binned") return ["restore"];
   return [];
@@ -73,11 +73,32 @@ export function recordLanded(view, now, landed) {
 // Whether the watch still looks at a note: confirmed solved, its fix not landed yet.
 export const isWatched = (view) => Boolean(view.solved?.confirmed) && view.solved?.landed?.state !== "landed";
 
-// A fix started in a new tab: its branch, tab and pane, so it never starts twice; or why it did not.
+// A fix that has been starting this long without a word back is called stale: the launcher was cut
+// off, and its tab may or may not be open.
+export const FIX_STALE_MS = 10 * 60000;
+
+// The fix as the box shows it now: a start that never reported back is marked stale.
+export function withStaleFix(view, now) {
+  if (!view.fix?.starting || Date.parse(now) - Date.parse(view.fix.at) < FIX_STALE_MS) return view;
+  return { ...view, fix: { ...view.fix, isStale: true } };
+}
+
+// A fix about to start, marked before the launcher runs, so no second start gets in meanwhile.
+export function startFix(view, now, space) {
+  const note = JSON.parse(JSON.stringify(view));
+  note.fix = { starting: true, space, at: now };
+  note.fixError = null;
+  return note;
+}
+
+// A fix started in a new tab: its branch, tab and pane, so it never starts twice; or why it did
+// not, and the button is back.
 export function recordFix(view, now, fix) {
   const note = JSON.parse(JSON.stringify(view));
-  if (fix.error) note.fixError = { why: fix.error, at: now };
-  else {
+  if (fix.error) {
+    note.fix = null;
+    note.fixError = { why: fix.error, at: now };
+  } else {
     note.fix = { branch: fix.branch, tab: fix.tab, pane: fix.pane, space: fix.space ?? null, at: now };
     note.fixError = null;
   }
@@ -85,10 +106,11 @@ export function recordFix(view, now, fix) {
   return note;
 }
 
-// A filed note whose issue was closed on GitHub.
+// A filed note after a look at its issue on GitHub: closed (with when), or open again.
 export function recordClosed(view, now, closedAt) {
   const note = JSON.parse(JSON.stringify(view));
-  note.issue = { ...note.issue, closed: { at: closedAt ?? now } };
+  note.issue = { ...note.issue, closed: closedAt ? { at: closedAt } : null };
+  note.updated = now;
   return note;
 }
 

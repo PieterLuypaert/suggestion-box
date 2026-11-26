@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
+import { loginShell } from "../cli/fix.js";
 import { branchCandidates, fixGate, fixType, lastLine, pickBranch, readLaunch } from "../mods/suggestion-box/fix.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
@@ -111,14 +112,14 @@ describe("box.js fix", () => {
   test("a fix never starts twice", async () => {
     const s = setup();
     await run(["fix", s.repo, s.id, "sp1"], s.env);
-    expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("note 1 is filed, already fixing in fix/formatdate-throws-null-date; nothing started");
+    expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("note 1 is already fixing in fix/formatdate-throws-null-date; nothing started");
     expect(calls(s).filter((line) => line.includes("|launch "))).toHaveLength(1);
   });
 
   test("a failing launcher: its last line on the note, and the button stays", async () => {
     const s = setup({ fail: "the primary checkout has uncommitted work" });
     expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("the primary checkout has uncommitted work");
-    expect(noteOf(s).fix).toBeUndefined();
+    expect(noteOf(s).fix).toBeNull();
     expect(noteOf(s).fixError).toMatchObject({ why: "the primary checkout has uncommitted work" });
     expect((await run(["read", s.repo], s.env)).history[0].actions).toEqual(["fix"]);
   });
@@ -135,14 +136,48 @@ describe("box.js fix", () => {
     expect((await run(["fix", other.repo, other.id, "sp1"], other.env)).error).toBe("issue #812 is not in this repo, so a ticket cannot start here");
   });
 
-  test("the watch learns that an issue closed; a closed issue gets no fix", async () => {
+  test("the watch asks about exactly the filed issues: closed, then open again", async () => {
     const s = setup();
     const gh = join(s.dir, "gh");
-    writeFileSync(gh, `#!/bin/sh\necho '[{"number":812,"closedAt":"2026-11-26T10:00:00Z"},{"number":3,"closedAt":"x"}]'\n`);
+    const answer = (state, closedAt) => writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${s.dir}/gh.log"\necho '${JSON.stringify({ data: { repository: { i812: { number: 812, state, closedAt } } } })}'\n`);
+    answer("CLOSED", "2026-11-26T10:00:00Z");
     chmodSync(gh, 0o755);
     expect(await run(["watch", s.repo], { ...s.env, SUGGESTION_BOX_GH: gh })).toEqual({ ok: true, watched: 0, closed: 1 });
-    const note = (await run(["read", s.repo], s.env)).history[0];
+    expect(readFileSync(join(s.dir, "gh.log"), "utf8")).toContain("i812: issue(number: 812)");
+    let note = (await run(["read", s.repo], s.env)).history[0];
     expect(note.issue.closed).toEqual({ at: "2026-11-26T10:00:00Z" });
     expect(note.actions).toEqual([]);
+    expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("note 1 is filed and issue #812 is closed; nothing started");
+    answer("OPEN", null);
+    expect((await run(["watch", s.repo], { ...s.env, SUGGESTION_BOX_GH: gh })).closed).toBe(1);
+    note = (await run(["read", s.repo], s.env)).history[0];
+    expect(note.issue.closed).toBeNull();
+    expect(note.actions).toEqual(["fix"]);
+  });
+
+  test("a start under way stops a second one, from any panel; one that never reported back is stale", async () => {
+    const s = setup();
+    const now = new Date();
+    writeFileSync(s.file, JSON.stringify({ ...noteOf(s), fix: { starting: true, space: "sp1", at: now.toISOString() } }));
+    expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("a fix for note 1 is starting already; nothing started");
+    expect((await run(["read", s.repo], s.env)).history[0].actions).toEqual([]);
+    const later = new Date(now.getTime() + 11 * 60000);
+    const stale = (await run(["read", s.repo], s.env, later)).history[0];
+    expect(stale.fix.isStale).toBe(true);
+    expect(stale.actions).toEqual(["fix"]);
+    expect((await run(["fix", s.repo, s.id, "sp1"], s.env, later)).ok).toBe(true);
+  });
+
+  test("a launcher that cannot be read never stops the box from reading", async () => {
+    const s = setup();
+    const answer = await run(["read", s.repo], { ...s.env, SUGGESTION_BOX_LAUNCHER: s.dir });
+    expect(answer.fixing.can).toBe(false);
+    expect(answer.history[0].actions).toEqual([]);
+  });
+
+  test("the launcher runs through a login shell that speaks sh", () => {
+    expect(loginShell({ SHELL: "/bin/zsh" })).toBe("/bin/zsh");
+    expect(loginShell({ SHELL: "/opt/homebrew/bin/bash" })).toBe("/opt/homebrew/bin/bash");
+    expect(loginShell({ SHELL: "/opt/homebrew/bin/fish" })).toBe("/bin/zsh");
   });
 });
