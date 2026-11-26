@@ -250,3 +250,35 @@ describe("changes since the drop", () => {
     expect(shown.actions).toEqual(["mark-solved", "check", "file", "bin"]);
   });
 });
+
+describe("the settings view's projects", () => {
+  test("the open spaces' projects and every project with notes, the focused one first, each with its own switch", async () => {
+    const { repo, box, env } = setup();
+    suggest(repo, box, [], NOTE);
+    const other = makeRepo({ origin: "git@github.com:acme/billing.git" });
+    const plain = tempDir("plain-");
+    const answer = await run(["projects", other, repo, other, plain], env);
+    expect(answer.all).toBe(true);
+    expect(answer.projects.map((p) => [p.name, p.isHere, p.isOn, p.hasSpace])).toEqual([["billing", true, true, true], ["shop", false, true, true]]);
+    expect(answer.projects[1].counts).toEqual({ open: 1, toVerify: 0, filed: 0 });
+  });
+
+  test("a project with notes but no open space, and one switched off, are listed too", async () => {
+    const { repo, box, env } = setup();
+    suggest(repo, box, [], NOTE);
+    await run(["collecting", repo, "off", "--key", "github.com/acme/gone"], env);
+    const answer = await run(["projects", repo], env);
+    expect(answer.projects.map((p) => [p.key, p.isOn, p.hasSpace])).toEqual([["github.com/acme/shop", true, false], ["github.com/acme/gone", false, false]]);
+  });
+
+  test("a switch by project, and collecting everywhere, which overrules it but keeps it", async () => {
+    const { repo, env } = setup();
+    expect((await run(["collecting", repo, "off", "--key", "github.com/acme/shop"], env)).collecting).toEqual({ all: true, project: false });
+    expect((await run(["collecting", repo, "off", "--all"], env)).collecting).toEqual({ all: false, project: false });
+    expect((await run(["projects", repo], env)).projects[0]).toMatchObject({ key: "github.com/acme/shop", isOn: false });
+    await run(["collecting", repo, "on", "--all"], env);
+    await run(["collecting", repo, "on", "--key", "github.com/acme/shop"], env);
+    expect((await run(["read", repo], env)).collecting).toEqual({ all: true, project: true });
+    expect((await run(["collecting", repo, "off", "--key", "not a key"], env)).error).toContain("--key needs a project");
+  });
+});
