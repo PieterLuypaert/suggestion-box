@@ -147,7 +147,7 @@ function noteCard(s, note) {
     .border_color(isSelected ? t.input : t.chrome).bg(s.fresh?.has(note.id) ? t.raised : t.chrome).hover((st) => st.bg(t.hover))
     .child(div().id(`title:${note.id}`).font_medium().cursor_pointer().whitespace_normal().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
     .child(h_flex().flex_wrap().gap(8).items_center().text_size(11.5).text_color(t.muted)
-      .when(Boolean(where), (el) => el.child(div().id(`file:${note.id}`).text_color(t.accent).cursor_pointer().tooltip(`Open ${note.at.path} in Cursor`).on_click((_e, cx) => s.act("open-file", note, cx)).child(where)))
+      .when(Boolean(where), (el) => el.child(div().id(`at:${note.id}`).text_color(t.accent).cursor_pointer().tooltip(`Open ${note.at.path} in Cursor`).on_click((_e, cx) => s.act("open-file", note, cx)).child(where)))
       .when(Boolean(note.from?.ticket), (el) => el.child(div().id(`ticket:${note.id}`).cursor_pointer().tooltip("Its tab, or the ticket on GitHub").on_click((_e, cx) => s.act("jump", note, cx)).child(`#${note.from.ticket}`)))
       .child(div().child(note.age))
       .when(note.spotted > 1, (el) => el.child(div().text_color(t.working).child(`${note.spotted}×`)))
