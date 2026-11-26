@@ -86,6 +86,9 @@ async function box(node, path, args, timeout = 60000) {
   return answer;
 }
 
+// What a button is called, for the line that says it failed.
+const LABEL_OF = { file: "File issue", check: "Check", bin: "Bin", "mark-solved": "Mark solved", confirm: "Confirm solved", "not-solved": "Not solved", reopen: "Reopen", restore: "Restore", fix: "Fix in new tab", "editor-create": "Create issue", "editor-copy": "Copy issue" };
+
 // Why a claim is not solved, kept on the note: what the independent check found, else the person's say.
 function notSolvedReason(note) {
   const verify = note.verify;
@@ -129,7 +132,7 @@ export default class SuggestionBox extends View {
     this.folders ??= new Map();
     if (at?.terminal && at.cwd) this.folders.set(space.id, at.cwd);
     const folder = this.folders.get(space.id) || space.folder;
-    return folder ? { folder } : { none: "This space has no folder." };
+    return folder ? { folder, space: space.id } : { none: "This space has no folder." };
   }
 
   read(cx, withChanges) {
@@ -141,7 +144,7 @@ export default class SuggestionBox extends View {
         if (!withChanges) this.keepChanges(answer);
         this.error = "";
         this.arrived(cx, here.folder, answer);
-        setShared(DATA, { folder: here.folder, answer });
+        setShared(DATA, { folder: here.folder, space: here.space, answer });
         if (!this.isButton) this.syncEditor(answer);
       } catch (error) {
         this.error = `Could not read the box: ${error.message}`;
@@ -161,9 +164,15 @@ export default class SuggestionBox extends View {
     }
   }
 
+  // The last read of the focused space's box. While a mod has the keyboard (the panel itself, when
+  // you click in it) no terminal says which folder this is, and each copy of the box remembers its
+  // own last one: the space's last read still holds then.
   answer() {
     const data = shared(DATA);
-    return data && data.folder === this.here().folder ? data.answer : null;
+    if (!data) return null;
+    const here = this.here();
+    if (data.folder === here.folder) return data.answer;
+    return data.space && data.space === here.space && !focused()?.terminal ? data.answer : null;
   }
 
   // What a new answer changes: the button wiggles when a note arrives while the panel is shut; the
@@ -379,7 +388,18 @@ export default class SuggestionBox extends View {
     return [...notes.filter((n) => n.state === "to verify"), ...notes.filter((n) => n.state === "open")];
   }
 
+  // A button that fails says so in the panel, never nothing at all.
   async act(name, note, cx) {
+    try {
+      return await this.actOn(name, note, cx);
+    } catch (error) {
+      console.log(`suggestion box: ${name} failed: ${error?.stack ?? error}`);
+      this.error = `${LABEL_OF[name] ?? name} did not work: ${error?.message ?? error}`;
+      cx.notify();
+    }
+  }
+
+  async actOn(name, note, cx) {
     const where = this.here().folder;
     if (name === "close") return this.close();
     if (name === "settings") this.showSettings = !this.showSettings;
@@ -550,7 +570,7 @@ export default class SuggestionBox extends View {
     if (this.editor?.id === note.id) return this.editor.fields.title.focus();
     this.closeEditor(cx);
     const texts = startTexts(note);
-    const editor = { id: note.id, number: note.number, title: note.title, folder: this.here().folder, typing: null, target: null, similar: [], link: null, error: "", isFiling: false };
+    const editor = { id: note.id, number: note.number, title: note.title, folder: this.here().folder, project: this.answer()?.project?.key ?? null, typing: null, target: null, similar: [], link: null, error: "", isFiling: false };
     editor.auto = Object.fromEntries(SECTIONS.map((name) => [name, checkedText(note, name)]));
     editor.fine = new Set(note.draft?.fine ?? []);
     editor.notGone = note.draft?.notGone ?? null;
@@ -903,10 +923,12 @@ export default class SuggestionBox extends View {
       this.justFiled.clear();
       this.proofs.clear();
     }
-    // The note being filed left Open (claimed, binned, another project): the editor closes, and
-    // its draft stays in the note.
+    // The note being filed left Open (claimed, binned) or you went to another project: the editor
+    // closes, and its draft stays in the note. A read that is missing for a moment closes nothing.
+    const shownKey = this.answer()?.project?.key ?? null;
     const editing = this.editor && this.noteById(this.editor.id);
-    if (this.editor && !this.editor.isFiling && editing?.state !== "open") {
+    const hasLeft = this.editor && ((editing && editing.state !== "open") || (shownKey && this.editor.project && shownKey !== this.editor.project));
+    if (this.editor && !this.editor.isFiling && hasLeft) {
       cx.spawn(async (cx) => {
         this.closeEditor(cx);
         cx.notify();
