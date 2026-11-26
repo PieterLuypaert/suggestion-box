@@ -36,7 +36,7 @@ import { scanBlock } from "../mods/suggestion-box/scan.js";
 import { runCheck, stopRunning } from "./check.js";
 import { addToBoard, boardsOf, codeLinkFor, createIssue, gh, issueSince, similarIssues, targetFor } from "./file.js";
 import { changeFor, defaultRef } from "./changes.js";
-import { repoAt } from "./git.js";
+import { repoAt, ticketRecords } from "./git.js";
 import { boxRoot, collecting, readSettings } from "./store.js";
 
 const DAY = 86400000;
@@ -80,9 +80,11 @@ function read(project, withChanges, now, env) {
   const settings = readSettings(project.root);
   const mainRef = withChanges ? defaultRef(project.repo.top) : null;
   const notes = existsSync(project.dir) ? notesOf(project.dir) : [];
-  // Whether the launcher can start a fix here matters only once a note is filed.
-  const fixing = notes.some((note) => stateOf(note) === "filed") ? gateFor(project.repo.top, project.key, env) : null;
-  const views = notes.map((note) => describe(project, withStaleFix(note, now.toISOString()), withChanges, mainRef, now, fixing));
+  // Whether the launcher can start a fix here, and the tickets it started, matter only once a note is filed.
+  const hasFiled = notes.some((note) => stateOf(note) === "filed");
+  const fixing = hasFiled ? gateFor(project.repo.top, project.key, env) : null;
+  const tickets = hasFiled ? ticketRecords(project.repo.common) : [];
+  const views = notes.map((note) => describe(project, withTicket(withStaleFix(note, now.toISOString()), tickets), withChanges, mainRef, now, fixing));
   // A filed note is history; the panel keeps the ones it just filed in sight until it closes.
   const live = views.filter((v) => ["open", "to verify"].includes(v.state));
   // A fix still watched stays in sight, however long it waits to land.
@@ -95,6 +97,16 @@ function read(project, withChanges, now, env) {
     history: recent.sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated)),
     counts: { open: views.filter((v) => v.state === "open").length, toVerify: views.filter((v) => v.state === "to verify").length },
   };
+}
+
+// A filed note whose issue already has a ticket from the parallel-tickets launcher, however it was
+// started (Fix in new tab, /parallel-tickets, hagent by hand): that ticket is its fix, so it is shown
+// and never started a second time.
+function withTicket(note, tickets) {
+  if (note.fix?.branch || note.status !== "filed" || !note.issue?.number) return note;
+  const record = tickets.find((one) => Number(one.ticket) === Number(note.issue.number) && (!one.repo || !note.issue.repo || String(one.repo).toLowerCase() === String(note.issue.repo).toLowerCase()));
+  if (!record?.branch) return note;
+  return { ...note, fix: { branch: record.branch, tab: record.tab ?? null, pane: record.pane ?? null, space: record.workspace ?? null, byLauncher: true } };
 }
 
 // Fix in new tab only where the launcher can start it, and for an issue in this very repo.
@@ -333,8 +345,9 @@ function fix(project, id, space, env, now) {
   // The marker goes on with the state checked under the same write, so a second start, from
   // another panel or window, finds it and stops.
   const at = now.toISOString();
+  const tickets = ticketRecords(project.repo.common);
   const started = update(project, id, ({ view: fresh }) => {
-    const current = withStaleFix(fresh, at);
+    const current = withTicket(withStaleFix(fresh, at), tickets);
     if (!allows(current, "fix")) return { error: refusedFix(current) };
     return { note: startFix(current, at, space) };
   }, { foldEvents: true });
