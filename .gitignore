@@ -1,0 +1,6 @@
+# Written by herdr-app check into every mod it loads.
+mods/*/gpui-kit.d.ts
+mods/*/jsconfig.json
+# Installed by bun install.
+node_modules/
+.DS_Store
