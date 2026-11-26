@@ -73,7 +73,7 @@ export function claudeArgs(question) {
 }
 
 // The check from claude's output, or { error } in words a person reads.
-export function readAnswer({ code, stdout, stderr }) {
+export function readAnswer({ code, stdout, stderr }, timeout = TIMEOUT_MS) {
   let json = null;
   try {
     json = JSON.parse(stdout);
@@ -88,7 +88,7 @@ export function readAnswer({ code, stdout, stderr }) {
     };
   }
   const why = (json && (json.result || json.subtype)) || firstLine(stderr) || firstLine(stdout) || `claude stopped with exit code ${code}`;
-  return { error: explain(why) ?? `Claude could not check the note: ${why}` };
+  return { error: explain(why, timeout) ?? `Claude could not check the note: ${why}` };
 }
 
 function cleanVerdict(entry) {
@@ -102,11 +102,11 @@ function cleanVerdict(entry) {
 const firstLine = (text) => String(text ?? "").trim().split("\n")[0] ?? "";
 
 // What to do about the failures people run into, else null.
-export function explain(why) {
+export function explain(why, timeout = TIMEOUT_MS) {
   const text = String(why ?? "");
   if (/not logged in|please run \/login|invalid api key|oauth token (?:has )?expired/i.test(text)) return "Your Claude Code is not logged in. Run claude in a terminal, log in with /login, and check again.";
   if (/limit/i.test(text) && /reset|reached|hit|exceeded/i.test(text)) return "You have used up your Claude usage for now. Check again after it resets.";
-  if (/timed?[ -]?out|timeout/i.test(text)) return `Claude took longer than ${TIMEOUT_MS / 1000} seconds, so the box stopped waiting. Check again.`;
+  if (/timed?[ -]?out|timeout/i.test(text)) return `Claude took longer than ${Math.max(1, Math.round(timeout / 1000))} seconds, so the box stopped waiting. Check again.`;
   if (/overloaded|\b529\b/i.test(text)) return "Claude is overloaded right now. Check again in a minute.";
   if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|getaddrinfo|fetch failed|network/i.test(text)) return "The box could not reach Claude. Check your internet connection and check again.";
   return null;

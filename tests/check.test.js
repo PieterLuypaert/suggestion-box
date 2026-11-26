@@ -1,11 +1,13 @@
 // The check: what it asks, how it reads the answer, and box.js check with a stand-in claude in a
 // throwaway repo whose origin is a local bare repo, so nothing reaches the network or the real claude.
 import { describe, expect, test } from "bun:test";
+import { spawn } from "node:child_process";
 import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { claudeArgs, explain, prompt, readAnswer, stillHolds } from "../mods/suggestion-box/check.js";
-import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
+import { git, makeRepo, NOTE, ROOT, suggest, tempDir } from "./helpers.js";
+import { applyAction } from "../mods/suggestion-box/rules.js";
 
 const note = {
   title: "formatDate throws on a null date",
@@ -70,9 +72,9 @@ describe("reading the answer", () => {
 });
 
 // A repo whose origin is a local bare clone, a box, and a stand-in claude that logs how it was run.
-function setup(reply, { sleep = 0 } = {}) {
+function setup(reply, { sleep = 0, branch = "feat/8504-group-records", during = "" } = {}) {
   const bare = join(tempDir("bare-"), "shop.git");
-  const repo = makeRepo({ origin: null });
+  const repo = makeRepo({ origin: null, branch });
   git(repo, "clone", "-q", "--bare", repo, bare);
   git(repo, "remote", "add", "origin", bare);
   git(repo, "fetch", "-q", "origin");
@@ -83,6 +85,7 @@ function setup(reply, { sleep = 0 } = {}) {
   writeFileSync(stand, `#!/bin/sh
 { echo "cwd=$PWD"; ls main/src branch/src 2>&1; for a in "$@"; do echo "arg=$a"; done; } > "${log}"
 sleep ${sleep}
+${during}
 cat <<'JSON'
 ${JSON.stringify({ is_error: false, structured_output: reply })}
 JSON
@@ -147,5 +150,67 @@ describe("box.js check", () => {
     suggest(s.repo, s.box, ["solved", "1"], "how: h\nproof: p\n");
     const id = JSON.parse(readFileSync(noteFile(s.box), "utf8")).id;
     expect((await run(["check", s.repo, id], s.env)).error).toBe("note 1 is to verify; only an open note is checked");
+  });
+});
+
+describe("box.js check, after the review", () => {
+  test("Check again runs anew even when nothing moved", async () => {
+    const s = setup({ sections: sections(), gone: { is_gone: false } });
+    suggest(s.repo, s.box, [], NOTE);
+    const id = JSON.parse(readFileSync(noteFile(s.box), "utf8")).id;
+    await run(["check", s.repo, id], s.env);
+    expect(await run(["check", s.repo, id], s.env)).toEqual({ ok: true, reused: true });
+    expect((await run(["check", s.repo, id, "--again"], s.env)).check).toBeDefined();
+  });
+
+  test("a check that ends after the note was binned is dropped", async () => {
+    const s = setup({ sections: sections(), gone: { is_gone: false } });
+    suggest(s.repo, s.box, [], NOTE);
+    const id = JSON.parse(readFileSync(noteFile(s.box), "utf8")).id;
+    writeFileSync(join(s.repo, ".bin-during"), `node "${join(ROOT, "cli", "box.js")}" act "${s.repo}" ${id} bin >/dev/null`);
+    const stand = s.env.SUGGESTION_BOX_CLAUDE;
+    writeFileSync(stand, readFileSync(stand, "utf8").replace("cat <<'JSON'", `SUGGESTION_BOX_HOME="${s.box}" sh "${join(s.repo, ".bin-during")}"\ncat <<'JSON'`));
+    expect(await run(["check", s.repo, id], s.env)).toEqual({ ok: true, dropped: true });
+    const written = JSON.parse(readFileSync(noteFile(s.box), "utf8"));
+    expect(written.status).toBe("binned");
+    expect(written.check ?? null).toBeNull();
+  });
+
+  test("a note dropped on the default branch gets no stale branch snapshot", async () => {
+    const s = setup({ sections: sections(), gone: { is_gone: true, on: "branch", why: "x" } }, { branch: null });
+    suggest(s.repo, s.box, [], NOTE);
+    const id = JSON.parse(readFileSync(noteFile(s.box), "utf8")).id;
+    const result = await run(["check", s.repo, id], s.env);
+    expect(readFileSync(s.log, "utf8")).toMatch(/branch\/src.*No such file/);
+    expect(result.check.basis.branch).toBeNull();
+    expect(result.check.gone).toBeNull();
+  });
+
+  test("a timeout says how long the box really waited", async () => {
+    const s = setup({ sections: sections(), gone: { is_gone: false } }, { sleep: 4 });
+    suggest(s.repo, s.box, [], NOTE);
+    const id = JSON.parse(readFileSync(noteFile(s.box), "utf8")).id;
+    const result = await run(["check", s.repo, id], { ...s.env, SUGGESTION_BOX_CHECK_TIMEOUT_MS: "2000" });
+    expect(result.check.error).toContain("longer than 2 seconds");
+  });
+
+  test("a stop from the panel ends claude and leaves no snapshot behind", async () => {
+    const s = setup({ sections: sections(), gone: { is_gone: false } }, { sleep: 20 });
+    suggest(s.repo, s.box, [], NOTE);
+    const id = JSON.parse(readFileSync(noteFile(s.box), "utf8")).id;
+    const tmp = tempDir("tmp-");
+    const child = spawn("node", [join(ROOT, "cli", "box.js"), "check", s.repo, id], { env: { ...process.env, ...s.env, TMPDIR: tmp } });
+    await new Promise((done) => setTimeout(done, 2500));
+    expect(readdirSync(tmp).some((n) => n.startsWith("suggestion-box-check-"))).toBe(true);
+    child.kill("SIGTERM");
+    await new Promise((done) => child.on("close", done));
+    expect(readdirSync(tmp).filter((n) => n.startsWith("suggestion-box-check-"))).toEqual([]);
+  });
+
+  test("not solved, restore and reopen clear the old check and its banner", () => {
+    const old = { verdict: "checked" };
+    const view = { number: 1, status: "open", solved: { branch: "b", confirmed: null }, check: { gone: { on: "main", why: "w" }, sections: { problem: old } } };
+    expect(applyAction(view, "not-solved", "t").note.check).toBeNull();
+    expect(applyAction({ ...view, status: "binned", solved: null }, "restore", "t").note.check).toBeNull();
   });
 });

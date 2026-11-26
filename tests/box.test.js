@@ -73,7 +73,7 @@ describe("act", () => {
     expect(await run(["act", repo, id, "restore"], env)).toEqual({ ok: true, state: "open" });
     expect(await run(["act", repo, id, "mark-solved", "--branch", "feat/y"], env)).toEqual({ ok: true, state: "to verify" });
     expect(await run(["act", repo, id, "not-solved", "--reason", "still throws"], env)).toEqual({ ok: true, state: "open" });
-    expect((await await run(["act", repo, id, "mark-solved"], env)).state).toBe("to verify");
+    expect((await run(["act", repo, id, "mark-solved"], env)).state).toBe("to verify");
     expect(await run(["act", repo, id, "confirm"], env)).toEqual({ ok: true, state: "solved" });
     expect(await run(["act", repo, id, "reopen"], env)).toEqual({ ok: true, state: "open" });
   });
@@ -85,8 +85,8 @@ describe("act", () => {
     const id = idOf(box, 1);
     const file = join(box, "notes", FOLDER, `${id}.json`);
     const before = readFileSync(file, "utf8");
-    expect((await await run(["act", repo, id, "bin"], env)).error).toBe("note 1 is to verify; bin is not one of its actions");
-    expect((await await run(["act", repo, id, "file"], env)).error).toBe("file is not something the box does yet");
+    expect((await run(["act", repo, id, "bin"], env)).error).toBe("note 1 is to verify; bin is not one of its actions");
+    expect((await run(["act", repo, id, "file"], env)).error).toBe("file is not something the box does yet");
     expect(readFileSync(file, "utf8")).toBe(before);
   });
 
@@ -108,18 +108,18 @@ describe("act", () => {
     suggest(repo, box, [], NOTE);
     const id = idOf(box, 1);
     suggest(repo, box, ["solved", "1"], "how: h\nproof: p\n");
-    expect((await await run(["act", repo, id, "bin"], env)).error).toContain("to verify");
+    expect((await run(["act", repo, id, "bin"], env)).error).toContain("to verify");
   });
 });
 
 describe("collecting", () => {
   test("off and on for this project, and for all", async () => {
     const { repo, box, env } = setup();
-    expect((await await run(["collecting", repo, "off"], env)).collecting).toEqual({ all: true, project: false });
+    expect((await run(["collecting", repo, "off"], env)).collecting).toEqual({ all: true, project: false });
     expect(suggest(repo, box, [], NOTE).out).toContain("off for shop");
-    expect((await await run(["collecting", repo, "on"], env)).collecting).toEqual({ all: true, project: true });
-    expect((await await run(["collecting", repo, "off", "--all"], env)).collecting).toEqual({ all: false, project: false });
-    expect((await await run(["collecting", repo, "on", "--all"], env)).collecting).toEqual({ all: true, project: true });
+    expect((await run(["collecting", repo, "on"], env)).collecting).toEqual({ all: true, project: true });
+    expect((await run(["collecting", repo, "off", "--all"], env)).collecting).toEqual({ all: false, project: false });
+    expect((await run(["collecting", repo, "on", "--all"], env)).collecting).toEqual({ all: true, project: true });
     expect(JSON.parse(readFileSync(join(box, "settings.json"), "utf8"))).toEqual({ collecting: true, off: [] });
   });
 });
@@ -134,7 +134,7 @@ describe("prune", () => {
     expect(await run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 1 });
     const dir = join(box, "notes", FOLDER);
     expect(readdirSync(join(dir, "tombstones"))).toHaveLength(1);
-    expect((await await run(["read", repo], env)).notes.map((n) => n.title)).toEqual(["Old open"]);
+    expect((await run(["read", repo], env)).notes.map((n) => n.title)).toEqual(["Old open"]);
     expect(suggest(repo, box, [], note("Old binned")).out).toBe("Already binned by the user (note 1). Carry on with your task.");
   });
 });
@@ -152,7 +152,7 @@ test("prune keeps a filed note that waits in To verify, and a note with events n
   suggest(repo, box, [], note("Binned, seen again"));
   const later = new Date(Date.now() + 40 * 86400000);
   expect(await run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 0 });
-  expect((await await run(["read", repo], env)).notes.map((n) => n.state)).toEqual(["to verify"]);
+  expect((await run(["read", repo], env)).notes.map((n) => n.state)).toEqual(["to verify"]);
 });
 
 test("box.js answers one line of JSON when run as a program", async () => {
@@ -245,7 +245,7 @@ describe("changes since the drop", () => {
     const { repo, box, env } = setup();
     dropped(repo, box);
     commitLine(repo, 43, "fixed");
-    const [shown] = (await await run(["read", repo, "--changes"], env)).notes;
+    const [shown] = (await run(["read", repo, "--changes"], env)).notes;
     expect(shown.changed).toEqual({ on: "feat/8504-group-records", kind: "changed" });
     expect(shown.actions).toEqual(["mark-solved", "check", "bin"]);
   });

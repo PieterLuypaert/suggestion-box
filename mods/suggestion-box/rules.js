@@ -44,6 +44,8 @@ export function applyAction(view, action, now, details = {}) {
   const note = JSON.parse(JSON.stringify(view));
   delete note.changed;
   delete note.tombstone;
+  // Moved back to open, the code is read anew: an old check, and its banner, do not come back.
+  if (["not-solved", "restore", "reopen"].includes(action)) note.check = null;
   change[action](note, now, details);
   note.updated = now;
   return { note };
