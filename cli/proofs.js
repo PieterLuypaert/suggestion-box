@@ -14,40 +14,58 @@ import { findClaude, inSnapshots, runClaude, snapshot } from "./claude.js";
 import { gh } from "./file.js";
 import { gitAnswer, gitText } from "./git.js";
 
-const MAX_COMMITS = 50;
 const SHOWN_COMMITS = 3;
 
 const commitOf = (top, ref) => (ref ? gitAnswer(top, ["rev-parse", "-q", "--verify", `${ref}^{commit}`]) : null);
 const isDefaultBranch = (branch, mainRef) => Boolean(branch && mainRef && (mainRef === branch || mainRef === `origin/${branch}`));
 
-// The claim's branch as git has it here: the fetched default branch for a claim made on it, else
-// the local branch (worktrees share it), else its fetched copy.
-export function claimRef(top, branch, mainRef = defaultRef(top)) {
+// The claim's branch as git has it here: the ref that holds the claimed commit, so a fix committed
+// but not pushed yet is seen. For the default branch the local one or the fetched one, else for
+// another branch the local one (worktrees share it) or its fetched copy.
+export function claimRef(top, branch, mainRef = defaultRef(top), sha = null) {
   if (!branch) return null;
-  if (isDefaultBranch(branch, mainRef)) return mainRef;
-  for (const ref of [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`]) if (commitOf(top, ref)) return ref;
-  return null;
+  const isDefault = isDefaultBranch(branch, mainRef);
+  const refs = isDefault ? [`refs/heads/${branch}`, mainRef] : [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`];
+  const there = refs.filter((ref) => commitOf(top, ref));
+  const holding = sha ? there.find((ref) => gitAnswer(top, ["merge-base", "--is-ancestor", sha, ref]) !== null) : null;
+  return holding ?? (isDefault ? mainRef : there[0] ?? null);
 }
 
-// Proof 1: { ref, path, commits: [{ sha, subject, lines }] } for the commits since the drop whose
-// diff touched the note's lines, oldest first, or { why } when there is nothing to look at.
+// Proof 1: { ref, path, commits: [{ sha, subject, lines, path, at }] } for the commits since the
+// drop whose diff touched the note's lines, oldest first, or { why } when there is nothing to look
+// at. The branch is walked along its first parents: a merge of main into it moves the lines like
+// any commit, but is never taken for the fix.
 export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
-  const ref = claimRef(top, claim?.branch, mainRef);
+  const ref = claimRef(top, claim?.branch, mainRef, claim?.sha);
   if (!ref) return { why: claim?.branch ? `${claim.branch} is not here, not even fetched` : "the claim names no branch" };
   const start = startOf(top, note, ref, mainRef);
   if (!start) return { ref, why: "the note's lines cannot be found where its branch started" };
   let { range, path } = start;
   const commits = [];
-  const log = gitAnswer(top, ["log", "--reverse", "--no-merges", "--format=%H%x09%s", `-${MAX_COMMITS}`, `${start.base}..${ref}`]) ?? "";
-  for (const entry of log.split("\n").filter(Boolean)) {
-    const [sha, subject] = entry.split("\t");
-    const step = stepThrough(top, sha, path, range);
+  for (const commit of commitsOn(top, `${start.base}..${ref}`)) {
+    const step = stepThrough(top, commit, path, range);
     if (!step) continue;
-    if (step.isTouched) commits.push({ sha, subject, lines: step.lines });
+    if (step.isTouched && !commit.isMerge) commits.push({ sha: commit.sha, subject: commit.subject, lines: step.lines, path: step.shownPath, at: step.shownAt });
     ({ range, path } = step);
     if (step.isGone) break;
   }
   return { ref, path, commits: commits.slice(-SHOWN_COMMITS), more: Math.max(0, commits.length - SHOWN_COMMITS) };
+}
+
+// The first-parent commits of a range, oldest first, each with the files it changed against its
+// first parent (renames found): one git call, however long the branch.
+function commitsOn(top, range) {
+  const log = gitAnswer(top, ["log", "--first-parent", "-m", "-M", "--reverse", "--name-status", "--format=%x00%H%x09%P%x09%s", range]) ?? "";
+  return log.split("\0").filter((chunk) => chunk.trim()).map((chunk) => {
+    const [head, ...rest] = chunk.split("\n");
+    const [sha, parents, subject] = head.split("\t");
+    const files = rest.filter(Boolean).map((line) => {
+      const [status, from, to] = line.split("\t");
+      return { status, from, to };
+    });
+    const list = (parents ?? "").split(" ").filter(Boolean);
+    return { sha, parent: list[0] ?? null, isMerge: list.length > 1, subject: subject ?? "", files };
+  });
 }
 
 // Where the note's lines start: at its own commit when the branch still has it, else (a rebase) at
@@ -65,40 +83,48 @@ function startOf(top, note, ref, mainRef) {
 }
 
 // One commit's effect on the lines: where they are after it (and under which name), whether it
-// changed one, the lines that did, and whether the file went. Null when it did not touch the file.
-function stepThrough(top, sha, path, range) {
-  const names = gitAnswer(top, ["diff-tree", "-r", "-M", "--no-commit-id", "--name-status", `${sha}^`, sha]);
-  if (names === null) return null;
-  let next = null;
-  for (const line of names.split("\n")) {
-    const [status, from, to] = line.split("\t");
-    if (from !== path) continue;
-    next = status.startsWith("R") ? to : status === "D" ? null : path;
-    if (status === "D") return { range, path, isTouched: true, isGone: true, lines: [{ kind: "@", text: `${path} removed` }] };
-    break;
+// changed one, the lines that did, where Open finds them, and whether the file went. Null when the
+// commit did not touch the file.
+function stepThrough(top, commit, path, range) {
+  const file = commit.files.find((one) => one.from === path);
+  if (!file || !commit.parent) return null;
+  if (file.status === "D") {
+    return { range, path, isTouched: true, isGone: true, lines: [{ kind: "@", text: `${path} removed` }], shownPath: path, shownAt: commit.parent };
   }
-  if (next === null) return null;
-  const diff = gitAnswer(top, ["diff", "-U0", "--no-color", "-M", `${sha}^`, sha, "--", path, next]) ?? "";
+  const next = file.status.startsWith("R") ? file.to : path;
+  const diff = gitAnswer(top, ["diff", "-U0", "--no-color", "-M", commit.parent, commit.sha, "--", path, next]) ?? "";
   const moved = mapRange(range, parseHunks(diff));
-  return { range: { first: moved.first, last: moved.last }, path: next, isTouched: moved.isTouched, lines: moved.isTouched ? touchingLines(diff, range) : [] };
+  const lines = moved.isTouched ? touchingLines(diff, range) : [];
+  return { range: { first: moved.first, last: moved.last }, path: next, isTouched: moved.isTouched, lines, shownPath: next, shownAt: commit.sha };
 }
 
 // Proof 3: { state, how, sha? } after asking gh for the branch's PR and git for the solving commit
-// in the fetched default branch.
-export function landedProof(top, key, claim, change, env, mainRef = defaultRef(top)) {
+// in the fetched default branch. `since` is when the note was dropped.
+export function landedProof(top, key, claim, change, env, { mainRef = defaultRef(top), since = null } = {}) {
   const branch = claim?.branch ?? null;
   const isDefault = isDefaultBranch(branch, mainRef);
   const repo = githubRepo(key);
-  const prs = repo && branch && !isDefault ? gh(["pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--json", "number,state,url,mergeCommit", "--limit", "10"], { env }) : null;
-  const listed = prs?.code === 0 ? JSON.parse(prs.stdout || "[]") : [];
-  const pr = pickPr(listed);
+  const prs = repo && branch && !isDefault ? gh(["pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--json", "number,state,url,mergeCommit,mergedAt,closedAt", "--limit", "10"], { env }) : null;
+  const listed = prs?.code === 0 ? parsed(prs.stdout) : null;
+  const knowsPrs = Boolean(listed);
+  const pr = pickPr(listed ?? [], since);
   const solving = change?.commits?.at(-1)?.sha ?? claim?.sha ?? null;
   const inMain = solving && mainRef && gitAnswer(top, ["merge-base", "--is-ancestor", solving, mainRef]) !== null ? solving : null;
   const cherry = solving && mainRef && !inMain ? gitAnswer(top, ["cherry", mainRef, solving, `${solving}^`]) : null;
   const samePatch = cherry?.startsWith("- ") ? solving : null;
   const hasBranch = isDefault || Boolean(commitOf(top, `refs/heads/${branch}`)) || remoteHas(top, branch) !== false;
-  const found = landedState({ pr: pr && { ...pr, mergeCommit: pr.mergeCommit?.oid ?? null }, inMain, samePatch, hasBranch, isDefault, hasCommit: Boolean(solving) });
-  return prs && prs.code !== 0 && found.state !== "landed" ? { ...found, how: `${found.how}; gh could not look for its PR` } : found;
+  const found = landedState({ pr: pr && { ...pr, mergeCommit: pr.mergeCommit?.oid ?? null }, inMain, samePatch, hasBranch, isDefault, hasCommit: Boolean(solving), knowsPrs });
+  return prs && !knowsPrs && found.state === "waiting" && hasBranch ? { ...found, how: `${found.how}; gh could not look for its PR` } : found;
+}
+
+// gh's JSON answer, or null when it gave something else.
+function parsed(text) {
+  try {
+    const value = JSON.parse(text || "[]");
+    return Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 // Whether origin still has a branch, asked of origin itself: a fetched copy outlives a branch deleted

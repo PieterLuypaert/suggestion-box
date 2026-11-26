@@ -40,6 +40,8 @@ function lineAfter(line, hunks, isEnd) {
 
 // The hunks of a `git diff -U0` that change lines first..last, as the lines the panel draws:
 // { kind: "@" | "-" | "+", text }.
+// The file headers (--- a/x, +++ b/x) come before the first hunk; inside one, a removed "-- x" or an
+// added "++i" is a line like any other.
 export function touchingLines(diff, { first, last }) {
   const lines = [];
   let keep = false;
@@ -48,7 +50,9 @@ export function touchingLines(diff, { first, last }) {
       const [hunk] = parseHunks(line);
       keep = Boolean(hunk) && touches([hunk], first, last);
       if (keep) lines.push({ kind: "@", text: line.replace(/^(@@[^@]*@@).*$/, "$1") });
-    } else if (keep && (line.startsWith("-") || line.startsWith("+")) && !line.startsWith("---") && !line.startsWith("+++")) {
+    } else if (line.startsWith("diff ")) {
+      keep = false;
+    } else if (keep && (line.startsWith("-") || line.startsWith("+"))) {
       lines.push({ kind: line[0], text: line.slice(1) });
     }
   }
@@ -61,20 +65,26 @@ export function touchingLines(diff, { first, last }) {
 // waiting or never. A merged PR counts first, whatever the merge style; then the solving commit in
 // main; then the same patch there (a squash or rebase merge). It never landed only when its PR
 // closed unmerged, or its branch is gone with none of those.
-export function landedState({ pr = null, inMain = null, samePatch = null, hasBranch = true, isDefault = false, hasCommit = true }) {
+// A gone branch says it never landed only when its PRs could be looked up: a squash merge whose PR
+// gh could not see would look the same.
+export function landedState({ pr = null, inMain = null, samePatch = null, hasBranch = true, isDefault = false, hasCommit = true, knowsPrs = true }) {
   if (pr?.state === "MERGED") return { state: "landed", how: `PR #${pr.number} merged`, sha: pr.mergeCommit ?? null, pr: pr.number };
   if (inMain) return { state: "landed", how: `in main (${inMain.slice(0, 7)})`, sha: inMain };
   if (samePatch) return { state: "landed", how: `the same change is in main (${samePatch.slice(0, 7)})`, sha: samePatch };
   if (pr?.state === "CLOSED") return { state: "never", how: `PR #${pr.number} was closed without merging` };
-  if (!hasBranch && !isDefault) return { state: "never", how: "its branch is gone, with no merged PR and no same change in main" };
+  if (!hasBranch && !isDefault && knowsPrs) return { state: "never", how: "its branch is gone, with no merged PR and no same change in main" };
+  if (!hasBranch && !isDefault) return { state: "waiting", how: "its branch is gone, and its PR could not be looked up" };
   if (pr?.state === "OPEN") return { state: "waiting", how: `PR #${pr.number} is open`, pr: pr.number };
   if (!hasCommit) return { state: "waiting", how: "no commit with the fix yet" };
   return { state: "waiting", how: isDefault ? "not in the fetched main yet" : "no PR yet" };
 }
 
-// The PR a branch's fix goes through: a merged one first, then an open one, then the newest.
-export function pickPr(prs) {
-  const list = Array.isArray(prs) ? prs : [];
+// The PR a branch's fix goes through: a merged one first, then an open one, then the newest. A PR
+// that merged or closed before the note was dropped is an older use of the branch name, not this fix.
+export function pickPr(prs, since = null) {
+  const from = since ? Date.parse(since) : null;
+  const ended = (pr) => Date.parse(pr.mergedAt || pr.closedAt || "");
+  const list = (Array.isArray(prs) ? prs : []).filter((pr) => pr.state === "OPEN" || from === null || !(ended(pr) < from));
   return list.find((pr) => pr.state === "MERGED") ?? list.find((pr) => pr.state === "OPEN") ?? list[0] ?? null;
 }
 

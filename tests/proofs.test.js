@@ -32,6 +32,11 @@ describe("mapping a note's lines through a diff", () => {
     expect(map("@@ -40,5 +39,0 @@")).toEqual({ first: 40, last: 40, isTouched: true });
   });
 
+  test("a removed SQL comment or an added ++i is a line, not a file header", () => {
+    const diff = "--- a/x\n+++ b/x\n@@ -42 +42 @@\n--- TODO: N+1 here\n+++i;";
+    expect(touchingLines(diff, { first: 40, last: 44 })).toEqual([{ kind: "@", text: "@@ -42 +42 @@" }, { kind: "-", text: "-- TODO: N+1 here" }, { kind: "+", text: "++i;" }]);
+  });
+
   test("the diff lines shown are those of the hunks that touch it", () => {
     const diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@ top\n-a\n+b\n@@ -42 +42 @@ fn\n-old\n+new";
     expect(touchingLines(diff, { first: 40, last: 44 })).toEqual([{ kind: "@", text: "@@ -42 +42 @@" }, { kind: "-", text: "old" }, { kind: "+", text: "new" }]);
@@ -51,6 +56,7 @@ describe("the landed rules", () => {
   test("never: a PR closed unmerged, or the branch gone with nothing in main", () => {
     expect(landedState({ pr: { number: 44, state: "CLOSED" } })).toMatchObject({ state: "never", how: "PR #44 was closed without merging" });
     expect(landedState({ hasBranch: false })).toMatchObject({ state: "never" });
+    expect(landedState({ hasBranch: false, knowsPrs: false })).toMatchObject({ state: "waiting", how: "its branch is gone, and its PR could not be looked up" });
     expect(landedState({ hasBranch: false, isDefault: true }).state).toBe("waiting");
   });
 
@@ -168,6 +174,51 @@ describe("proof 1: the change", () => {
     git(s.repo, "switch", "-q", "-c", "feat/redo");
     const fix = edit(s.repo, "fix: on a fresh branch", (lines) => (lines[42] = "line 42 fixed"));
     const change = changeProof(s.repo, noteOf(s), { branch: "feat/redo" });
+    expect(change.commits.map((c) => c.sha)).toEqual([fix]);
+  });
+
+  test("a long branch is walked from the drop, however many commits it has", () => {
+    const s = setup();
+    git(s.repo, "mv", "src/invoices.ts", "src/billing.ts");
+    git(s.repo, "commit", "-qm", "refactor: rename first");
+    for (let i = 0; i < 55; i++) {
+      writeFileSync(join(s.repo, "other.txt"), `${i}\n`);
+      git(s.repo, "add", "other.txt");
+      git(s.repo, "commit", "-qm", `chore: ${i}`);
+    }
+    const path = join(s.repo, "src", "billing.ts");
+    writeFileSync(path, readFileSync(path, "utf8").replace("line 42\n", "line 42 fixed\n"));
+    git(s.repo, "commit", "-qam", "fix: late");
+    expect(changeProof(s.repo, noteOf(s), { branch: BRANCH }).commits.map((c) => c.subject)).toEqual(["fix: late"]);
+  });
+
+  test("main merged into the branch moves the lines but is never the fix", () => {
+    const s = setup();
+    git(s.repo, "switch", "-q", "main");
+    edit(s.repo, "fix: a teammate on main", (lines) => (lines[41] = "line 42 by a teammate"));
+    git(s.repo, "switch", "-q", BRANCH);
+    git(s.repo, "merge", "-q", "--no-edit", "--no-ff", "main");
+    edit(s.repo, "chore: elsewhere", (lines) => (lines[2] = "line 3 changed"));
+    expect(changeProof(s.repo, noteOf(s), { branch: BRANCH }).commits).toEqual([]);
+  });
+
+  test("Open finds each commit's file under the name it had then", () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: before the rename", (lines) => (lines[41] = "line 42 fixed"));
+    git(s.repo, "mv", "src/invoices.ts", "src/billing.ts");
+    git(s.repo, "commit", "-qm", "refactor: rename");
+    git(s.repo, "rm", "-q", "src/billing.ts");
+    const gone = (git(s.repo, "commit", "-qm", "chore: drop billing"), git(s.repo, "rev-parse", "HEAD"));
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    expect(change.commits.map((c) => [c.subject, c.path, c.at])).toEqual([["fix: before the rename", "src/invoices.ts", fix], ["chore: drop billing", "src/billing.ts", git(s.repo, "rev-parse", `${gone}^`)]]);
+  });
+
+  test("a fix committed on main but not pushed is seen", () => {
+    const s = setup();
+    git(s.repo, "switch", "-q", "main");
+    const fix = edit(s.repo, "fix: on local main", (lines) => (lines[41] = "line 42 fixed"));
+    const change = changeProof(s.repo, noteOf(s), { branch: "main", sha: fix });
+    expect(change.ref).toBe("refs/heads/main");
     expect(change.commits.map((c) => c.sha)).toEqual([fix]);
   });
 
@@ -299,9 +350,38 @@ describe("box.js proofs, verify, confirm and watch", () => {
     git(t.repo, "switch", "-q", "main");
     git(t.repo, "branch", "-q", "-D", BRANCH);
     git(t.repo, "push", "-q", "origin", "--delete", BRANCH);
-    await run(["watch", t.repo], t.env);
-    const back = (await run(["read", t.repo], t.env)).notes[0];
-    expect(back).toMatchObject({ state: "to verify", status: "open", solved: { confirmed: null, neverLanded: { how: "its branch is gone, with no merged PR and no same change in main" } } });
+    // This origin is not on GitHub, so its PRs cannot be looked up: a gone branch is no proof.
+    expect((await run(["watch", t.repo], t.env)).results).toEqual([{ number: 1, state: "waiting", how: "its branch is gone, and its PR could not be looked up" }]);
+    expect((await run(["read", t.repo], t.env)).history[0].solved.confirmed).not.toBeNull();
+  });
+
+  test("watch: a fix that never landed brings the note back to To verify", async () => {
+    const s = setup();
+    edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    await run(["act", s.repo, s.id, "confirm"], s.env);
+    const gh = join(s.dir, "gh");
+    writeFileSync(gh, `#!/bin/sh\necho '[{"number":44,"state":"CLOSED","closedAt":"2099-01-01T00:00:00Z"}]'\n`);
+    chmodSync(gh, 0o755);
+    const note = noteOf(s);
+    const change = changeProof(s.repo, note, note.solved);
+    expect(landedProof(s.repo, "github.com/acme/shop", note.solved, change, { SUGGESTION_BOX_GH: gh }, { since: note.created })).toMatchObject({ state: "never", how: "PR #44 was closed without merging" });
+  });
+
+  test("a PR that closed before the note was dropped is an older use of the branch name", () => {
+    expect(pickPr([{ number: 12, state: "MERGED", mergedAt: "2026-01-01T00:00:00Z" }, { number: 40, state: "OPEN" }], "2026-06-01T00:00:00Z").number).toBe(40);
+    expect(pickPr([{ number: 12, state: "CLOSED", closedAt: "2026-01-01T00:00:00Z" }], "2026-06-01T00:00:00Z")).toBeNull();
+    expect(pickPr([{ number: 41, state: "MERGED", mergedAt: "2026-07-01T00:00:00Z" }], "2026-06-01T00:00:00Z").number).toBe(41);
+  });
+
+  test("a fix still watched is never pruned, and stays in the history past 30 days", async () => {
+    const s = setup();
+    edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    await run(["act", s.repo, s.id, "confirm"], s.env);
+    const later = new Date(Date.now() + 40 * 86400000);
+    expect(await run(["prune", s.repo], s.env, later)).toEqual({ ok: true, pruned: 0 });
+    expect((await run(["read", s.repo], s.env, later)).history.map((n) => n.number)).toEqual([1]);
   });
 
   test("show: the file as the solving commit has it", async () => {
