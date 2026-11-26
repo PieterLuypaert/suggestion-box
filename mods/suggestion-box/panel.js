@@ -119,9 +119,10 @@ function projectRow(s, project, isAll) {
 }
 
 // The card every part of the panel is drawn in, as Settings' Collecting everywhere: raised, with room
-// around its words. A selected card gets an outline, a claim a green one.
+// around its words. A selected card gets an outline; a claim keeps its green one, and shows it is
+// selected by a lighter fill.
 function card(t, id, { isSelected = false, edge = null } = {}) {
-  return v_flex().id(id).px(12).py(10).gap(6).rounded(8).bg(t.raised).border(1).border_color(isSelected ? t.input : edge ?? t.raised);
+  return v_flex().id(id).px(12).py(10).gap(6).rounded(8).bg(isSelected && edge ? t.hover : t.raised).border(1).border_color(edge ?? (isSelected ? t.input : t.raised));
 }
 
 // The line under a card's title: where, which ticket, how long ago, how it stands.
@@ -137,12 +138,15 @@ function messageCard(t, id, title, words) {
 // A card's buttons: Bin quiet on the far left, away from the others; the main action filled, last.
 const QUIET = ["bin"];
 
-function actionsRow(s, note, { primary = null, isBusy = () => false } = {}) {
+function actionsRow(s, note, { primary = null, isBusy = () => false, leave = [] } = {}) {
   const { t } = s;
+  const actions = note.actions.filter((a) => !leave.includes(a));
+  const rest = actions.filter((a) => !QUIET.includes(a));
+  const ordered = [...rest.filter((a) => a !== primary), ...rest.filter((a) => a === primary)];
   return h_flex().gap(6).items_center().pt(2)
-    .children(note.actions.filter((a) => QUIET.includes(a)).map((a) => quietButton(t, note, a, s.act)))
+    .children(actions.filter((a) => QUIET.includes(a)).map((a) => quietButton(t, note, a, s.act)))
     .child(div().flex_1())
-    .children(note.actions.filter((a) => !QUIET.includes(a)).map((a) => actionButton(t, note, a, s.act, a === primary, isBusy(a))));
+    .children(ordered.map((a) => actionButton(t, note, a, s.act, a === primary, isBusy(a))));
 }
 
 function quietButton(t, note, action, act) {
@@ -162,7 +166,9 @@ function groups(s) {
   const open = answer.notes.filter((n) => n.state === "open");
   const filed = (answer.history ?? []).filter((n) => n.state === "filed" && s.justFiled?.has(n.id));
   if (!toVerify.length && !open.length && !filed.length && !s.undo) {
-    return messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.");
+    return (answer.history ?? []).length
+      ? messageCard(t, "empty", `Nothing open in ${answer.project.name}'s box`, "Filed, solved and binned notes are in the history, below. Agents drop a new note here when they spot a problem outside their ticket.")
+      : messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.");
   }
   const group = (name, notes, draw) => notes.length ? [groupTitle(t, `${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)] : [];
   return v_flex().gap(8).children([
@@ -223,10 +229,13 @@ function noteCard(s, note) {
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
       .when(note.state === "filed", (el) => el.child(chip(t, `filed #${note.issue?.number}`, t.ansi2))))
     .when(Boolean(note.check?.error) && !isChecking(s, note), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`Not checked: ${note.check.error}`)))
-    .when(Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note), (el) => el.child(goneBanner(s, note)))
+    .when(hasGoneBanner(s, note), (el) => el.child(goneBanner(s, note)))
     .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
-    .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "file", isBusy: (a) => a === "check" && isChecking(s, note) })));
+    .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "file", isBusy: (a) => a === "check" && isChecking(s, note), leave: hasGoneBanner(s, note) ? ["bin"] : [] })));
 }
+
+// The check says the problem is gone: its banner holds Mark solved and Bin.
+const hasGoneBanner = (s, note) => Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note);
 
 const isChecking = (s, note) => Boolean(s.checking?.has(note.id));
 
@@ -506,7 +515,8 @@ const KEYS = { file: "f file", check: "k check", "mark-solved": "s solved", bin:
 function hintsFor(s) {
   if (s.view !== "list") return "esc back";
   if (s.editor) return "esc leaves a field · again closes, the draft is kept";
-  const note = (s.answer?.notes ?? []).find((one) => one.id === s.selected);
+  // The keys reach the notes of the list: To verify and Open.
+  const note = (s.answer?.notes ?? []).find((one) => one.id === s.selected && (one.state === "open" || one.state === "to verify"));
   return ["↑↓ pick", note ? "enter open" : null, ...(note?.actions ?? []).map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean).join(" · ");
 }
 
@@ -517,7 +527,6 @@ function footer(s) {
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
       .child(s.view !== "list" ? "◂ Back to the notes" : `History ▸ ${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned`))
-    .child(div().flex_1())
-    .child(div().flex_none().min_w(0).truncate().child(hintsFor(s)));
+    .child(div().flex_1().min_w(0).truncate().text_right().child(hintsFor(s)));
 }
 
