@@ -3,10 +3,10 @@
 // anything else, also a click that races an agent's claim. Pure: no Herdr and no Node imports.
 import { stateOf } from "./events.js";
 
-// Every action the box knows. File issue and Fix in new tab come with later versions.
+// Every action the box knows. Fix in new tab comes with a later version.
 export const ACTIONS = ["check", "file", "mark-solved", "bin", "restore", "confirm", "not-solved", "reopen", "fix"];
-// The ones that change a note's state, through applyAction.
-export const ACTS = ["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen"];
+// The ones that change a note's state: through applyAction, and File issue through recordIssue.
+export const ACTS = ["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen", "file"];
 // What the box itself does so far: those, and the check.
 export const BOX_DOES = [...ACTS, "check"];
 
@@ -51,6 +51,18 @@ export function applyAction(view, action, now, details = {}) {
   return { note };
 }
 
+// The note once its issue exists. Create issue is only offered for an open note, but the issue is
+// real by the time this runs, so it is recorded whatever happened to the note meanwhile: an agent's
+// claim that came in stays, and the note goes to To verify as a filed note.
+export function recordIssue(view, now, details) {
+  const note = JSON.parse(JSON.stringify(view));
+  delete note.changed;
+  delete note.tombstone;
+  change.file(note, now, details);
+  note.updated = now;
+  return note;
+}
+
 const change = {
   bin(note, now) {
     note.status = "binned";
@@ -90,8 +102,16 @@ const change = {
     note.status = "open";
     note.reopened = { by: "you", at: now };
   },
-  file() {
-    throw new Error("filing comes with version 0.4.0");
+  // Filed: the issue (with the words a PR uses to close it), what went into it, and how the board
+  // step went. Its draft is done with.
+  file(note, now, details) {
+    note.status = "filed";
+    note.binned = null;
+    note.issue = { number: details.issue.number, url: details.issue.url, repo: details.repo ?? null, closes: details.closes ?? null, at: now };
+    note.filed = { title: details.title, sections: details.sections, notGone: details.notGone ?? null };
+    note.board = details.board ?? null;
+    note.draft = null;
+    note.filing = null;
   },
   fix() {
     throw new Error("fixing comes with version 0.6.0");

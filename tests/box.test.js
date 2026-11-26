@@ -40,7 +40,7 @@ describe("read", () => {
     expect(answer.project).toMatchObject({ key: "github.com/acme/shop", name: "shop", top: repo, checkout: repo });
     expect(answer.collecting).toEqual({ all: true, project: true });
     expect(answer.notes.map((n) => [n.number, n.state])).toEqual([[2, "open"], [1, "to verify"]]);
-    expect(answer.notes[0].actions).toEqual(["check", "bin"]);
+    expect(answer.notes[0].actions).toEqual(["check", "file", "bin"]);
     expect(answer.notes[1].actions).toEqual(["confirm", "not-solved"]);
     expect(answer.counts).toEqual({ open: 1, toVerify: 1 });
   });
@@ -86,7 +86,7 @@ describe("act", () => {
     const file = join(box, "notes", FOLDER, `${id}.json`);
     const before = readFileSync(file, "utf8");
     expect((await run(["act", repo, id, "bin"], env)).error).toBe("note 1 is to verify; bin is not one of its actions");
-    expect((await run(["act", repo, id, "file"], env)).error).toBe("file is not something the box does yet");
+    expect((await run(["act", repo, id, "file"], env)).error).toBe("file is not something the box does here");
     expect(readFileSync(file, "utf8")).toBe(before);
   });
 
@@ -247,6 +247,6 @@ describe("changes since the drop", () => {
     commitLine(repo, 43, "fixed");
     const [shown] = (await run(["read", repo, "--changes"], env)).notes;
     expect(shown.changed).toEqual({ on: "feat/8504-group-records", kind: "changed" });
-    expect(shown.actions).toEqual(["mark-solved", "check", "bin"]);
+    expect(shown.actions).toEqual(["mark-solved", "check", "file", "bin"]);
   });
 });
