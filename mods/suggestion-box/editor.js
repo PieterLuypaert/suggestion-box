@@ -85,6 +85,6 @@ export function targetLine(target) {
   const parts = [`→ ${target.repo} (${target.visibility ?? "visibility unknown"})`];
   if (target.label) parts.push(target.labelMissing ? `no label: ${target.label} is not in the repo` : target.label);
   if (target.board) parts.push(target.board.problem ? `board: ${target.board.problem}` : `board ${target.board.title ?? `#${target.board.number}`} › ${target.board.column}`);
-  else parts.push(target.hasConfig ? "no board in the config" : "no config, so no label or board");
+  else parts.push(target.hasConfig ? "no board in the config" : "no config: no label, and no board from the box (a board that adds new issues itself still will)");
   return parts.join(" · ");
 }

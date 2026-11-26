@@ -51,6 +51,7 @@ case "$1 $2" in
     esac ;;
   "issue create") cat > "${dir}/body"; printf '%s' "$6" > "${dir}/created"; ${gh.during ?? ":"}; ${gh.createFails ? "echo 'GraphQL: Could not resolve to a Repository' >&2; exit 1" : "echo 'Creating issue in acme/shop'; echo 'https://github.com/acme/shop/issues/812'"} ;;
   "api "*) exit ${gh.hasCommit ? 0 : 1} ;;
+  "issue view") echo '${JSON.stringify({ projectItems: gh.boards ?? [] })}' ;;
   "project view") ${gh.noScope ? "echo \"error: your authentication token is missing required scopes [read:project]\" >&2; exit 1" : `echo '{"id":"PVT_41","title":"Shop"}'`} ;;
   "project item-add") if [ -f "${dir}/no-scope" ]; then echo "error: your authentication token is missing required scopes [project]" >&2; exit 1; fi; echo '{"id":"PVTI_7"}' ;;
   "project field-list") echo '{"fields":[{"id":"F_S","name":"Status","options":[{"id":"O_T","name":"Todo"},{"id":"O_B","name":"Backlog"}]}]}' ;;
@@ -237,7 +238,14 @@ describe("box.js file", () => {
     await run(["file", s.repo, s.id, filing()], s.env);
     expect(calls(s).find((c) => c[1] === "create")).not.toContain("--label");
     expect(calls(s).some((c) => c[0] === "project")).toBe(false);
-    expect(noteOf(s)).toMatchObject({ board: null, issue: { closes: "Closes #812" } });
+    expect(noteOf(s)).toMatchObject({ board: null, issue: { closes: "Closes #812", boards: [] } });
+  });
+
+  test("a board that adds new issues itself: the note says where GitHub put it", async () => {
+    const s = setup({ gh: { boards: [{ title: "Shop", status: { name: "Todo", optionId: "x" } }] } });
+    await run(["file", s.repo, s.id, filing()], s.env);
+    expect(calls(s).some((c) => c[0] === "project")).toBe(false);
+    expect(noteOf(s).issue.boards).toEqual([{ title: "Shop", column: "Todo" }]);
   });
 
   test("a label the repo lacks is left off rather than failing the issue", async () => {

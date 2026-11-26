@@ -25,7 +25,7 @@ import { fold, stateOf } from "../mods/suggestion-box/events.js";
 import { age } from "../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName } from "../mods/suggestion-box/project.js";
 import { stillHolds } from "../mods/suggestion-box/check.js";
-import { ACTS, allows, applyAction, buttonsFor, isWatched, recordClosed, recordFix, recordIssue, recordLanded, startFix, withStaleFix } from "../mods/suggestion-box/rules.js";
+import { ACTS, allows, applyAction, buttonsFor, isWatched, recordFix, recordIssue, recordIssueState, recordLanded, startFix, withStaleFix } from "../mods/suggestion-box/rules.js";
 import { freeBranch, gateFor, launchFix } from "./fix.js";
 import { verifyHolds } from "../mods/suggestion-box/proofs.js";
 import { changeProof, fileAt, landedProof, runVerify } from "./proofs.js";
@@ -34,7 +34,7 @@ import { fillProblem, isPublicTarget, scanTexts } from "../mods/suggestion-box/e
 import { githubRepo, issueText } from "../mods/suggestion-box/issue.js";
 import { scanBlock } from "../mods/suggestion-box/scan.js";
 import { runCheck, stopRunning } from "./check.js";
-import { addToBoard, codeLinkFor, createIssue, gh, issueSince, similarIssues, targetFor } from "./file.js";
+import { addToBoard, boardsOf, codeLinkFor, createIssue, gh, issueSince, similarIssues, targetFor } from "./file.js";
 import { changeFor, defaultRef } from "./changes.js";
 import { repoAt } from "./git.js";
 import { boxRoot, collecting, readSettings } from "./store.js";
@@ -211,8 +211,10 @@ function file(project, id, text, env, now) {
     if (issue.error) return { error: `gh could not create the issue: ${issue.error}` };
   }
   const board = where.board ? addToBoard(where.board, issue.url, env) : null;
+  // Where it is now, as GitHub says: also a board that adds new issues itself. The watch asks again.
+  const boards = boardsOf(where.repo, issue.number, env);
   const ref = where.repo.toLowerCase() === githubRepo(project.key) ? `#${issue.number}` : `${where.repo}#${issue.number}`;
-  const details = { issue, repo: where.repo, closes: `${where.linkKeyword} ${ref}`, title, sections: value.sections, notGone: value.notGone ?? null, board };
+  const details = { issue: { ...issue, boards }, repo: where.repo, closes: `${where.linkKeyword} ${ref}`, title, sections: value.sections, notGone: value.notGone ?? null, board };
   return { ok: true, issue, board, ...record(project, id, now, details) };
 }
 
@@ -349,8 +351,8 @@ function refusedFix(view) {
   return `note ${view.number} is ${stateOf(view)}${view.issue?.closed ? ` and issue #${view.issue.number} is closed` : ""}; nothing started`;
 }
 
-// Filed notes learn whether their issue is closed, or open again: per repo, one question to
-// GitHub about exactly those issue numbers.
+// Filed notes learn whether their issue is closed, or open again, and which boards it is on: per
+// repo, one question to GitHub about exactly those issue numbers.
 function closedIssues(project, env, now) {
   const filed = notesOf(project.dir).filter((note) => stateOf(note) === "filed" && note.issue?.repo && note.issue?.number);
   let changed = 0;
@@ -362,8 +364,9 @@ function closedIssues(project, env, now) {
       const state = states.get(note.issue.number);
       if (!state) continue;
       const closedAt = state.state === "CLOSED" ? state.closedAt ?? now.toISOString() : null;
-      if (Boolean(closedAt) === Boolean(note.issue.closed)) continue;
-      update(project, note.id, ({ view }) => ({ note: recordClosed(view, now.toISOString(), closedAt) }), { foldEvents: true });
+      const boards = (state.projectItems?.nodes ?? []).filter(Boolean).map((item) => ({ title: item.project?.title ?? null, column: item.fieldValueByName?.name ?? null }));
+      if (Boolean(closedAt) === Boolean(note.issue.closed) && JSON.stringify(boards) === JSON.stringify(note.issue.boards ?? [])) continue;
+      update(project, note.id, ({ view }) => ({ note: recordIssueState(view, now.toISOString(), { closedAt, boards }) }), { foldEvents: true });
       changed++;
     }
   }
@@ -373,7 +376,8 @@ function closedIssues(project, env, now) {
 // The state of each of these issues of a repo, from one GraphQL query, or null when gh could not ask.
 function issueStates(repo, numbers, env) {
   const [owner, name] = repo.split("/");
-  const fields = numbers.map((n) => `i${n}: issue(number: ${Number(n)}) { number state closedAt }`).join(" ");
+  const board = "projectItems(first: 5) { nodes { project { title } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } }";
+  const fields = numbers.map((n) => `i${n}: issue(number: ${Number(n)}) { number state closedAt ${board} }`).join(" ");
   const answer = gh(["api", "graphql", "-f", `query=query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, "-F", `owner=${owner}`, "-F", `name=${name}`], { env });
   if (answer.code !== 0) return null;
   try {

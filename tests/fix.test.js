@@ -139,7 +139,7 @@ describe("box.js fix", () => {
   test("the watch asks about exactly the filed issues: closed, then open again", async () => {
     const s = setup();
     const gh = join(s.dir, "gh");
-    const answer = (state, closedAt) => writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${s.dir}/gh.log"\necho '${JSON.stringify({ data: { repository: { i812: { number: 812, state, closedAt } } } })}'\n`);
+    const answer = (state, closedAt, boards = []) => writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${s.dir}/gh.log"\necho '${JSON.stringify({ data: { repository: { i812: { number: 812, state, closedAt, projectItems: { nodes: boards } } } } })}'\n`);
     answer("CLOSED", "2026-11-26T10:00:00Z");
     chmodSync(gh, 0o755);
     expect(await run(["watch", s.repo], { ...s.env, SUGGESTION_BOX_GH: gh })).toEqual({ ok: true, watched: 0, closed: 1 });
@@ -153,6 +153,11 @@ describe("box.js fix", () => {
     note = (await run(["read", s.repo], s.env)).history[0];
     expect(note.issue.closed).toBeNull();
     expect(note.actions).toEqual(["fix"]);
+    // A board's own workflow put it on the board later: the next look says so.
+    answer("OPEN", null, [{ project: { title: "Shop" }, fieldValueByName: { name: "Todo" } }]);
+    expect((await run(["watch", s.repo], { ...s.env, SUGGESTION_BOX_GH: gh })).closed).toBe(1);
+    expect((await run(["read", s.repo], s.env)).history[0].issue.boards).toEqual([{ title: "Shop", column: "Todo" }]);
+    expect((await run(["watch", s.repo], { ...s.env, SUGGESTION_BOX_GH: gh })).closed).toBe(0);
   });
 
   test("a start under way stops a second one, from any panel; one that never reported back is stale", async () => {
