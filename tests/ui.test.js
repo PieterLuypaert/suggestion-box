@@ -47,7 +47,7 @@ const scenes = {
   "panel empty": `panel({ ...base, answer: { ...answer, notes: [], history: [], counts: { open: 0, toVerify: 0 } } })`,
   "panel settings: collecting everywhere and per project": `panel({ ...base, view: "settings", projects })`,
   "panel settings: off everywhere": `panel({ ...base, view: "settings", projects: { ...projects, all: false } })`,
-  "panel settings: still looking, and a failure": `panel({ ...base, view: "settings", projects: null })`,
+  "panel settings: still looking": `panel({ ...base, view: "settings", projects: null })`,
   "panel settings: could not list": `panel({ ...base, view: "settings", projects: { error: "node was not found" } })`,
   "panel with the editor: labels, the scan, the target, similar issues": `panel({ ...base, expanded: new Set(["n4"]), justFiled: new Set(["h4"]), editor: editor({ hits: [{ kind: "a GitHub token", text: "ghp_abcdefghijklmnopqrstuvwxyz0123456789", blocking: true }, { kind: "an email address", text: "jan@acme.be", blocking: false, isFine: false }, { kind: "a home path", text: "/Users/jan", blocking: false, isFine: true }], similar: [{ number: 12, title: "PDF export crashes", url: "u" }], off: "Remove a GitHub token: ghp_abcdefgh…", canStartOver: true }) })`,
   "panel with the editor: checking, the gone banner, a failed filing": `panel({ ...base, editor: editor({ isChecking: true, labels: { problem: { label: "checking" }, evidence: { label: "checking" }, current: { label: "checking" }, desired: { label: "checking" } }, gone: { on: "main", why: "formatDate returns a dash now" }, similar: null, off: "Waiting for the check", error: "gh could not create the issue: HTTP 410" }) })`,
