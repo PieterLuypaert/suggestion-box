@@ -4,6 +4,25 @@ All notable changes to the suggestion box. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Settings (the ⚙ in the panel's header): collecting everywhere, and a switch per project for the
+  projects of your open spaces and every project with notes, each with its notes and On or Off in
+  words, and what a switch does written above them.
+
+### Fixed
+
+- File issue did nothing: the link to a note's file had the same element id as the button.
+- A button whose action fails says why in the panel, and the editor no longer closes on a read that
+  is missing for a moment.
+- A filed issue says which boards it is on, also when a board's own auto-add workflow put it there;
+  without a project config the editor no longer claims there is no board.
+- A ticket the parallel-tickets launcher started for a filed issue, however it was started, counts as
+  its fix, so Fix in new tab never starts a second one.
+- The tab bar's Box button sits next to the button before it.
+
 ## [0.6.0] - 2026-11-26
 
 ### Added

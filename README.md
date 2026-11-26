@@ -175,14 +175,25 @@ worktree and stack, the ticket's prompt (`/ship-issue <n>`) and the record behin
 
 ## Collecting on or off
 
-`~/.suggestion-box/settings.json` holds the switches; the box's header flips them:
+Which projects use the box is up to you. The **⚙** in the panel's header opens Settings:
+
+- **Collecting everywhere**: one switch for every project. Off, no project's agents hear of the box,
+  and the switches per project keep what you chose for when you turn it back on.
+- **Projects**: the projects of your open spaces and every project with notes, the one you are in
+  first, each with its notes and its own On or Off.
+- The **Collecting** switch in the header flips the project you are in.
+
+When a project is on, its new Claude sessions get the box's instructions, and agents drop the
+problems they find outside their task. When it is off, its agents never hear of the box, exactly
+as before it was installed. A switch counts for new sessions at once; an agent that is already
+running hears that the box is off on its next note, and names what it found in its final report
+instead. There is no `suggest off`: an agent can never silence the box.
+
+The switches live in `~/.suggestion-box/settings.json`:
 
 ```json
 { "collecting": true, "off": ["github.com/acme/shop"] }
 ```
-
-With collecting off for a project, new sessions there never hear of the box, and a running agent
-that still tries is told to carry on. There is no `suggest off`: an agent can never silence the box.
 
 ## Install
 
