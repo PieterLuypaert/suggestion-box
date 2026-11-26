@@ -1,10 +1,10 @@
 // The suggestion box in the Herdr app. With props {button: true} it is the tab bar's button: it reads
 // the focused space's box, keeps one right-hand panel at a time, and wiggles when a note arrives.
 // Without, it is the panel on the right: the box's notes by state, with the actions their state
-// allows. Every read and write goes through cli/box.js in the checkout this mod links to; this file
-// only keeps state, and panel.js draws.
-// Its parts live next to it: view-host (shared names and helpers), view-reading, view-button,
-// view-panel, view-editor, view-proofs, view-fix, and just-filed.
+// allows. Every read and write goes through cli/box.js in the checkout this mod links to.
+// This file holds only the view's class, init and render. Its state and actions live in the parts
+// next to it: view-host (shared names and helpers), view-reading, view-button, view-panel,
+// view-editor, view-proofs, view-fix, and just-filed; panel.js and its panel-*.js parts draw.
 import { View } from "gpui-kit";
 import { appHome, checking, exec, props, theme } from "herdr";
 import { findNode, MOD } from "./view-host.js";

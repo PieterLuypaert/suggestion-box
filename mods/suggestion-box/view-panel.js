@@ -35,7 +35,7 @@ export const panelCopy = {
     this.verifying = new Set();
     // Notes whose fix is starting in a new tab.
     this.fixing = new Set();
-    // Notes filed while the panel is open stay in sight until it closes (JustFiled below).
+    // Notes filed while the panel is open stay in sight until it closes (see just-filed.js).
     this.justFiled = new JustFiled();
     this.handle = cx.focus_handle();
     if (checking()) return;

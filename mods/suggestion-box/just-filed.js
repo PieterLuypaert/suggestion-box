@@ -1,6 +1,3 @@
-// Notes filed while the panel is open, kept in the app's storage per project, so a reload of the mod
-// keeps them in sight.
-
 // The notes filed while the panel is open, per project. Kept in the app's storage, so a reload of the
 // mod (an update) or of the app keeps them in sight; they go to the history when the panel closes,
 // when another project shows, and after two hours at the latest.
