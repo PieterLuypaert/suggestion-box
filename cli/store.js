@@ -49,6 +49,11 @@ export function claimKey(dir, key, id) {
   return publish(join(dir, "keys", key), id);
 }
 
+// Takes a key back, only while it still names this note.
+export function dropKey(dir, key, id) {
+  if (readKey(dir, key) === id) rmSync(join(dir, "keys", key), { force: true });
+}
+
 export function readKey(dir, key) {
   const file = join(dir, "keys", key);
   return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
@@ -78,8 +83,10 @@ export function addEvent(dir, id, event) {
 
 // A note with its events folded in, from its file or its tombstone; null when neither exists.
 export function readNote(dir, id) {
-  const note = readJson(join(dir, `${id}.json`)) ?? readJson(join(dir, "tombstones", `${id}.json`));
-  return note ? fold(note, readEvents(dir, id)) : null;
+  const note = readJson(join(dir, `${id}.json`));
+  if (note) return fold(note, readEvents(dir, id));
+  const tombstone = readJson(join(dir, "tombstones", `${id}.json`));
+  return tombstone ? { ...fold(tombstone, readEvents(dir, id)), tombstone: true } : null;
 }
 
 // Every note of the project that still has its file, with its events folded in.

@@ -60,6 +60,11 @@ test("parseAt reads a path and an optional line", () => {
   expect(parseAt("")).toBeNull();
 });
 
+test("parseAt drops a column or the end of a range", () => {
+  expect(parseAt("src/a.ts:42:7")).toEqual({ path: "src/a.ts", line: 42 });
+  expect(parseAt("src/a.ts:10-20")).toEqual({ path: "src/a.ts", line: 10 });
+});
+
 test("sameNoteKey ignores case, spacing and a final full stop, but not the file", () => {
   const key = sameNoteKey("formatDate throws on a null date", "src/a.ts");
   expect(sameNoteKey("FormatDate  throws on a null date.", "src/a.ts")).toBe(key);

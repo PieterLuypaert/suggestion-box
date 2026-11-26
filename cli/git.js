@@ -1,7 +1,7 @@
 // What the suggest command asks git about the folder it runs in.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 // git's answer, or null when git says no: outside a repo, no origin, no commit yet. Those are
 // answers the command handles, not errors, so git's own message is not shown.
@@ -17,7 +17,9 @@ export function gitAnswer(cwd, args) {
 export function repoAt(cwd) {
   const top = gitAnswer(cwd, ["rev-parse", "--show-toplevel"]);
   if (!top) return null;
-  const common = gitAnswer(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  // --path-format needs git 2.31; older git gives the folder relative to cwd.
+  const common = gitAnswer(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"])
+    ?? resolve(cwd, gitAnswer(cwd, ["rev-parse", "--git-common-dir"]) ?? ".git");
   return {
     top,
     common,

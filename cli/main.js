@@ -31,7 +31,8 @@ export async function main(io) {
       io.err(`suggest: ${error.message}\n`);
       return 2;
     }
-    io.err(`suggest: could not write the note: ${error.message}\n`);
+    const what = command === "list" ? "suggest list" : command === "solved" ? "suggest solved" : "suggest: could not write the note";
+    io.err(`${what}: ${error.message}\n`);
     return 1;
   }
 }
@@ -60,17 +61,46 @@ async function drop(io, project, args) {
   const at = locate(io, project.repo, fields.at);
   const key = sameNoteKey(fields.title, at?.path);
   const now = new Date();
-  const id = noteId(now, Math.random().toString(36).slice(2, 6));
-  if (!store.claimKey(project.dir, key, id)) return repeat(io, project, key, now);
-  const number = store.claimNumber(project.dir);
-  store.writeNote(project.dir, newNote({ io, project, fields, at, id, number, now }));
-  const open = store.readNotes(project.dir).filter((note) => stateOf(note) === "open").length;
-  return say(io, `Dropped in ${project.name}'s suggestion box as note ${number} (${open} open). ${CARRY_ON}`);
+  let reopened = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const id = noteId(now, `${process.pid.toString(36)}${Math.random().toString(36).slice(2, 6)}`);
+    if (store.claimKey(project.dir, key, id)) return fresh(io, project, { fields, at, id, now, key, reopened });
+    const answer = await repeat(io, project, key, now);
+    if (typeof answer === "number") return answer;
+    reopened = answer.reopened ?? reopened;
+  }
+  throw new Error("the same-note key kept changing; try again");
 }
 
-// The same note again: only an event, and an answer that fits the note's state.
+// A new note. Its key was claimed first, so a step that fails takes the key back with it: a
+// half-done drop never blocks that title.
+function fresh(io, project, { fields, at, id, now, key, reopened }) {
+  try {
+    const number = store.claimNumber(project.dir);
+    store.writeNote(project.dir, { ...newNote({ io, project, fields, at, id, number, now }), ...(reopened ? { reopened } : {}) });
+    const open = store.readNotes(project.dir).filter((note) => stateOf(note) === "open").length;
+    if (reopened) return say(io, `Note ${reopened.number} was solved on ${reopened.after ?? "a branch"} and has left the box; it is back, so it is note ${number} now (${open} open). ${CARRY_ON}`);
+    return say(io, `Dropped in ${project.name}'s suggestion box as note ${number} (${open} open). ${CARRY_ON}`);
+  } catch (error) {
+    store.dropKey(project.dir, key, id);
+    throw error;
+  }
+}
+
+// The same note again: an event, and an answer that fits the note's state. Returns the exit code,
+// or { reopened } when the key has to be claimed anew: it pointed at nothing (a drop that died
+// halfway), or at a solved note that is only a tombstone now, which comes back as a new note.
 async function repeat(io, project, key, now) {
-  const note = await waitForNote(project.dir, store.readKey(project.dir, key));
+  const id = store.readKey(project.dir, key);
+  const note = await waitForNote(project.dir, id);
+  if (!note) {
+    store.dropKey(project.dir, key, id);
+    return {};
+  }
+  if (note.tombstone && note.status === "solved") {
+    store.dropKey(project.dir, key, id);
+    return { reopened: { after: note.solved?.branch ?? null, number: note.number, at: now.toISOString() } };
+  }
   store.addEvent(project.dir, note.id, { type: "spotted", at: now.toISOString(), from: origin(io, project.repo) });
   const seen = store.readNote(project.dir, note.id);
   const n = seen.number;
@@ -81,14 +111,15 @@ async function repeat(io, project, key, now) {
   return say(io, `Already in ${project.name}'s box as note ${n} (spotted ${seen.spotted}×). ${CARRY_ON}`);
 }
 
-// Another agent may have claimed the title a moment ago and still be writing its note.
+// Another agent may have claimed the title a moment ago and still be writing its note: null when
+// none appears within two seconds.
 async function waitForNote(dir, id) {
-  for (let tries = 0; tries < 50; tries++) {
-    const note = id && store.readNote(dir, id);
+  for (let tries = 0; id && tries < 50; tries++) {
+    const note = store.readNote(dir, id);
     if (note) return note;
     await new Promise((done) => setTimeout(done, 40));
   }
-  throw new Error(`note ${id} did not appear`);
+  return null;
 }
 
 function newNote({ io, project, fields, at, id, number, now }) {

@@ -59,7 +59,8 @@ export function dropProblem(fields) {
 export function parseAt(at) {
   const text = String(at ?? "").trim();
   if (!text) return null;
-  const match = /^(.+?)(?::(\d+))?$/.exec(text);
+  // file, file:line, file:line:column or file:line-line; a column or the end of a range is dropped.
+  const match = /^(.+?)(?::(\d+))?(?::\d+|-\d+)?$/.exec(text);
   const line = match[2] ? Number(match[2]) : null;
   return { path: match[1], line: line && line > 0 ? line : null };
 }

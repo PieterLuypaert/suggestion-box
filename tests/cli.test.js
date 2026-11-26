@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sameNoteKey } from "../mods/suggestion-box/notes.js";
 import { git, makeRepo, note, NOTE, suggest, suggestLater, tempDir } from "./helpers.js";
 
 const FOLDER = "github.com__acme__shop";
@@ -131,6 +132,56 @@ describe("the same note again", () => {
     expect(suggest(repo, box, [], note("Claimed one")).out).toBe("Note 3 is claimed solved and waits for the user to verify. Carry on with your task.");
     expect(suggest(repo, box, [], note("Solved one")).out).toBe("Note 4 was solved on feat/x; reopened it, as you see it again.");
     expect(suggest(repo, box, ["list"]).out).toContain("Solved one");
+  });
+});
+
+describe("left-overs", () => {
+  test("a key left by a drop that died halfway does not block the title", () => {
+    const { repo, box } = setup();
+    const keys = join(box, "notes", FOLDER, "keys");
+    mkdirSync(keys, { recursive: true });
+    writeFileSync(join(keys, sameNoteKey("formatDate throws on a null date", "src/invoices.ts")), "20261126-000000-gone");
+    const run = suggest(repo, box, [], NOTE);
+    expect(run).toMatchObject({ code: 0, out: "Dropped in shop's suggestion box as note 1 (1 open). Carry on with your task." });
+    expect(suggest(repo, box, [], NOTE).out).toContain("spotted 2×");
+  });
+
+  test("a solved note that is only a tombstone comes back as a new note", () => {
+    const { repo, box } = setup();
+    suggest(repo, box, [], NOTE);
+    const dir = join(box, "notes", FOLDER);
+    const [written] = notesIn(box);
+    mkdirSync(join(dir, "tombstones"));
+    writeFileSync(join(dir, "tombstones", `${written.id}.json`), JSON.stringify({ ...written, status: "solved", solved: { branch: "feat/x", confirmed: { at: "t" } } }));
+    renameSync(join(dir, `${written.id}.json`), join(tempDir(), "gone.json"));
+    const run = suggest(repo, box, [], NOTE);
+    expect(run.out).toBe("Note 1 was solved on feat/x and has left the box; it is back, so it is note 2 now (1 open). Carry on with your task.");
+    expect(notesIn(box)[0]).toMatchObject({ number: 2, reopened: { after: "feat/x", number: 1 } });
+  });
+
+  test("a binned note that is only a tombstone still only counts", () => {
+    const { repo, box } = setup();
+    suggest(repo, box, [], NOTE);
+    const dir = join(box, "notes", FOLDER);
+    const [written] = notesIn(box);
+    mkdirSync(join(dir, "tombstones"));
+    writeFileSync(join(dir, "tombstones", `${written.id}.json`), JSON.stringify({ ...written, status: "binned" }));
+    renameSync(join(dir, `${written.id}.json`), join(tempDir(), "gone.json"));
+    expect(suggest(repo, box, [], NOTE).out).toBe("Already binned by the user (note 1). Carry on with your task.");
+  });
+
+  test("an error says which command it came from", () => {
+    const { repo, box } = setup();
+    mkdirSync(box, { recursive: true });
+    writeFileSync(join(box, "settings.json"), "{ broken");
+    expect(suggest(repo, box, ["list"])).toMatchObject({ code: 1 });
+    expect(suggest(repo, box, ["list"]).err).toStartWith("suggest list: could not read");
+  });
+
+  test("a note at file:line:column is the same note as at file:line", () => {
+    const { repo, box } = setup();
+    suggest(repo, box, [], NOTE);
+    expect(suggest(repo, box, [], NOTE.replace("src/invoices.ts:42", "src/invoices.ts:42:7")).out).toContain("spotted 2×");
   });
 });
 
