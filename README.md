@@ -209,6 +209,30 @@ layout (to a copy, `<name>-suggestion-box`, when the layout is one of Herdr's ow
 `cmd-alt-s` when it is free. Every file they change is kept beside it first, and both can run
 again at any time.
 
+## How it is built
+
+```
+bin/suggest            the agents' command (a link to it sits in ~/.local/bin)
+cli/suggest/           its code: drop, list, solved, session-start; it only ever creates files
+cli/box.js             the box's own side, which the panel runs; it alone rewrites notes
+cli/box/               one module per group of the box's commands (read, act, filing, claims,
+                       fixing, settings, note-files) and their libraries (check, claude, file,
+                       proofs, fix, changes)
+cli/shared/            what both sides use: git, and the box's folder and switches
+mods/suggestion-box/   the Herdr mod
+  main.js              the view: init and render, with its parts in view-*.js
+  view-*.js            reading, the button, the panel, the editor, the proofs, Fix in new tab
+  panel.js             the panel's drawing, with its parts in panel-*.js
+  rules.js events.js notes.js lines.js check.js config.js issue.js scan.js editor.js
+  proofs.js fix.js     pure modules: no Herdr and no Node, shared by the panel and cli/box, and
+                       tested on their own
+scripts/               the pixel icon's drawing
+tests/                 one test file per module, the panel drawn by Herdr's own engine
+docs/                  the plan the box was built from, and its blueprint
+```
+
+The mod's files sit flat in one folder, as Herdr loads a mod by its folder.
+
 ## Tests
 
 ```sh
