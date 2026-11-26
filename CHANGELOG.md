@@ -23,6 +23,11 @@ All notable changes to the suggestion box. The format follows
 
 - The check and the independent check share one runner for Claude and the code snapshots.
 
+### Fixed
+
+- The scan no longer calls macOS's shared folder `/Users/Shared` a home path. Found through the box
+  itself: noted, fixed, claimed and proven on this version's own branch.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added
