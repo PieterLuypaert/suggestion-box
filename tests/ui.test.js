@@ -154,3 +154,68 @@ export default class Scene extends View {
     expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","b1","","|b1","new","",""]');
   }, 30000);
 });
+
+// The panel's own methods, run by Herdr's own engine on the real main.js: reading the shown box,
+// opening a note, Settings and the history, the editor (open, its view, a draft, closing), the
+// folder buttons act on, Just filed, and a full draw. Its report must not change when the code is
+// moved around.
+const SMOKE = `REPORT {"answer":true,"shown":"/tmp/shop","expanded":1,"settings":"settings","back":"list","editor":true,"fields":"title,problem,evidence,current,desired","off":"Waiting for the check","line":"Looking up where it goes…","draft":null,"edited":"Another title","closed":false,"justFiled":"n1","drawn":true}`;
+
+describe.skipIf(!HERDR)("the panel's own methods", () => {
+  test("run by Herdr's engine, with the same outcome as before any move", () => {
+    const dir = join(tempDir("ui-"), "smoke");
+    mkdirSync(dir, { recursive: true });
+    for (const file of readdirSync(join(ROOT, "mods", "suggestion-box"))) {
+      if (file.endsWith(".js")) copyFileSync(join(ROOT, "mods", "suggestion-box", file), join(dir, file === "main.js" ? "box-main.js" : file));
+    }
+    writeFileSync(join(dir, "mod.json"), '{ "place": "none", "title": "scene" }\n');
+    writeFileSync(join(dir, "main.js"), `import { setShared, theme } from "herdr";
+import Box, { JustFiled } from "./box-main.js";
+const sections = { problem: "p", evidence: "e", current: "c", desired: "d" };
+const note = { id: "n1", number: 1, title: "A note", state: "open", age: "now", spotted: 1, at: { path: "src/a.ts", line: 3 }, sections, actions: ["check", "file", "bin"] };
+const answer = { project: { key: "github.com/acme/shop", name: "shop" }, collecting: { all: true, project: true }, notes: [note], history: [], counts: { open: 1, toVerify: 0 } };
+export default class Smoke extends Box {
+  init(props, cx) {
+    super.init(props, cx);
+    this.boxJs = "/nonexistent/box.js";
+    this.node = "/usr/bin/true";
+    this.here = () => ({ folder: "/tmp/shop", space: "sp1" });
+    setShared("suggestion-box.data", { folder: "/tmp/shop", space: "sp1", answer });
+    const r = {};
+    r.answer = this.answer() === answer || JSON.stringify(this.answer()) === JSON.stringify(answer);
+    r.shown = this.shownFolder();
+    this.act("expand", note, cx);
+    r.expanded = this.expanded.size;
+    this.act("settings", null, cx);
+    r.settings = this.view;
+    this.act("history", null, cx);
+    r.back = this.view;
+    this.openEditor(cx, note);
+    r.editor = Boolean(this.editor);
+    const view = this.editorView();
+    r.fields = Object.keys(view.fields).join(",");
+    r.off = view.off;
+    r.line = view.line;
+    r.draft = this.draftOf(this.editor);
+    this.editor.fields.title.set_value("Another title");
+    r.edited = this.draftOf(this.editor).title;
+    this.closeEditor(cx, { save: false });
+    r.closed = Boolean(this.editor);
+    const kept = new JustFiled("suggestion-box.just-filed.smoke");
+    kept.clear();
+    kept.add("github.com/acme/shop", "n1");
+    r.justFiled = [...kept.for("github.com/acme/shop")].join(",");
+    kept.clear();
+    this.result = r;
+  }
+  render(cx) {
+    this.result.drawn = Boolean(this.renderPanel(cx, theme()));
+    throw new Error("REPORT " + JSON.stringify(this.result));
+  }
+}
+`);
+    const result = spawnSync(HERDR, ["check", dir], { encoding: "utf8" });
+    const out = `${result.stdout}${result.stderr}`;
+    expect(out.match(/REPORT \{.*\}/)?.[0] ?? out.slice(0, 600)).toBe(SMOKE);
+  }, 30000);
+});
