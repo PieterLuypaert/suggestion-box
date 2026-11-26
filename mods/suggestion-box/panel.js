@@ -430,7 +430,10 @@ function verifyCard(s, note) {
   return card(t, `note:${note.id}`, { isSelected: s.selected === note.id, edge: t.ansi2 })
     .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
     .child(metaRow(t)
-      .child(div().min_w(0).whitespace_normal().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
+      .child(div().flex_none().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"}`))
+      // The branch stays whole: it moves to the next line as one piece, and only a branch wider than
+      // the card ends in an ellipsis.
+      .child(div().min_w(0).max_w_full().truncate().child(`on ${claim.branch ?? "a branch"}`))
       .when(Boolean(claim.neverLanded), (el) => el.child(chip(t, "the fix never landed", t.blocked))))
     .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed, but ${claim.neverLanded.how}.`)))
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
