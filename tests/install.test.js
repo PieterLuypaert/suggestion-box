@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { ROOT, tempDir } from "./helpers.js";
 
 const run = (script, home, args = []) => {
-  const env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: "", SUGGESTION_BOX_HOME: join(home, ".suggestion-box") };
+  const env = { ...process.env, HOME: home, SUGGESTION_BOX_HOME: join(home, ".suggestion-box"), HERDR_APP_HOME: join(home, ".config", "herdr-app") };
   delete env.CLAUDE_CONFIG_DIR;
   const result = spawnSync("sh", [join(ROOT, script), ...args], { env, encoding: "utf8" });
   return { code: result.status, out: result.stdout, err: result.stderr };
@@ -123,7 +123,7 @@ test("uninstall leaves another tool called suggest alone", () => {
 
 test("install.sh and uninstall.sh run as ./install.sh, as the readme says", () => {
   const home = tempDir("home-");
-  const env = { ...process.env, HOME: home };
+  const env = { ...process.env, HOME: home, HERDR_APP_HOME: join(home, ".config", "herdr-app") };
   delete env.CLAUDE_CONFIG_DIR;
   expect(spawnSync(join(ROOT, "install.sh"), [], { env }).status).toBe(0);
   expect(spawnSync(join(ROOT, "uninstall.sh"), [], { env }).status).toBe(0);

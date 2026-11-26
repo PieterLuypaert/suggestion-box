@@ -1,0 +1,5 @@
+{
+  "global": {
+    "cmd-alt-s": "layout.toggle:suggestion-box"
+  }
+}
