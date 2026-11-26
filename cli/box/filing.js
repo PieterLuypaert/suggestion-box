@@ -1,14 +1,11 @@
 // Filing a note as an issue: where it goes, the draft, Create issue, the board, and what GitHub says
 // about filed issues since.
-import { join } from "node:path";
 import { fold, stateOf } from "../../mods/suggestion-box/events.js";
 import { allows, recordIssue, recordIssueState } from "../../mods/suggestion-box/rules.js";
 import { fillProblem, isPublicTarget, scanTexts } from "../../mods/suggestion-box/editor.js";
 import { githubRepo, issueText } from "../../mods/suggestion-box/issue.js";
 import { scanBlock } from "../../mods/suggestion-box/scan.js";
 import { addToBoard, boardsOf, codeLinkFor, createIssue, gh, issueSince, similarIssues, targetFor } from "./file.js";
-import { check } from "./act.js";
-import { watch } from "./claims.js";
 import { loadNote, notesOf, update } from "./note-files.js";
 
 // For the editor: where the issue goes, similar open issues (null when gh could not look), and
@@ -71,7 +68,7 @@ export function file(project, id, text, env, now) {
 
 // The issue exists: the note records it. When that fails, the filing marker stays, so Create
 // issue finds this issue again instead of making another.
-export function record(project, id, now, details) {
+function record(project, id, now, details) {
   try {
     const written = update(project, id, ({ view: fresh }) => ({ note: recordIssue(fresh, now.toISOString(), details) }), { foldEvents: true });
     if (!written.error) return {};

@@ -5,11 +5,8 @@ import { isWatched, recordLanded } from "../../mods/suggestion-box/rules.js";
 import { verifyHolds } from "../../mods/suggestion-box/proofs.js";
 import { changeProof, landedProof, runVerify } from "./proofs.js";
 import { fetch } from "./claude.js";
-import { gh } from "./file.js";
 import { defaultRef } from "./changes.js";
-import { check } from "./act.js";
 import { closedIssues } from "./filing.js";
-import { fix } from "./fixing.js";
 import { loadNote, notesOf, update } from "./note-files.js";
 
 // Proofs 1 and 3 of a claim, after a fetch: the change and whether it landed. Not kept: git and gh

@@ -3,9 +3,6 @@
 import { existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fold } from "../../mods/suggestion-box/events.js";
-import { check } from "./act.js";
-import { draft, file } from "./filing.js";
-import { read } from "./read.js";
 
 export const DAY = 86400000;
 

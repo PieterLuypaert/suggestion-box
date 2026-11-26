@@ -5,10 +5,8 @@ import { fold, stateOf } from "../../mods/suggestion-box/events.js";
 import { stillHolds } from "../../mods/suggestion-box/check.js";
 import { ACTS, allows, applyAction, isWatched } from "../../mods/suggestion-box/rules.js";
 import { runCheck } from "./check.js";
-import { keptProofs, proofs, verify } from "./claims.js";
-import { file } from "./filing.js";
+import { keptProofs } from "./claims.js";
 import { DAY, KEEP_DAYS, loadNote, notesOf, update } from "./note-files.js";
-import { read } from "./read.js";
 
 // One of the user's actions: the note with its events folded in, the action applied, written over
 // the note at once, then the folded event files removed. An event that arrives meanwhile stays.

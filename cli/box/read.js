@@ -10,9 +10,6 @@ import { githubRepo } from "../../mods/suggestion-box/issue.js";
 import { changeFor, defaultRef } from "./changes.js";
 import { repoAt, ticketRecords } from "../shared/git.js";
 import { boxRoot, collecting, readSettings } from "../shared/store.js";
-import { verify } from "./claims.js";
-import { record } from "./filing.js";
-import { fix } from "./fixing.js";
 import { DAY, KEEP_DAYS, notesOf } from "./note-files.js";
 
 export function read(project, withChanges, now, env) {

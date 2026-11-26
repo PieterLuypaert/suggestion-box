@@ -2,7 +2,6 @@
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { boxRoot, collecting, readSettings } from "../shared/store.js";
-import { file } from "./filing.js";
 
 export function switchCollecting(project, rest, env) {
   const [value, scope] = rest;
