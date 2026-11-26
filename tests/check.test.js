@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { claudeArgs, explain, prompt, readAnswer, stillHolds } from "../mods/suggestion-box/check.js";
+import { checkedSummary, claudeArgs, explain, prompt, readAnswer, stillHolds } from "../mods/suggestion-box/check.js";
 import { git, makeRepo, NOTE, ROOT, suggest, tempDir } from "./helpers.js";
 import { applyAction } from "../mods/suggestion-box/rules.js";
 
@@ -38,6 +38,23 @@ describe("what the check asks", () => {
     expect(args).toContain("--no-session-persistence");
     expect(JSON.parse(after("--json-schema")).required).toEqual(["sections", "gone"]);
     expect(args[args.length - 1]).toBe("q");
+  });
+});
+
+describe("the line a checked note shows", () => {
+  const now = Date.parse("2026-11-26T12:00:00Z");
+  const at = (minutes) => new Date(now - minutes * 60000).toISOString();
+
+  test("who checked it, how long ago, and what it found", () => {
+    expect(checkedSummary({ at: at(2), sections: sections({ current: { verdict: "corrected", text: "x" } }), gone: null }, now)).toBe("Checked by your Claude · 2m ago · 3 hold, 1 corrected");
+    expect(checkedSummary({ at: at(0), sections: sections(), gone: null }, now)).toBe("Checked by your Claude · just now · 4 hold");
+    expect(checkedSummary({ at: at(180), sections: sections({ desired: { verdict: "unsure", question: "?" } }), gone: { on: "main", why: "w" } }, now)).toBe("Checked by your Claude · 3h ago · 3 hold, 1 unsure · looks solved");
+  });
+
+  test("no line before a check, after a failed one, and no time when it has none", () => {
+    expect(checkedSummary(null, now)).toBeNull();
+    expect(checkedSummary({ at: at(1), error: "timeout" }, now)).toBeNull();
+    expect(checkedSummary({ sections: sections(), gone: null }, now)).toBe("Checked by your Claude · 4 hold");
   });
 });
 

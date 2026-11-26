@@ -2,6 +2,7 @@
 // a click does comes in as `act`, from main.js.
 import { div, image, svg } from "gpui-kit";
 import { Input, Textarea, h_flex, v_flex } from "gpui-base";
+import { checkedSummary } from "./check.js";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
 
 // The pixel box, drawn by scripts/make-icon.js: in colour, and grey while collecting is off. An image
@@ -188,13 +189,28 @@ const LABELS = { check: "Check", "mark-solved": "Mark solved", file: "File issue
 
 const BUSY = { check: "Checking…", fix: "Starting the tab…" };
 
+// What each button does, on hover. The check says who does it: your own Claude, read-only.
+const TIPS = {
+  check: "Your own Claude (Sonnet, read-only) checks this note against the code on main and on its branch",
+  "check-again": "Check again: your own Claude reads the code anew, also when it did not change",
+  file: "Turn it into a GitHub issue: you see and edit the text first, nothing is created until you press Create issue",
+  "mark-solved": "It is solved already: the note waits in To verify until you confirm it",
+  confirm: "The fix holds: the note leaves the box, and the box watches until the fix lands in main",
+  "not-solved": "The claim goes; the note is back where it was",
+  reopen: "Back to the open notes",
+  restore: "Back to the open notes",
+  fix: "Start this issue as a ticket in a new tab, through the parallel-tickets launcher",
+};
+
 function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
   if (isBusy) {
     return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
       .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child(BUSY[action] ?? "Working…"));
   }
-  const label = action === "check" && note.check && !note.check.error ? "Check again" : LABELS[action];
+  const isAgain = action === "check" && note.check && !note.check.error;
+  const label = isAgain ? "Check again" : LABELS[action];
   return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
+    .tooltip(TIPS[isAgain ? "check-again" : action] ?? label)
     .bg(isPrimary ? t.solid : t.background).text_color(isPrimary ? t.solid_foreground : t.foreground).border(1).border_color(isPrimary ? t.solid : t.border)
     .hover((st) => st.bg(isPrimary ? t.solid : t.hover))
     .on_click((_e, cx) => act(action, note, cx))
@@ -233,6 +249,7 @@ function noteCard(s, note) {
       .when(Boolean(note.notVerified), (el) => el.child(chip(t, `claimed on ${note.notVerified?.branch}, not verified`, t.working)))
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
       .when(note.state === "filed", (el) => el.child(chip(t, `filed #${note.issue?.number}`, t.ansi2))))
+    .when(Boolean(checkedSummary(note.check)) && !isChecking(s, note), (el) => el.child(checkedLine(t, note)))
     .when(Boolean(note.check?.error) && !isChecking(s, note), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`Not checked: ${note.check.error}`)))
     .when(hasGoneBanner(s, note), (el) => el.child(goneBanner(s, note)))
     .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
@@ -243,6 +260,13 @@ function noteCard(s, note) {
 const hasGoneBanner = (s, note) => Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note);
 
 const isChecking = (s, note) => Boolean(s.checking?.has(note.id));
+
+// Who checked the note, when, and what it found, so that shows without opening it.
+function checkedLine(t, note) {
+  return h_flex().gap(6).items_center().text_size(11.5).text_color(t.muted)
+    .child(div().flex_none().size(6).rounded(3).bg(note.check?.gone ? t.working : t.ansi2))
+    .child(div().min_w(0).whitespace_normal().child(checkedSummary(note.check)));
+}
 
 const FIELD_LABELS = { checking: "Checking…", "not-checked": "Not checked", checked: "Checked", corrected: "Corrected", agent: "The agent's text", unsure: "Unsure" };
 
@@ -256,6 +280,7 @@ function editorCard(s, note, ed) {
     .child(h_flex().gap(8).items_center().text_size(11.5).text_color(t.muted)
       .child(div().flex_1().min_w(0).truncate().child(`Filing note ${note.number}`))
       .when(ed.canStartOver, (el) => el.child(link(t, `start-over:${note.id}`, "Start over", act("start-over")))))
+    .when(!ed.isChecking && Boolean(checkedSummary(note.check)), (el) => el.child(checkedLine(t, note)))
     .when(ed.isChecking, (el) => el.child(h_flex().gap(6).items_center().text_size(12).text_color(t.muted)
       .child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child("Checking the note against the code…")))
     .when(Boolean(ed.checkError), (el) => el.child(h_flex().gap(8).items_start().text_size(12)
