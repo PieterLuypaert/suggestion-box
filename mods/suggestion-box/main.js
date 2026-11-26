@@ -6,6 +6,7 @@
 import { View } from "gpui-kit";
 import { appHome, checking, exec, focused, layout, nextCommand, notify, props, run, setShared, shared, spaces, terminals, theme, watchFolder, window } from "herdr";
 import { button, panel } from "./panel.js";
+import { buttonsFor } from "./rules.js";
 
 const BLOCK = "suggestion-box";
 const MOD = "suggestion-box";
@@ -38,9 +39,22 @@ const isShown = (id) => {
 };
 const sleep = (cx, ms) => new Promise((done) => cx.timer.after(ms, () => done()));
 
+// node by its real path: an app started from the Dock may not have the PATH of a shell, and a
+// version manager's per-shell path (fnm, nvm) goes away with that shell. Tried as the app finds it,
+// then through the person's login shell.
+async function findNode() {
+  const tries = [["node", ["-p", "process.execPath"]], ["sh", ["-c", 'exec "${SHELL:-/bin/zsh}" -lc "node -p process.execPath"']]];
+  for (const [command, args] of tries) {
+    const found = await exec(command, args).catch(() => null);
+    const path = found?.code === 0 ? found.stdout.trim().split("\n").pop() : "";
+    if (path.startsWith("/")) return path;
+  }
+  throw new Error("node was not found, directly or through your login shell");
+}
+
 // One answer of cli/box.js: its JSON, or an error with what it said.
-async function box(path, args) {
-  const result = await exec("node", [path, ...args], { timeout: 60000 });
+async function box(node, path, args) {
+  const result = await exec(node, [path, ...args], { timeout: 60000 });
   let answer;
   try {
     answer = JSON.parse(result.stdout);
@@ -64,6 +78,7 @@ export default class SuggestionBox extends View {
       try {
         // The checkout the mod's link points into: -P follows the link before .. climbs.
         const real = await exec("sh", ["-c", 'cd -P "$1" && cd ../.. && pwd -P', "sh", `${appHome()}/mods/${MOD}`]);
+        this.node = await findNode();
         this.boxJs = `${real.stdout.trim()}/cli/box.js`;
         this.read(cx, true);
       } catch (error) {
@@ -81,7 +96,11 @@ export default class SuggestionBox extends View {
     const space = spaces().find((one) => one.id === at?.space) ?? spaces().find((one) => one.active);
     if (!space) return { none: "No space is open." };
     if (space.machine) return { none: "This space is on another machine; its notes stay there.", remote: true };
-    const folder = at?.cwd || space.folder;
+    // While the panel itself (or another mod) has the keyboard there is no terminal folder: the
+    // space's last terminal folder still says which project it is.
+    this.folders ??= new Map();
+    if (at?.terminal && at.cwd) this.folders.set(space.id, at.cwd);
+    const folder = this.folders.get(space.id) || space.folder;
     return folder ? { folder } : { none: "This space has no folder." };
   }
 
@@ -90,7 +109,8 @@ export default class SuggestionBox extends View {
     if (!this.boxJs || !here.folder) return;
     cx.spawn(async (cx) => {
       try {
-        const answer = await box(this.boxJs, ["read", here.folder, ...(withChanges ? ["--changes"] : [])]);
+        const answer = await box(this.node, this.boxJs, ["read", here.folder, ...(withChanges ? ["--changes"] : [])]);
+        if (!withChanges) this.keepChanges(answer);
         this.error = "";
         this.arrived(cx, here.folder, answer);
         setShared(DATA, { folder: here.folder, answer });
@@ -99,6 +119,17 @@ export default class SuggestionBox extends View {
       }
       cx.notify();
     });
+  }
+
+  // A quick read (after an action, or a new drop) asks git nothing: what the last full read found
+  // about each note's lines stays, with its Mark solved button, until the next full read.
+  keepChanges(answer) {
+    const before = new Map((shared(DATA)?.answer?.notes ?? []).map((note) => [note.id, note.changed]));
+    for (const note of answer.notes ?? []) {
+      if (note.state !== "open" || !before.get(note.id)) continue;
+      note.changed = before.get(note.id);
+      note.actions = buttonsFor(note);
+    }
   }
 
   answer() {
@@ -118,16 +149,25 @@ export default class SuggestionBox extends View {
         cx.notify();
       });
     }
-    if (!this.isButton && key && key === this.lastKey) this.noticeMoves(cx, answer);
     this.lastKey = key;
     this.lastTotal = total;
+  }
+
+  // The panel says so when a note leaves a group by itself, whichever copy read it.
+  watchMoves(cx) {
+    const answer = this.answer();
+    if (!answer || answer === this.seenAnswer) return;
+    this.seenAnswer = answer;
+    const key = answer.project?.key;
+    if (key && key === this.seenKey) this.noticeMoves(cx, answer);
+    this.seenKey = key;
     this.lastStates = new Map((answer.notes ?? []).map((note) => [note.id, note.state]));
   }
 
   noticeMoves(cx, answer) {
     for (const note of answer.notes ?? []) {
       const was = this.lastStates?.get(note.id);
-      if (was !== "open" || note.state !== "to verify" || this.mine?.has(note.id)) continue;
+      if (was !== "open" || note.state !== "to verify" || Date.now() < (this.mine?.get(note.id) ?? 0)) continue;
       const editing = this.expanded?.has(note.id) ? " Your view of it is kept." : "";
       this.say(cx, `Note ${note.number} moved to To verify: ${note.solved?.by === "you" ? "you" : "an agent"} claimed it solved on ${note.solved?.branch ?? "a branch"}.${editing}`);
     }
@@ -164,14 +204,16 @@ export default class SuggestionBox extends View {
   // Reads again whenever an agent drops or claims a note in the focused project's folder.
   async watchBox(cx) {
     for (;;) {
-      const dir = this.answer()?.project?.dir;
+      const project = this.answer()?.project;
+      const dir = project ? (project.exists ? project.dir : project.notes) : null;
       if (!dir) {
         await sleep(cx, 2000);
         continue;
       }
       this.watch = watchFolder(dir);
       const changed = await this.watch.catch(() => []);
-      if (changed.length && this.answer()?.project?.dir === dir) this.read(cx, false);
+      const still = this.answer()?.project;
+      if (changed.length && still && (still.exists ? still.dir : still.notes) === dir) this.read(cx, false);
       else await sleep(cx, 500);
     }
   }
@@ -189,7 +231,7 @@ export default class SuggestionBox extends View {
     if (Date.now() - last < DAY_MS) return;
     cx.spawn(async () => {
       try {
-        await box(this.boxJs, ["prune", this.here().folder]);
+        await box(this.node, this.boxJs, ["prune", this.here().folder]);
         localStorage.setItem(key, String(Date.now()));
       } catch (error) {
         console.log(`suggestion box: prune failed: ${error.message}`);
@@ -241,7 +283,10 @@ export default class SuggestionBox extends View {
   initPanel(cx) {
     this.view = "list";
     this.expanded = new Set();
-    this.mine = new Set();
+    // Notes the person just acted on, until when: their own move is no news.
+    this.mine = new Map();
+    // Writes go one after another, so an Undo never overtakes its Bin.
+    this.queue = Promise.resolve();
     this.selected = null;
     this.undo = null;
     this.showSettings = false;
@@ -284,7 +329,7 @@ export default class SuggestionBox extends View {
 
   change(cx, action, note) {
     const extra = action === "mark-solved" ? ["--branch", note.changed?.on ?? ""] : [];
-    this.mine.add(note.id);
+    this.mine.set(note.id, Date.now() + 15000);
     if (action === "bin") this.showUndo(cx, note);
     return this.write(cx, ["act", this.here().folder, note.id, action, ...extra]);
   }
@@ -305,16 +350,21 @@ export default class SuggestionBox extends View {
     return this.write(cx, ["act", this.here().folder, id, "restore"]);
   }
 
-  // A write through box.js, then a fresh read for every copy.
+  // A write through box.js, after the ones before it, then a fresh read for every copy.
   write(cx, args) {
     if (!this.boxJs) return;
-    cx.spawn(async (cx) => {
+    const run = async () => {
       try {
-        await box(this.boxJs, args);
+        await box(this.node, this.boxJs, args);
         this.error = "";
       } catch (error) {
         this.error = error.message;
       }
+    };
+    this.queue = this.queue.then(run);
+    const done = this.queue;
+    cx.spawn(async (cx) => {
+      await done;
       this.read(cx, false);
       cx.notify();
     });
@@ -379,8 +429,10 @@ export default class SuggestionBox extends View {
 
   renderPanel(cx, t) {
     const here = this.here();
-    if (here.folder !== this.folder) {
-      this.folder = here.folder;
+    this.watchMoves(cx);
+    const key = this.answer()?.project?.key ?? here.none ?? null;
+    if (key !== this.panelKey) {
+      this.panelKey = key;
       this.expanded.clear();
       this.selected = null;
     }
