@@ -89,6 +89,50 @@ async function box(node, path, args, timeout = 60000) {
 // What a button is called, for the line that says it failed.
 const LABEL_OF = { file: "File issue", check: "Check", bin: "Bin", "mark-solved": "Mark solved", confirm: "Confirm solved", "not-solved": "Not solved", reopen: "Reopen", restore: "Restore", fix: "Fix in new tab", "editor-create": "Create issue", "editor-copy": "Copy issue" };
 
+// The notes filed while the panel is open, per project. Kept in the app's storage, so a reload of the
+// mod (an update) or of the app keeps them in sight; they go to the history when the panel closes,
+// when another project shows, and after two hours at the latest.
+const JUST_FILED = "suggestion-box.just-filed";
+const JUST_FILED_MS = 2 * 3600000;
+
+export class JustFiled {
+  read() {
+    try {
+      const kept = JSON.parse(localStorage.getItem(JUST_FILED) ?? "null");
+      return kept && Date.now() - kept.at < JUST_FILED_MS ? kept : null;
+    } catch (error) {
+      console.log(`suggestion box: no just-filed notes kept: ${error}`);
+      return null;
+    }
+  }
+
+  // The ids for a project, as a Set the panel draws from.
+  for(key) {
+    const kept = this.read();
+    return new Set(kept && key && kept.key === key ? kept.ids : []);
+  }
+
+  add(key, id) {
+    if (!key) return;
+    const kept = this.read();
+    const ids = kept?.key === key ? kept.ids : [];
+    this.write({ key, ids: [...new Set([...ids, id])], at: Date.now() });
+  }
+
+  clear() {
+    this.write(null);
+  }
+
+  write(value) {
+    try {
+      if (value) localStorage.setItem(JUST_FILED, JSON.stringify(value));
+      else localStorage.removeItem(JUST_FILED);
+    } catch (error) {
+      console.log(`suggestion box: could not keep the just-filed notes: ${error}`);
+    }
+  }
+}
+
 // Why a claim is not solved, kept on the note: what the independent check found, else the person's say.
 function notSolvedReason(note) {
   const verify = note.verify;
@@ -359,8 +403,8 @@ export default class SuggestionBox extends View {
     this.verifying = new Set();
     // Notes whose fix is starting in a new tab.
     this.fixing = new Set();
-    // Notes filed while the panel is open: they stay in sight until it closes.
-    this.justFiled = new Set();
+    // Notes filed while the panel is open stay in sight until it closes (JustFiled below).
+    this.justFiled = new JustFiled();
     this.handle = cx.focus_handle();
     if (checking()) return;
     cx.spawn(async (cx) => {
@@ -748,7 +792,7 @@ export default class SuggestionBox extends View {
       if (error) this.filingFailed(cx, editor, value, error);
       else {
         // Closed meanwhile, the panel has moved what it filed to the history already.
-        if (isShown(BLOCK)) this.justFiled.add(editor.id);
+        if (isShown(BLOCK)) this.justFiled.add(editor.project, editor.id);
         if (this.editor === editor) this.closeEditor(cx, { save: false });
         const board = answer.board?.error ? `; not on the board: ${answer.board.error}` : "";
         this.say(cx, answer.warning ?? `Filed #${answer.issue.number}${board}.`);
@@ -947,10 +991,12 @@ export default class SuggestionBox extends View {
     this.watchMoves(cx);
     const key = this.answer()?.project?.key ?? here.none ?? null;
     if (key !== this.panelKey) {
+      // Only a real switch to another project sends what was just filed to the history: not the
+      // first draw after a reload, and not a read that is missing for a moment.
+      if (this.panelKey && key && this.panelKey.includes("/") && key.includes("/")) this.justFiled.clear();
       this.panelKey = key;
       this.expanded.clear();
       this.selected = null;
-      this.justFiled.clear();
       this.proofs.clear();
       if (this.view === "settings") {
         this.projects = null;
@@ -981,7 +1027,7 @@ export default class SuggestionBox extends View {
       verifying: this.verifying,
       fixing: this.fixing,
       mono: settings()?.font || "Menlo",
-      justFiled: this.justFiled,
+      justFiled: this.justFiled.for(this.answer()?.project?.key),
       notice: this.notice,
       error: this.error,
       projects: this.projects,

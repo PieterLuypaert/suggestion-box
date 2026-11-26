@@ -110,3 +110,37 @@ describe.skipIf(!HERDR)("the box drawn by Herdr's engine", () => {
     });
   }
 });
+
+// "Just filed" lives in the app's storage, so a reload of the mod keeps it: checked with Herdr's own
+// engine, as localStorage only exists there.
+describe.skipIf(!HERDR)("Just filed in the app's storage", () => {
+  test("kept across a reload, per project, gone after two hours or when cleared", () => {
+    const dir = join(tempDir("ui-"), "just-filed");
+    mkdirSync(dir, { recursive: true });
+    for (const file of readdirSync(join(ROOT, "mods", "suggestion-box"))) {
+      if (file.endsWith(".js")) copyFileSync(join(ROOT, "mods", "suggestion-box", file), join(dir, file === "main.js" ? "box-main.js" : file));
+    }
+    writeFileSync(join(dir, "mod.json"), '{ "place": "none", "title": "scene" }\n');
+    writeFileSync(join(dir, "main.js"), `import { View } from "gpui-kit";
+import { JustFiled } from "./box-main.js";
+export default class Scene extends View {
+  render() {
+    const a = new JustFiled();
+    a.clear();
+    a.add("github.com/acme/shop", "n1");
+    a.add("github.com/acme/shop", "n2");
+    const b = new JustFiled();
+    const found = [[...b.for("github.com/acme/shop")].join(","), [...b.for("github.com/acme/billing")].join(",")];
+    localStorage.setItem("suggestion-box.just-filed", JSON.stringify({ key: "github.com/acme/shop", ids: ["old"], at: Date.now() - 3 * 3600000 }));
+    found.push([...b.for("github.com/acme/shop")].join(","));
+    b.add("github.com/acme/shop", "n3");
+    b.clear();
+    found.push([...b.for("github.com/acme/shop")].join(","));
+    throw new Error("REPORT " + JSON.stringify(found));
+  }
+}
+`);
+    const result = spawnSync(HERDR, ["check", dir], { encoding: "utf8" });
+    expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","","",""]');
+  });
+});
