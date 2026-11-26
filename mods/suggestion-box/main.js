@@ -208,15 +208,16 @@ export default class SuggestionBox extends View {
     }
   }
 
-  // The last read of the focused space's box. While a mod has the keyboard (the panel itself, when
-  // you click in it) no terminal says which folder this is, and each copy of the box remembers its
-  // own last one: the space's last read still holds then.
+  // The last read of the focused space's box. Moving to another tab of the space (Main and its
+  // ticket worktrees: other folders, the same project) shows that read until the read for the new
+  // folder is in, so the panel never flashes empty or closes what you opened. Another space starts
+  // empty: its box is another project's.
   answer() {
     const data = shared(DATA);
     if (!data) return null;
     const here = this.here();
     if (data.folder === here.folder) return data.answer;
-    return data.space && data.space === here.space && !focused()?.terminal ? data.answer : null;
+    return data.space && data.space === here.space ? data.answer : null;
   }
 
   // What a new answer changes: the button wiggles when a note arrives while the panel is shut; the
