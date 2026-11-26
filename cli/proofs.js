@@ -31,10 +31,12 @@ export function claimRef(top, branch, mainRef = defaultRef(top), sha = null) {
   return holding ?? (isDefault ? mainRef : there[0] ?? null);
 }
 
-// Proof 1: { ref, path, commits: [{ sha, subject, lines, path, at }] } for the commits since the
-// drop whose diff touched the note's lines, oldest first, or { why } when there is nothing to look
-// at. The branch is walked along its first parents: a merge of main into it moves the lines like
-// any commit, but is never taken for the fix.
+// Proof 1: { ref, path, commits: [{ sha, subject, lines, path, at }], elsewhere } for the commits
+// since the drop whose diff touched the note's lines, oldest first, or { why } when there is nothing
+// to look at. The branch is walked along its first parents: a merge of main into it moves the lines
+// like any commit, but is never taken for the fix. A fix often lands in another file than the one the
+// note names: `elsewhere` holds the claim branch's own commits (those not in the default branch) that
+// changed other files: never a teammate's work merged in between, nor anything on the default branch.
 export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
   const ref = claimRef(top, claim?.branch, mainRef, claim?.sha);
   if (!ref) return { why: claim?.branch ? `${claim.branch} is not here, not even fetched` : "the claim names no branch" };
@@ -42,14 +44,21 @@ export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
   if (!start) return { ref, why: "the note's lines cannot be found where its branch started" };
   let { range, path } = start;
   const commits = [];
+  const elsewhere = [];
+  // The branch's own commits: not in the default branch, so not a teammate's merged work in between.
+  const own = !isDefaultBranch(claim?.branch, mainRef) && mainRef ? new Set((gitAnswer(top, ["rev-list", ref, `^${mainRef}`]) ?? "").split("\n").filter(Boolean)) : new Set();
   for (const commit of commitsOn(top, `${start.base}..${ref}`)) {
     const step = stepThrough(top, commit, path, range);
+    if (!step || !step.isTouched) {
+      if (own.has(commit.sha) && !commit.isMerge && commit.files.length) elsewhere.push({ sha: commit.sha, subject: commit.subject, files: commit.files.map((file) => file.to ?? file.from) });
+    } else if (!commit.isMerge) {
+      commits.push({ sha: commit.sha, subject: commit.subject, lines: step.lines, path: step.shownPath, at: step.shownAt });
+    }
     if (!step) continue;
-    if (step.isTouched && !commit.isMerge) commits.push({ sha: commit.sha, subject: commit.subject, lines: step.lines, path: step.shownPath, at: step.shownAt });
     ({ range, path } = step);
     if (step.isGone) break;
   }
-  return { ref, path, commits: commits.slice(-SHOWN_COMMITS), more: Math.max(0, commits.length - SHOWN_COMMITS) };
+  return { ref, path, commits: commits.slice(-SHOWN_COMMITS), more: Math.max(0, commits.length - SHOWN_COMMITS), elsewhere: elsewhere.slice(-SHOWN_COMMITS) };
 }
 
 // The first-parent commits of a range, oldest first, each with the files it changed against its

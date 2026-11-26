@@ -430,7 +430,7 @@ function verifyCard(s, note) {
   return card(t, `note:${note.id}`, { isSelected: s.selected === note.id, edge: t.ansi2 })
     .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
     .child(metaRow(t)
-      .child(div().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
+      .child(div().min_w(0).whitespace_normal().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
       .when(Boolean(claim.neverLanded), (el) => el.child(chip(t, "the fix never landed", t.blocked))))
     .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed, but ${claim.neverLanded.how}.`)))
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
@@ -447,18 +447,22 @@ function proofList(s, note) {
   const { t } = s;
   const found = s.proofs?.get(note.id) ?? null;
   return v_flex().gap(8).pt(2)
-    .child(proofRow(t, "The change", ...changeState(t, found)).when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change))))
+    .child(proofRow(t, "The change", ...changeState(t, found))
+      .when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change)))
+      .when(!found?.change?.commits?.length && Boolean(found?.change?.elsewhere?.length), (el) => el.child(elsewhereList(s, found.change))))
     .child(proofRow(t, "Independent check", ...verifyState(t, note, s.verifying?.has(note.id)))
       .when(Boolean(note.verify?.error) && !s.verifying?.has(note.id), (el) => el.child(h_flex().child(div().id(`verify-again:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("verify-again", note, cx)).child("Check again")))))
     .child(proofRow(t, "Landed", ...landedState(t, found)));
 }
 
+// A proof: its dot and name on a line of their own, then what it found under it, the full width of
+// the card, so a long answer never squeezes into a narrow column beside the name.
 function proofRow(t, name, color, text, detail = null) {
   return v_flex().gap(3)
     .child(h_flex().gap(7).items_center().text_size(12)
       .child(div().flex_none().size(8).rounded(4).bg(color))
-      .child(div().flex_none().font_medium().child(name))
-      .child(div().flex_1().min_w(0).text_color(t.muted).whitespace_normal().child(text)))
+      .child(div().flex_none().font_medium().child(name)))
+    .child(div().pl(15).text_size(12).text_color(t.muted).whitespace_normal().child(text))
     .when(Boolean(detail), (el) => el.child(div().pl(15).text_size(11.5).text_color(t.muted).whitespace_normal().child(detail)));
 }
 
@@ -468,7 +472,9 @@ function changeState(t, found) {
   const { change } = found;
   if (change.why) return [t.dim, change.why];
   const count = change.commits.length + (change.more ?? 0);
-  return count ? [t.ansi2, `${count === 1 ? "1 commit" : `${count} commits`} since the drop changed these lines`] : [t.working, "No commit since the drop changed these lines"];
+  if (count) return [t.ansi2, `${count === 1 ? "1 commit" : `${count} commits`} since the drop changed the note's lines`];
+  if (change.elsewhere?.length) return [t.working, "The note's lines did not change; the branch changed other files (below). The independent check reads them too."];
+  return [t.working, "No commit since the drop changed the note's lines"];
 }
 
 const VERIFY_WORDS = { verified: "Verified", partly: "Partly", not_fixed: "Not fixed" };
@@ -507,6 +513,17 @@ function commitList(s, note, change) {
         .when(line.kind === "@", (el) => el.text_color(t.dim))
         .child(`${line.kind === "@" ? "" : line.kind}${line.text}`)))
       .when(commit.lines.length > MAX_LINES, (el) => el.child(div().px(6).text_color(t.dim).child(`… ${commit.lines.length - MAX_LINES} more lines`))))));
+}
+
+// The branch's commits that changed other files than the note's: each with the files it touched.
+function elsewhereList(s, change) {
+  const { t } = s;
+  const short = (path) => path.split("/").slice(-2).join("/");
+  return v_flex().gap(4).pl(15).pt(2).children(change.elsewhere.map((commit) => v_flex().gap(1).text_size(11.5)
+    .child(h_flex().gap(8).items_center()
+      .child(div().flex_none().font_family(s.mono).text_color(t.muted).child(commit.sha.slice(0, 7)))
+      .child(div().flex_1().min_w(0).truncate().child(commit.subject)))
+    .child(div().text_color(t.muted).whitespace_normal().child(`${commit.files.slice(0, 3).map(short).join(", ")}${commit.files.length > 3 ? ` and ${commit.files.length - 3} more` : ""}`))));
 }
 
 // The new file's first line in a hunk header, so Open lands on the change.
@@ -556,7 +573,8 @@ function footer(s) {
   const count = (state) => past.filter((n) => n.state === state).length;
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
-      .child(s.view !== "list" ? "◂ Back to the notes" : `History ▸ ${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned`))
+      .tooltip(s.view !== "list" ? "Back to the notes" : `${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned in the last 30 days`)
+      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.length} ▸`))
     .child(div().flex_1().min_w(0).truncate().text_right().child(hintsFor(s)));
 }
 

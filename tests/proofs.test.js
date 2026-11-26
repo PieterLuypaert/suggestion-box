@@ -222,6 +222,45 @@ describe("proof 1: the change", () => {
     expect(change.commits.map((c) => c.sha)).toEqual([fix]);
   });
 
+  test("a fix in another file than the note's: its commits and their files, as the change", () => {
+    const s = setup();
+    writeFileSync(join(s.repo, "src", "other.ts"), "fixed\n");
+    git(s.repo, "add", "src/other.ts");
+    git(s.repo, "commit", "-qm", "fix: in the file that really had it");
+    const fix = git(s.repo, "rev-parse", "HEAD");
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    expect(change.commits).toEqual([]);
+    expect(change.elsewhere).toEqual([{ sha: fix, subject: "fix: in the file that really had it", files: ["src/other.ts"] }]);
+    expect(verifyPrompt(noteOf(s), { branch: BRANCH }, change)).toContain(`<commit sha="${fix}" subject="fix: in the file that really had it" files="src/other.ts"/>`);
+  });
+
+  test("a fix branch that started from a newer main: only its own commits count, never main's in between", () => {
+    const s = setup();
+    git(s.repo, "switch", "-q", "main");
+    git(s.repo, "merge", "-q", "--no-ff", "--no-edit", BRANCH);
+    writeFileSync(join(s.repo, "src", "teammate.ts"), "x\n");
+    git(s.repo, "add", "src/teammate.ts");
+    git(s.repo, "commit", "-qm", "feat: a teammate's work on main");
+    git(s.repo, "push", "-q", "origin", "main");
+    git(s.repo, "fetch", "-q", "origin");
+    git(s.repo, "switch", "-q", "-c", "fix/elsewhere");
+    writeFileSync(join(s.repo, "src", "fix.ts"), "fixed\n");
+    git(s.repo, "add", "src/fix.ts");
+    git(s.repo, "commit", "-qm", "fix: the real fix");
+    const change = changeProof(s.repo, noteOf(s), { branch: "fix/elsewhere" });
+    expect(change.elsewhere.map((c) => c.subject)).toEqual(["fix: the real fix"]);
+  });
+
+  test("on the default branch other files are teammates' work, never the fix", () => {
+    const s = setup();
+    git(s.repo, "switch", "-q", "main");
+    edit(s.repo, "chore: a teammate elsewhere", (lines) => (lines[2] = "line 3 changed"));
+    writeFileSync(join(s.repo, "src", "other.ts"), "x\n");
+    git(s.repo, "add", "src/other.ts");
+    git(s.repo, "commit", "-qm", "feat: a teammate's file");
+    expect(changeProof(s.repo, noteOf(s), { branch: "main", sha: git(s.repo, "rev-parse", "HEAD") }).elsewhere).toEqual([]);
+  });
+
   test("no commit yet, and a branch that is not here", () => {
     const s = setup();
     expect(changeProof(s.repo, noteOf(s), { branch: BRANCH }).commits).toEqual([]);
