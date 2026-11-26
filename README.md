@@ -5,8 +5,8 @@ ticket may not fix unrelated code, so what it spots outside its ticket gets lost
 suggestion box, the agent drops a note in the project's box and carries on. Later you check each
 note against the code, file it as a GitHub issue, or bin it.
 
-This is version 0.3.0: the `suggest` command, the agent instructions, the box as a panel in the
-Herdr app, and the check. Filing, proving a solve and fixing follow; [PLAN.md](PLAN.md) has the whole
+This is version 0.4.0: the `suggest` command, the agent instructions, the box as a panel in the
+Herdr app, the check, and filing. Proving a solve and fixing follow; [PLAN.md](PLAN.md) has the whole
 plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
 
 ## How an agent drops a note
@@ -62,11 +62,12 @@ Quarterdeck: one right-hand panel shows at a time, whichever opened last.
   changed since the drop says so, with Mark solved.
 - **Check** (or `k`) asks your own Claude to check the note's four sections against the code (see
   below).
+- **File issue** (or `f`) turns the note into an editor and files it as a GitHub issue (see below).
 - **Bin** takes a note away at once, with Undo for five seconds; the history keeps the last 30
   days of binned, solved and filed notes, with Restore and Reopen.
 - **Collecting** in the header switches drops off and on for this project; the ⚙ for all projects.
-- Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `s` mark solved, `x` bin, `u`
-  undo, `c` confirm, `n` not solved, esc closes.
+- Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `f` file, `k` check, `s` mark
+  solved, `x` bin, `u` undo, `c` confirm, `n` not solved, esc closes.
 
 Each note's state allows a fixed set of actions (PLAN.md section 6c), and the box refuses any
 other, also a click that races an agent's claim. All reading and writing goes through
@@ -87,6 +88,43 @@ your own Claude Code (`claude -p`, Sonnet, on your own login) whether each secti
   kept; the folder is removed afterwards.
 - A check is kept on the note and reused until the code of the note's file changes. After 90
   seconds, or when Claude cannot answer, it says why, with Check again.
+
+## Filing an issue
+
+**File issue** turns the note into an editor in place: the title and the four sections as fields.
+The check runs first (or is reused while it holds), and its texts go into the fields: Claude's where
+it corrected the agent, with **Use the agent's text** to swap back. A field you change loses its
+label. Create issue waits for the check, and the line under it always says why it is off:
+`Waiting for the check`, `Fill in: Desired situation`, `The check says this is solved` (until you
+press **It is not solved**), or what the scan found.
+
+- **Where it goes** comes from the project's `.ai-tooling/config.yml` (or `.claude/project.yml`) on
+  the fetched default branch, and the editor shows it before anything is created:
+  `→ acme/shop (public) · triage · board Shop › Backlog`.
+
+  | The project has | Repo | Label | Board |
+  | --- | --- | --- | --- |
+  | The config, tracker on GitHub, with `project` and `status` | `tracker.repo` | `labels.needs-triage` | `tracker.project`, column `tracker.status.todo` |
+  | The config without `project` or `status` | `tracker.repo` | as above | none |
+  | The config, tracker on monday or asana | Copy issue puts the title and text on your clipboard | | |
+  | No config | the `origin` repo | none | none |
+
+- **The issue text** is always Problem, Evidence, Current situation and Desired situation. Under
+  Evidence the box adds the code: the note's lines found on the default branch, linked so GitHub
+  shows them, else the note's own commit when GitHub has it, else the file. A last line names the
+  ticket the note was spotted on. No mention of Claude or agents.
+- **Before it goes out**, the title and sections are scanned. A token (GitHub, AWS, Slack, OpenAI,
+  Anthropic, a private key, a bearer token) blocks Create anywhere. Email addresses, home paths, IP
+  addresses and long random strings block it in a repo that is not private, until each is removed
+  or marked **Fine to publish**.
+- **Similar open issues** show as links, so you can bin a duplicate instead.
+- **The board**: the issue is added to the board and put in its `todo` column, finding the field
+  and column by name, as the team's skills do. When that fails, the issue stays, the note says why,
+  and **Add to board** tries again; without the `project` scope it says `run gh auth refresh -s
+  project`.
+- **Your draft** is kept in the note when you leave a field, close the editor or close the panel.
+- A filed note shows `Filed #812 ↗` until the panel closes, then sits in the history. Once it is
+  solved, the box gives you the words for the fix's PR, such as `Closes #812`, with Copy.
 
 ## Collecting on or off
 

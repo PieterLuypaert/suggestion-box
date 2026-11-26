@@ -4,6 +4,32 @@ All notable changes to the suggestion box. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-26
+
+### Added
+
+- Filing: File issue (or `f`) turns an open note into an editor with the title and the four
+  sections, filled from the check (Claude's text where it corrected the agent, with Use the agent's
+  text to swap back), each with its check label until you change it.
+- Create issue waits for the check and never goes off without saying why on the line under it; it
+  stays off while the check says the problem is gone, until you press It is not solved.
+- Where the issue goes comes from the project's `.ai-tooling/config.yml` (or `.claude/project.yml`)
+  on the fetched default branch: repo, `needs-triage` label, board and column; without a config, the
+  origin repo. The editor shows it, with the repo's visibility, before anything is created. A
+  tracker on monday or asana gets Copy issue instead.
+- The issue text: Problem, Evidence with the code linked so GitHub shows it, Current situation,
+  Desired situation, and the ticket the note was spotted on.
+- A scan before anything goes out: tokens always block; emails, home paths, IP addresses and long
+  random strings block in a repo that is not private until marked Fine to publish.
+- Similar open issues, the board step with Add to board when it fails, drafts kept in the note, a
+  Just filed group, and the `Closes #n` words with Copy once a filed note is solved.
+
+### Changed
+
+- Filed notes are part of the history; the panel keeps the ones it just filed in sight until it closes.
+- Every write of a note reads it again when something else wrote it in between, so a check
+  finishing and a click at the same moment no longer fail with "the note changed meanwhile".
+
 ## [0.3.0] - 2026-11-26
 
 ### Added
