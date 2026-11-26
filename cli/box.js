@@ -79,7 +79,8 @@ function read(project, withChanges, now) {
   const views = (existsSync(project.dir) ? notesOf(project.dir) : []).map((note) => describe(project, note, withChanges, mainRef, now));
   // A filed note is history; the panel keeps the ones it just filed in sight until it closes.
   const live = views.filter((v) => ["open", "to verify"].includes(v.state));
-  const recent = views.filter((v) => !live.includes(v) && now - Date.parse(v.updated) < KEEP_DAYS * DAY);
+  // A fix still watched stays in sight, however long it waits to land.
+  const recent = views.filter((v) => !live.includes(v) && (now - Date.parse(v.updated) < KEEP_DAYS * DAY || isWatched(v)));
   return {
     project: { key: project.key, name: project.name, dir: project.dir, exists: existsSync(project.dir), notes: join(project.root, "notes"), top: project.repo.top, checkout: project.repo.checkout, origin: project.repo.origin },
     collecting: { all: settings.collecting !== false, project: collecting(settings, project.key) },
@@ -130,7 +131,7 @@ function act(project, rest, now, env) {
   if (action === "confirm") {
     const loaded = loadNote(project.dir, id);
     const view = loaded && fold(loaded.note, loaded.events.map((e) => e.event));
-    if (view?.solved) details.proofs = proofsOf(project, view, env);
+    if (view?.solved) details.proofs = keptProofs(project, view, env);
   }
   const result = update(project, id, ({ view }) => applyAction(view, action, now.toISOString(), details), { foldEvents: true });
   return result.error ? result : { ok: true, state: stateOf(result.note) };
@@ -272,11 +273,21 @@ function proofs(project, id, env) {
   return { ok: true, fetched, ...proofsOf(project, view, env) };
 }
 
+// The proofs Confirm keeps, or null when they could not be found: Confirm never fails over them.
+function keptProofs(project, view, env) {
+  try {
+    return proofsOf(project, view, env);
+  } catch (error) {
+    process.stderr.write(`box.js: kept no proofs for note ${view.number}: ${error.message}\n`);
+    return null;
+  }
+}
+
 function proofsOf(project, view, env) {
   const top = project.repo.top;
   const mainRef = defaultRef(top);
   const change = changeProof(top, view, view.solved, mainRef);
-  const landed = landedProof(top, project.key, view.solved, change, env, mainRef);
+  const landed = landedProof(top, project.key, view.solved, change, env, { mainRef, since: view.created });
   const commits = (change.commits ?? []).map(({ sha, subject }) => ({ sha, subject }));
   return { change, landed, verify: view.verify ?? null, commits };
 }
@@ -309,7 +320,7 @@ function watch(project, env, now) {
   const results = [];
   for (const note of watched) {
     const change = changeProof(project.repo.top, note, note.solved, mainRef);
-    const landed = landedProof(project.repo.top, project.key, note.solved, change, env, mainRef);
+    const landed = landedProof(project.repo.top, project.key, note.solved, change, env, { mainRef, since: note.created });
     update(project, note.id, ({ view }) => (isWatched(view) ? { note: recordLanded(view, now.toISOString(), landed) } : { skip: true }), { foldEvents: true });
     results.push({ number: note.number, state: landed.state, how: landed.how });
   }
@@ -359,7 +370,7 @@ function prune(project, now) {
   let pruned = 0;
   if (!existsSync(project.dir)) return { ok: true, pruned };
   for (const note of notesOf(project.dir)) {
-    if (!["filed", "solved", "binned"].includes(stateOf(note))) continue;
+    if (!["filed", "solved", "binned"].includes(stateOf(note)) || isWatched(note)) continue;
     if (note.eventFiles.length || now - Date.parse(note.updated) < KEEP_DAYS * DAY) continue;
     const tombstone = { id: note.id, number: note.number, project: note.project, title: note.title, at: note.at, status: note.status, issue: note.issue ?? null, solved: note.solved ?? null, spotted: note.spotted, created: note.created, updated: note.updated };
     mkdirSync(join(project.dir, "tombstones"), { recursive: true });

@@ -249,9 +249,11 @@ export default class SuggestionBox extends View {
     if (!answer?.project || !(answer.history ?? []).some(isWatched) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
     this.watchedAt = Date.now();
     const folder = this.here().folder;
+    // A fetch, then per watched fix gh and git ls-remote, each 20 s at most.
+    const timeout = PROOFS_MS + (answer.history ?? []).filter(isWatched).length * 45000;
     cx.spawn(async (cx) => {
       try {
-        const result = await box(this.node, this.boxJs, ["watch", folder], PROOFS_MS);
+        const result = await box(this.node, this.boxJs, ["watch", folder], timeout);
         if (result.watched) this.read(cx, false);
       } catch (error) {
         console.log(`suggestion box: watching fixes failed: ${error.message}`);
