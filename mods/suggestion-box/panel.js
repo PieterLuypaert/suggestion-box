@@ -241,6 +241,13 @@ function hitList(s, note, ed) {
       .when(!hit.blocking && !hit.isFine, (el) => el.child(link(t, `fine:${note.id}:${i}`, "Fine to publish", (_e, cx) => s.act("editor-fine", { hit: hit.text }, cx))))));
 }
 
+// A solved note in the history: where it was solved, and whether its fix landed yet.
+function solvedLine(note) {
+  const landed = note.solved?.landed;
+  if (landed?.state === "landed") return `Solved · landed: ${landed.how}`;
+  return `Solved on ${note.solved?.branch ?? "a branch"}${note.solved?.confirmed ? " · waiting to land" : ""}`;
+}
+
 // A filed note: its issue, how the board step went, and once solved the words that close it.
 function filedLines(s, note) {
   const { t } = s;
@@ -249,7 +256,7 @@ function filedLines(s, note) {
   return v_flex().gap(4).text_size(12)
     .child(h_flex().gap(8).items_center()
       .child(link(t, `issue:${note.id}`, `Filed #${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
-      .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(`solved on ${note.solved.branch ?? "a branch"}`))))
+      .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
     .when(Boolean(note.board?.error), (el) => el.child(h_flex().gap(8).items_center()
       .child(div().flex_1().min_w(0).whitespace_normal().text_color(t.working).child(`Not on the board: ${note.board.error}`))
       .child(plainButton(t, `board:${note.id}`, "Add to board", (_e, cx) => s.act("board", note, cx)))))
@@ -303,14 +310,94 @@ function verifyCard(s, note) {
   const { t } = s;
   const claim = note.solved ?? {};
   const isSelected = s.selected === note.id;
+  const isOpen = s.expanded.has(note.id);
   return v_flex().id(`note:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1).border_color(isSelected ? t.input : t.border).bg(t.raised)
-    .child(div().font_medium().whitespace_normal().child(note.title))
-    .child(div().text_size(11.5).text_color(t.muted).child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
+    .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
+    .child(h_flex().flex_wrap().gap(8).items_center().text_size(11.5).text_color(t.muted)
+      .child(div().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
+      .when(Boolean(claim.neverLanded), (el) => el.child(chip(t, "the fix never landed", t.blocked))))
+    .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed, but ${claim.neverLanded.how}.`)))
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
     .child(v_flex().gap(2).pl(8).border_l(2).border_color(t.border).text_size(12)
       .child(div().whitespace_normal().child(claim.how ?? ""))
       .when(Boolean(claim.proof), (el) => el.child(div().whitespace_normal().text_color(t.muted).child(`proof: ${claim.proof}`))))
+    .when(isOpen, (el) => el.child(proofList(s, note)))
+    .when(!isOpen, (el) => el.child(div().id(`show-proofs:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child("Show the three proofs")))
     .child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, a === "confirm"))));
+}
+
+// The three proofs of a claim (PLAN.md section 6b), each with a dot that says how it stands.
+function proofList(s, note) {
+  const { t } = s;
+  const found = s.proofs?.get(note.id) ?? null;
+  return v_flex().gap(8).pt(2)
+    .child(proofRow(t, "The change", ...changeState(t, found)).when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change))))
+    .child(proofRow(t, "Independent check", ...verifyState(t, note, s.verifying?.has(note.id)))
+      .when(Boolean(note.verify?.error) && !s.verifying?.has(note.id), (el) => el.child(h_flex().child(div().id(`verify-again:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("verify-again", note, cx)).child("Check again")))))
+    .child(proofRow(t, "Landed", ...landedState(t, found)));
+}
+
+function proofRow(t, name, color, text, detail = null) {
+  return v_flex().gap(3)
+    .child(h_flex().gap(7).items_center().text_size(12)
+      .child(div().flex_none().size(8).rounded(4).bg(color))
+      .child(div().flex_none().font_medium().child(name))
+      .child(div().flex_1().min_w(0).text_color(t.muted).whitespace_normal().child(text)))
+    .when(Boolean(detail), (el) => el.child(div().pl(15).text_size(11.5).text_color(t.muted).whitespace_normal().child(detail)));
+}
+
+function changeState(t, found) {
+  if (!found || found.isLoading) return [t.dim, "Looking at the branch…"];
+  if (found.error) return [t.dim, `Could not look: ${found.error}`];
+  const { change } = found;
+  if (change.why) return [t.dim, change.why];
+  const count = change.commits.length + (change.more ?? 0);
+  return count ? [t.ansi2, `${count === 1 ? "1 commit" : `${count} commits`} since the drop changed these lines`] : [t.working, "No commit since the drop changed these lines"];
+}
+
+const VERIFY_WORDS = { verified: "Verified", partly: "Partly", not_fixed: "Not fixed" };
+
+function verifyState(t, note, isRunning) {
+  if (isRunning) return [t.dim, "Your Claude is checking the fix…"];
+  const verify = note.verify;
+  if (!verify) return [t.dim, "Not checked yet"];
+  if (verify.error) return [t.dim, `Not checked: ${verify.error}`];
+  const color = { verified: t.ansi2, partly: t.working, not_fixed: t.blocked }[verify.verdict];
+  const test = !verify.test?.found ? "The named test was not found." : verify.test.assertsFix ? "The named test asserts the fix." : `The named test does not assert the fix${verify.test.why ? `: ${verify.test.why}` : "."}`;
+  return [color, `${VERIFY_WORDS[verify.verdict]}: ${verify.why}`, test];
+}
+
+function landedState(t, found) {
+  if (!found || found.isLoading) return [t.dim, "Looking for its PR…"];
+  if (found.error) return [t.dim, "Could not look"];
+  const color = { landed: t.ansi2, waiting: t.working, never: t.blocked }[found.landed.state];
+  return [color, found.landed.state === "landed" ? `Landed: ${found.landed.how}` : found.landed.how];
+}
+
+// The commits that changed the note's lines, each with its diff of those lines in red and green.
+function commitList(s, note, change) {
+  const { t } = s;
+  const MAX_LINES = 14;
+  return v_flex().gap(6).pl(15).pt(2).children(change.commits.map((commit) => v_flex().gap(2)
+    .child(h_flex().gap(8).items_center().text_size(11.5)
+      .child(div().flex_none().font_family(s.mono).text_color(t.muted).child(commit.sha.slice(0, 7)))
+      .child(div().flex_1().min_w(0).truncate().child(commit.subject))
+      .child(div().id(`open-at:${commit.sha}`).flex_none().text_color(t.accent).cursor_pointer().tooltip(`Open ${change.path} as this commit has it`)
+        .on_click((_e, cx) => s.act("open-at", { sha: commit.sha, path: change.path, line: firstNewLine(commit.lines) }, cx)).child("Open")))
+    .child(v_flex().rounded(4).border(1).border_color(t.border).bg(t.background).py(2).font_family(s.mono).text_size(11)
+      .children(commit.lines.slice(0, MAX_LINES).map((line) => div().px(6).whitespace_normal()
+        .when(line.kind === "-", (el) => el.text_color(t.blocked))
+        .when(line.kind === "+", (el) => el.text_color(t.ansi2))
+        .when(line.kind === "@", (el) => el.text_color(t.dim))
+        .child(`${line.kind === "@" ? "" : line.kind}${line.text}`)))
+      .when(commit.lines.length > MAX_LINES, (el) => el.child(div().px(6).text_color(t.dim).child(`… ${commit.lines.length - MAX_LINES} more lines`))))));
+}
+
+// The new file's first line in a hunk header, so Open lands on the change.
+function firstNewLine(lines) {
+  const header = lines.find((line) => line.kind === "@")?.text ?? "";
+  const match = /\+(\d+)/.exec(header);
+  return match ? Number(match[1]) : null;
 }
 
 function undoRow(s, note) {
@@ -326,7 +413,7 @@ function history(s) {
   const notes = (answer?.history ?? []).filter((note) => !s.justFiled?.has(note.id));
   if (!notes.length) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Nothing filed, solved or binned in the last 30 days.");
   return v_flex().gap(4).children(notes.map((note) => {
-    const what = note.state === "binned" ? "Binned" : note.state === "solved" ? `Solved on ${note.solved?.branch ?? "a branch"}` : null;
+    const what = note.state === "binned" ? "Binned" : note.state === "solved" ? solvedLine(note) : null;
     return v_flex().id(`past:${note.id}`).px(10).py(8).gap(4).rounded(8).hover((st) => st.bg(t.hover))
       .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
       .when(note.state === "filed", (el) => el.child(filedLines(s, note)))
