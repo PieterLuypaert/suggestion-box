@@ -12,7 +12,7 @@ describe("tokens, which always block", () => {
     ["an AWS key", "AKIAIOSFODNN7EXAMPLE"],
     ["a Slack token", "xoxb-1234567890-abcdefghij"],
     ["an Anthropic key", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz"],
-    ["an OpenAI key", "sk-proj-abcdefghijklmnopqrstuvwxyz"],
+    ["an OpenAI key", "sk-proj-Ab3dEf6hIj9kLm2nOp5qRs8t"],
     ["a private key", "-----BEGIN RSA PRIVATE KEY-----"],
     ["a bearer token", "Authorization: Bearer abcdefghijklmnopqrstuvwxyz.123"],
   ])("%s", (kind, text) => {
@@ -39,6 +39,11 @@ describe("other hits", () => {
       "formatDateWithTheLocaleOfTheInvoiceOwner", "src/very/long/path/to/some/file/that/is/deep.ts",
     ].join("\n");
     expect(scan(text)).toEqual([]);
+  });
+
+  test("placeholders and slugs that look like a token's start are not tokens", () => {
+    expect(scan("the client sends Authorization: Bearer YOUR_ACCESS_TOKEN_HERE")).toEqual([]);
+    expect(scan("the sk-some-long-kebab-case-name-here package")).toEqual([]);
   });
 
   test("a token is not found again as a long random string", () => {

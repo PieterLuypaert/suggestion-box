@@ -19,7 +19,7 @@ labels:
 const CHECKED = { sections: { problem: { verdict: "checked" }, evidence: { verdict: "checked" }, current: { verdict: "checked" }, desired: { verdict: "checked" } }, gone: null };
 
 // A ticket branch with a dropped, checked note; main (and origin/main) holds the config when given.
-function setup({ config = null, check = CHECKED, gh = {} } = {}) {
+function setup({ config = null, check = CHECKED, gh = {}, fetched = true } = {}) {
   const repo = makeRepo();
   if (config) {
     git(repo, "switch", "-q", "main");
@@ -29,8 +29,10 @@ function setup({ config = null, check = CHECKED, gh = {} } = {}) {
     git(repo, "commit", "-qm", "config");
     git(repo, "switch", "-q", "feat/8504-group-records");
   }
-  git(repo, "update-ref", "refs/remotes/origin/main", "main");
-  git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+  if (fetched) {
+    git(repo, "update-ref", "refs/remotes/origin/main", "main");
+    git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+  }
   const box = join(tempDir(), "box");
   suggest(repo, box, [], NOTE);
   const file = noteFile(box);
@@ -41,10 +43,13 @@ function setup({ config = null, check = CHECKED, gh = {} } = {}) {
   writeFileSync(stand, `#!/bin/sh
 printf '%s\\n' "---" "$@" >> "${dir}/log"
 case "$1 $2" in
-  "repo view") echo '{"visibility":"${gh.visibility ?? "PUBLIC"}","nameWithOwner":"${gh.name ?? "acme/shop"}"}' ;;
-  "label list") echo '${JSON.stringify(gh.labels ?? [{ name: "triage" }])}' ;;
-  "issue list") ${gh.searchFails ? "echo 'HTTP 502' >&2; exit 1" : `echo '[{"number":12,"title":"PDF export crashes","url":"https://github.com/acme/shop/issues/12"}]'`} ;;
-  "issue create") cat > "${dir}/body"; ${gh.during ?? ":"}; ${gh.createFails ? "echo 'GraphQL: Could not resolve to a Repository' >&2; exit 1" : "echo 'Creating issue in acme/shop'; echo 'https://github.com/acme/shop/issues/812'"} ;;
+  "repo view") printf '{"visibility":"${gh.visibility ?? "PUBLIC"}","nameWithOwner":"%s"}\\n' "${gh.name ?? "$3"}" ;;
+  "label list") ${gh.labelsFail ? "echo 'HTTP 502' >&2; exit 1" : `echo '${JSON.stringify(gh.labels ?? [{ name: "triage" }])}'`} ;;
+  "issue list") case "$*" in
+      *--author*) if [ -f "${dir}/created" ]; then printf '[{"number":812,"title":"%s","url":"https://github.com/acme/shop/issues/812","createdAt":"%s"}]\n' "$(cat "${dir}/created")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; else echo '[]'; fi ;;
+      *) ${gh.searchFails ? "echo 'HTTP 502' >&2; exit 1" : `echo '[{"number":12,"title":"PDF export crashes","url":"https://github.com/acme/shop/issues/12"}]'`} ;;
+    esac ;;
+  "issue create") cat > "${dir}/body"; printf '%s' "$6" > "${dir}/created"; ${gh.during ?? ":"}; ${gh.createFails ? "echo 'GraphQL: Could not resolve to a Repository' >&2; exit 1" : "echo 'Creating issue in acme/shop'; echo 'https://github.com/acme/shop/issues/812'"} ;;
   "api "*) exit ${gh.hasCommit ? 0 : 1} ;;
   "project view") ${gh.noScope ? "echo \"error: your authentication token is missing required scopes [read:project]\" >&2; exit 1" : `echo '{"id":"PVT_41","title":"Shop"}'`} ;;
   "project item-add") if [ -f "${dir}/no-scope" ]; then echo "error: your authentication token is missing required scopes [project]" >&2; exit 1; fi; echo '{"id":"PVTI_7"}' ;;
@@ -105,6 +110,36 @@ describe("box.js target", () => {
   test("a board without the config's column says so before anything is created", async () => {
     const s = setup({ config: CONFIG.replace("todo: Backlog", "todo: Doing") });
     expect((await run(["target", s.repo, s.id], s.env)).target.board.problem).toBe("the board has no Status column called Doing");
+  });
+
+  test("the code is linked in the origin repo when the tracker's repo is another one", async () => {
+    const s = setup({ config: CONFIG.replace("repo: acme/shop", "repo: acme/issues") });
+    const answer = await run(["target", s.repo, s.id], s.env);
+    expect(answer.target).toMatchObject({ repo: "acme/issues", codeRepo: "acme/shop" });
+    expect(answer.link.url).toStartWith("https://github.com/acme/shop/blob/");
+  });
+
+  test("a label gh could not look up stays on", async () => {
+    const s = setup({ config: CONFIG, gh: { labelsFail: true } });
+    expect((await run(["target", s.repo, s.id], s.env)).target.labelMissing).toBe(false);
+    await run(["file", s.repo, s.id, filing()], s.env);
+    expect(calls(s).find((c) => c[1] === "create")).toContain("triage");
+  });
+
+  test("a file that starts with blank lines keeps its line numbers in the link", async () => {
+    const s = setup();
+    git(s.repo, "switch", "-q", "main");
+    writeFileSync(join(s.repo, "src", "invoices.ts"), `\n\n${readFileSync(join(s.repo, "src", "invoices.ts"), "utf8")}`);
+    git(s.repo, "commit", "-qam", "two blank lines on top");
+    git(s.repo, "update-ref", "refs/remotes/origin/main", "main");
+    expect((await run(["target", s.repo, s.id], s.env)).link.url).toEndWith("#L42-L46");
+  });
+
+  test("a local main that was never fetched is linked only when GitHub has its commit", async () => {
+    const s = setup({ fetched: false });
+    expect((await run(["target", s.repo, s.id], s.env)).link).toEqual({ url: "https://github.com/acme/shop/blob/main/src/invoices.ts", embed: false });
+    const t = setup({ fetched: false, gh: { hasCommit: true } });
+    expect((await run(["target", t.repo, t.id], t.env)).link.url).toEndWith(`/blob/${git(t.repo, "rev-parse", "main")}/src/invoices.ts#L40-L44`);
   });
 
   test("a tracker on monday copies instead", async () => {
@@ -174,6 +209,19 @@ describe("box.js file", () => {
     expect(calls(s).find((c) => c[1] === "create").slice(2, 4)).toEqual(["--repo", "Acme/Shop"]);
     expect(readFileSync(join(s.dir, "body"), "utf8")).toContain("https://github.com/Acme/Shop/blob/");
     expect(noteOf(s).issue.closes).toBe("Closes #812");
+  });
+
+  test("a filing cut off after gh created the issue is found again, never made twice", async () => {
+    const s = setup({ gh: { during: 'chmod 555 "$(dirname "$SBOX_NOTE")"' } });
+    const first = await run(["file", s.repo, s.id, filing()], s.env);
+    chmodSync(join(s.file, ".."), 0o755);
+    expect(first).toMatchObject({ ok: true, issue: { number: 812 } });
+    expect(first.warning).toContain("#812 exists, but the note could not record it");
+    expect(noteOf(s)).toMatchObject({ status: "open", filing: { repo: "acme/shop" } });
+    const again = await run(["file", s.repo, s.id, filing()], s.env);
+    expect(again).toMatchObject({ ok: true, issue: { number: 812, url: "https://github.com/acme/shop/issues/812" } });
+    expect(calls(s).filter((c) => c[1] === "create")).toHaveLength(1);
+    expect(noteOf(s)).toMatchObject({ status: "filed", issue: { number: 812 }, filing: null });
   });
 
   test("gh failing to create: its message, and the note stays open with its draft", async () => {

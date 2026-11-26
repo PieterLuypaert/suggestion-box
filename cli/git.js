@@ -13,6 +13,16 @@ export function gitAnswer(cwd, args) {
   }
 }
 
+// A file's text as git has it, or null: untrimmed, so a file that starts with blank lines keeps its
+// line numbers.
+export function gitText(cwd, args) {
+  try {
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 });
+  } catch {
+    return null;
+  }
+}
+
 // The repo around a folder, or null outside one.
 export function repoAt(cwd) {
   const top = gitAnswer(cwd, ["rev-parse", "--show-toplevel"]);

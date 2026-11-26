@@ -7,11 +7,14 @@ import { filingTarget } from "../mods/suggestion-box/config.js";
 import { githubRepo, permalink } from "../mods/suggestion-box/issue.js";
 import { findSnippet, noteRange } from "../mods/suggestion-box/lines.js";
 import { defaultRef } from "./changes.js";
-import { gitAnswer } from "./git.js";
+import { gitAnswer, gitText } from "./git.js";
+
+// One gh call's limit; the panel waits for a lookup's and a filing's calls together.
+export const GH_MS = 20000;
 
 // gh, or the tests' stand-in. { code, stdout, stderr }; stdin when given.
 export function gh(args, { env = process.env, input } = {}) {
-  const result = spawnSync(env.SUGGESTION_BOX_GH || "gh", args, { encoding: "utf8", input, timeout: 30000, env: { ...process.env, ...env, GH_PROMPT_DISABLED: "1" } });
+  const result = spawnSync(env.SUGGESTION_BOX_GH || "gh", args, { encoding: "utf8", input, timeout: GH_MS, env: { ...process.env, ...env, GH_PROMPT_DISABLED: "1" } });
   return { code: result.status, stdout: result.stdout ?? "", stderr: (result.stderr ?? "").trim() || (result.error ? result.error.message : "") };
 }
 
@@ -40,16 +43,20 @@ export function targetFor(top, key, env) {
   const config = filingTarget(configText(top, mainRef));
   const repo = config?.repo ?? githubRepo(key);
   const board = config?.board ? { ...config.board } : null;
-  const target = { kind: config?.kind ?? "github", repo, label: config?.label ?? null, labelMissing: false, board, linkKeyword: config?.linkKeyword ?? "Closes", visibility: null, hasConfig: Boolean(config) };
-  if (target.kind !== "github") return { ...target, why: `This project's tracker is ${target.kind}: Copy issue puts it on your clipboard` };
+  const target = { kind: config?.kind ?? "github", repo, label: config?.label ?? null, labelMissing: false, board, linkKeyword: config?.linkKeyword ?? "Closes", visibility: null, hasConfig: Boolean(config), codeRepo: null };
+  if (target.kind !== "github") return { ...target, codeRepo: spelled(githubRepo(key), env), why: `This project's tracker is ${target.kind}: Copy issue puts it on your clipboard` };
   if (!repo) return { ...target, why: "This project has no GitHub repo to file in" };
   // GitHub's own spelling of the repo: a code link only shows as code when it matches.
   const view = json(gh(["repo", "view", repo, "--json", "visibility,nameWithOwner"], { env }));
   target.visibility = view?.visibility ? String(view.visibility).toLowerCase() : null;
   if (view?.nameWithOwner) target.repo = view.nameWithOwner;
+  // The code lives in the origin repo, which the tracker's repo may not be.
+  const origin = githubRepo(key);
+  target.codeRepo = origin && origin !== target.repo.toLowerCase() ? spelled(origin, env) : origin ? target.repo : null;
+  // A label gh could not look up stays on: gh then says itself if it is not there.
   if (target.label) {
-    const labels = json(gh(["label", "list", "--repo", repo, "--search", target.label, "--json", "name", "--limit", "50"], { env })) ?? [];
-    target.labelMissing = !labels.some((one) => one.name === target.label);
+    const labels = gh(["label", "list", "--repo", repo, "--search", target.label, "--json", "name", "--limit", "50"], { env });
+    if (labels.code === 0) target.labelMissing = !(json(labels) ?? []).some((one) => one.name === target.label);
   }
   if (board) {
     const found = findBoard(board, env);
@@ -57,6 +64,12 @@ export function targetFor(top, key, env) {
     else board.title = found.title;
   }
   return target;
+}
+
+// A repo as GitHub spells it, else as given; null stays null.
+function spelled(repo, env) {
+  if (!repo) return null;
+  return json(gh(["repo", "view", repo, "--json", "nameWithOwner"], { env }))?.nameWithOwner ?? repo;
 }
 
 // The board's id and title, and the ids of its column field and the column, found by name; or
@@ -96,15 +109,27 @@ export function codeLinkFor(top, note, repo, env) {
   const mainRef = defaultRef(top);
   const range = noteRange(note);
   const mainSha = mainRef ? gitAnswer(top, ["rev-parse", "-q", "--verify", `${mainRef}^{commit}`]) : null;
-  const text = mainRef ? gitAnswer(top, ["show", `${mainRef}:${note.at.path}`]) : null;
+  const text = mainRef ? gitText(top, ["show", `${mainRef}:${note.at.path}`]) : null;
   const at = text && note.snippet ? findSnippet(text, note.snippet, note.at.line) : null;
-  if (at && mainSha) return { url: permalink(repo, mainSha, note.at.path, at, at + note.snippet.lines.length - 1), embed: true };
-  const sha = note.from?.sha;
-  if (sha && range && gh(["api", `repos/${repo}/commits/${sha}`, "--silent"], { env }).code === 0) {
-    return { url: permalink(repo, sha, note.at.path, range.first, range.last), embed: true };
+  // A local main or master (no fetched default branch) may hold commits GitHub does not have.
+  const onGitHub = (sha) => gh(["api", `repos/${repo}/commits/${sha}`, "--silent"], { env }).code === 0;
+  if (at && mainSha && (mainRef.startsWith("origin/") || onGitHub(mainSha))) {
+    return { url: permalink(repo, mainSha, note.at.path, at, at + note.snippet.lines.length - 1), embed: true };
   }
+  const sha = note.from?.sha;
+  if (sha && range && onGitHub(sha)) return { url: permalink(repo, sha, note.at.path, range.first, range.last), embed: true };
   const branch = (mainRef ?? "main").replace(/^origin\//, "");
   return { url: `https://github.com/${repo}/blob/${branch}/${note.at.path}`, embed: false };
+}
+
+// An issue of yours with exactly this title, created since `since`: what a filing that was cut off
+// after gh created it left behind. The newest issues are listed rather than searched, as a new issue
+// takes a while to show up in search. null when there is none or gh could not look.
+export function issueSince(repo, title, since, env) {
+  const result = gh(["issue", "list", "--repo", repo, "--state", "all", "--author", "@me", "--limit", "30", "--json", "number,title,url,createdAt"], { env });
+  const from = Date.parse(since) - 60000;
+  const found = result.code === 0 ? (json(result) ?? []).find((one) => one.title === title && Date.parse(one.createdAt) >= from) : null;
+  return found ? { number: found.number, url: found.url } : null;
 }
 
 // Creates the issue: { number, url } or { error } with gh's own words.

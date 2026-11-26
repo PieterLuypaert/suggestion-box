@@ -111,6 +111,7 @@ const change = {
     note.filed = { title: details.title, sections: details.sections, notGone: details.notGone ?? null };
     note.board = details.board ?? null;
     note.draft = null;
+    note.filing = null;
   },
   fix() {
     throw new Error("fixing comes with version 0.6.0");

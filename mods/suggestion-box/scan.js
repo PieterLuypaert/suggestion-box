@@ -2,14 +2,18 @@
 // home paths, IP addresses, long random strings) can each be marked fine to publish. Commit SHAs,
 // UUIDs, version numbers, 127.0.0.1 and example addresses never count. Pure.
 
+// A real key mixes letters and digits; a placeholder such as YOUR_ACCESS_TOKEN or a slug that
+// happens to start with sk- does not, and is not a token.
+const isKeyLike = (text) => /\d/.test(text) && /[A-Za-z]/.test(text);
+
 const TOKENS = [
   ["a GitHub token", /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{40,}\b/g],
   ["an AWS key", /\bAKIA[0-9A-Z]{16}\b/g],
   ["a Slack token", /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g],
-  ["an Anthropic key", /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g],
-  ["an OpenAI key", /\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{20,}\b/g],
+  ["an Anthropic key", /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g, isKeyLike],
+  ["an OpenAI key", /\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{20,}\b/g, (m) => isKeyLike(m.replace(/^sk-(?:proj-)?/, ""))],
   ["a private key", /-----BEGIN [A-Z ]*PRIVATE KEY-----/g],
-  ["a bearer token", /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/g],
+  ["a bearer token", /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/g, (m) => isKeyLike(m.replace(/^Bearer\s+/, ""))],
 ];
 
 const OTHERS = [
@@ -24,8 +28,8 @@ export function scan(text) {
   const value = String(text ?? "");
   const hits = [];
   const seen = new Set();
-  for (const [kind, pattern] of TOKENS) {
-    for (const match of value.matchAll(pattern)) add(hits, seen, { kind, text: match[0], blocking: true });
+  for (const [kind, pattern, isReal = () => true] of TOKENS) {
+    for (const match of value.matchAll(pattern)) if (isReal(match[0])) add(hits, seen, { kind, text: match[0], blocking: true });
   }
   for (const [kind, pattern, harmless] of OTHERS) {
     for (const match of value.matchAll(pattern)) {
