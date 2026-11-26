@@ -169,8 +169,9 @@ worktree and stack, the ticket's prompt (`/ship-issue <n>`) and the record behin
   its `hagent` are installed and the launcher knows `--space`, and when a project config, if there
   is one, names GitHub and that repo. Without the launcher there is no button; the rest of the box
   works the same.
-- The box looks every few minutes whether a filed issue was closed; a closed one says so and gets
-  no fix.
+- The box asks every few minutes whether a filed issue was closed; a closed one says so and gets
+  no fix, and one opened again gets the button back. A start that never reported back (the
+  launcher was cut off) says so after ten minutes: look for its tab before starting again.
 
 ## Collecting on or off
 
