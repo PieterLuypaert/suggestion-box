@@ -27,37 +27,37 @@ const commitLine = (repo, line, text) => {
 };
 
 describe("read", () => {
-  test("outside a git repo there is no project", () => {
-    expect(run(["read", tempDir()], { SUGGESTION_BOX_HOME: tempDir() })).toEqual({ project: null, why: "no git repo here" });
+  test("outside a git repo there is no project", async () => {
+    expect(await run(["read", tempDir()], { SUGGESTION_BOX_HOME: tempDir() })).toEqual({ project: null, why: "no git repo here" });
   });
 
-  test("the project, the switches, its live notes newest first, and the counts", () => {
+  test("the project, the switches, its live notes newest first, and the counts", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], note("First"));
     suggest(repo, box, [], note("Second"));
     suggest(repo, box, ["solved", "1"], "how: h\nproof: p\n");
-    const answer = run(["read", repo], env);
+    const answer = await run(["read", repo], env);
     expect(answer.project).toMatchObject({ key: "github.com/acme/shop", name: "shop", top: repo, checkout: repo });
     expect(answer.collecting).toEqual({ all: true, project: true });
     expect(answer.notes.map((n) => [n.number, n.state])).toEqual([[2, "open"], [1, "to verify"]]);
-    expect(answer.notes[0].actions).toEqual(["bin"]);
+    expect(answer.notes[0].actions).toEqual(["check", "bin"]);
     expect(answer.notes[1].actions).toEqual(["confirm", "not-solved"]);
     expect(answer.counts).toEqual({ open: 1, toVerify: 1 });
   });
 
-  test("the history holds binned and solved notes of the last 30 days", () => {
+  test("the history holds binned and solved notes of the last 30 days", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], note("Binned"));
-    run(["act", repo, idOf(box, 1), "bin"], env);
-    const answer = run(["read", repo], env);
+    await run(["act", repo, idOf(box, 1), "bin"], env);
+    const answer = await run(["read", repo], env);
     expect(answer.notes).toEqual([]);
     expect(answer.history.map((n) => [n.number, n.state, n.actions])).toEqual([[1, "binned", ["restore"]]]);
   });
 });
 
-test("reading a repo that never had a note leaves no folder for it", () => {
+test("reading a repo that never had a note leaves no folder for it", async () => {
   const { repo, box, env } = setup();
-  const answer = run(["read", repo], env);
+  const answer = await run(["read", repo], env);
   expect(answer.project.exists).toBe(false);
   expect(answer.notes).toEqual([]);
   expect(existsSync(join(box, "notes", FOLDER))).toBe(false);
@@ -65,81 +65,81 @@ test("reading a repo that never had a note leaves no folder for it", () => {
 });
 
 describe("act", () => {
-  test("bin, restore, mark solved, not solved, confirm and reopen, each by the states table", () => {
+  test("bin, restore, mark solved, not solved, confirm and reopen, each by the states table", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], NOTE);
     const id = idOf(box, 1);
-    expect(run(["act", repo, id, "bin"], env)).toEqual({ ok: true, state: "binned" });
-    expect(run(["act", repo, id, "restore"], env)).toEqual({ ok: true, state: "open" });
-    expect(run(["act", repo, id, "mark-solved", "--branch", "feat/y"], env)).toEqual({ ok: true, state: "to verify" });
-    expect(run(["act", repo, id, "not-solved", "--reason", "still throws"], env)).toEqual({ ok: true, state: "open" });
-    expect(run(["act", repo, id, "mark-solved"], env).state).toBe("to verify");
-    expect(run(["act", repo, id, "confirm"], env)).toEqual({ ok: true, state: "solved" });
-    expect(run(["act", repo, id, "reopen"], env)).toEqual({ ok: true, state: "open" });
+    expect(await run(["act", repo, id, "bin"], env)).toEqual({ ok: true, state: "binned" });
+    expect(await run(["act", repo, id, "restore"], env)).toEqual({ ok: true, state: "open" });
+    expect(await run(["act", repo, id, "mark-solved", "--branch", "feat/y"], env)).toEqual({ ok: true, state: "to verify" });
+    expect(await run(["act", repo, id, "not-solved", "--reason", "still throws"], env)).toEqual({ ok: true, state: "open" });
+    expect((await run(["act", repo, id, "mark-solved"], env)).state).toBe("to verify");
+    expect(await run(["act", repo, id, "confirm"], env)).toEqual({ ok: true, state: "solved" });
+    expect(await run(["act", repo, id, "reopen"], env)).toEqual({ ok: true, state: "open" });
   });
 
-  test("an action the state does not allow is refused, and the note stays as it was", () => {
+  test("an action the state does not allow is refused, and the note stays as it was", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], NOTE);
     suggest(repo, box, ["solved", "1"], "how: h\nproof: p\n");
     const id = idOf(box, 1);
     const file = join(box, "notes", FOLDER, `${id}.json`);
     const before = readFileSync(file, "utf8");
-    expect(run(["act", repo, id, "bin"], env).error).toBe("note 1 is to verify; bin is not one of its actions");
-    expect(run(["act", repo, id, "file"], env).error).toBe("file is not something the box does yet");
+    expect((await run(["act", repo, id, "bin"], env)).error).toBe("note 1 is to verify; bin is not one of its actions");
+    expect((await run(["act", repo, id, "file"], env)).error).toBe("file is not something the box does yet");
     expect(readFileSync(file, "utf8")).toBe(before);
   });
 
-  test("an act folds the events in and removes exactly those event files", () => {
+  test("an act folds the events in and removes exactly those event files", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], NOTE);
     suggest(repo, box, [], NOTE);
     suggest(repo, box, [], NOTE);
     const id = idOf(box, 1);
-    run(["act", repo, id, "bin"], env);
+    await run(["act", repo, id, "bin"], env);
     const written = JSON.parse(readFileSync(join(box, "notes", FOLDER, `${id}.json`), "utf8"));
     expect(written).toMatchObject({ spotted: 3, status: "binned" });
     expect(readdirSync(join(box, "notes", FOLDER, "events", id))).toEqual([]);
     expect(suggest(repo, box, [], NOTE).out).toBe("Already binned by the user (note 1). Carry on with your task.");
   });
 
-  test("a claim that races the user's click: the store refuses a bin on a note just claimed", () => {
+  test("a claim that races the user's click: the store refuses a bin on a note just claimed", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], NOTE);
     const id = idOf(box, 1);
     suggest(repo, box, ["solved", "1"], "how: h\nproof: p\n");
-    expect(run(["act", repo, id, "bin"], env).error).toContain("to verify");
+    expect((await run(["act", repo, id, "bin"], env)).error).toContain("to verify");
   });
 });
 
 describe("collecting", () => {
-  test("off and on for this project, and for all", () => {
+  test("off and on for this project, and for all", async () => {
     const { repo, box, env } = setup();
-    expect(run(["collecting", repo, "off"], env).collecting).toEqual({ all: true, project: false });
+    expect((await run(["collecting", repo, "off"], env)).collecting).toEqual({ all: true, project: false });
     expect(suggest(repo, box, [], NOTE).out).toContain("off for shop");
-    expect(run(["collecting", repo, "on"], env).collecting).toEqual({ all: true, project: true });
-    expect(run(["collecting", repo, "off", "--all"], env).collecting).toEqual({ all: false, project: false });
-    expect(run(["collecting", repo, "on", "--all"], env).collecting).toEqual({ all: true, project: true });
+    expect((await run(["collecting", repo, "on"], env)).collecting).toEqual({ all: true, project: true });
+    expect((await run(["collecting", repo, "off", "--all"], env)).collecting).toEqual({ all: false, project: false });
+    expect((await run(["collecting", repo, "on", "--all"], env)).collecting).toEqual({ all: true, project: true });
     expect(JSON.parse(readFileSync(join(box, "settings.json"), "utf8"))).toEqual({ collecting: true, off: [] });
   });
 });
 
 describe("prune", () => {
-  test("old filed, solved and binned notes become tombstones; open ones stay", () => {
+  test("old filed, solved and binned notes become tombstones; open ones stay", async () => {
     const { repo, box, env } = setup();
     suggest(repo, box, [], note("Old binned"));
     suggest(repo, box, [], note("Old open"));
-    run(["act", repo, idOf(box, 1), "bin"], env);
+    await run(["act", repo, idOf(box, 1), "bin"], env);
     const later = new Date(Date.now() + 31 * 86400000);
-    expect(run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 1 });
+    expect(await run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 1 });
     const dir = join(box, "notes", FOLDER);
     expect(readdirSync(join(dir, "tombstones"))).toHaveLength(1);
-    expect(run(["read", repo], env).notes.map((n) => n.title)).toEqual(["Old open"]);
+    expect((await run(["read", repo], env)).notes.map((n) => n.title)).toEqual(["Old open"]);
     expect(suggest(repo, box, [], note("Old binned")).out).toBe("Already binned by the user (note 1). Carry on with your task.");
   });
 });
 
-test("prune keeps a filed note that waits in To verify, and a note with events not folded in yet", () => {
+test("prune keeps a filed note that waits in To verify, and a note with events not folded in yet", async () => {
   const { repo, box, env } = setup();
   suggest(repo, box, [], note("Filed, then claimed"));
   suggest(repo, box, [], note("Binned, seen again"));
@@ -148,14 +148,14 @@ test("prune keeps a filed note that waits in To verify, and a note with events n
   const filed = JSON.parse(readFileSync(join(dir, `${filedId}.json`), "utf8"));
   writeFileSync(join(dir, `${filedId}.json`), JSON.stringify({ ...filed, status: "filed", issue: { number: 812 } }));
   suggest(repo, box, ["solved", "1"], "how: h\nproof: p\n");
-  run(["act", repo, idOf(box, 2), "bin"], env);
+  await run(["act", repo, idOf(box, 2), "bin"], env);
   suggest(repo, box, [], note("Binned, seen again"));
   const later = new Date(Date.now() + 40 * 86400000);
-  expect(run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 0 });
-  expect(run(["read", repo], env).notes.map((n) => n.state)).toEqual(["to verify"]);
+  expect(await run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 0 });
+  expect((await run(["read", repo], env)).notes.map((n) => n.state)).toEqual(["to verify"]);
 });
 
-test("box.js answers one line of JSON when run as a program", () => {
+test("box.js answers one line of JSON when run as a program", async () => {
   const { repo, box } = setup();
   suggest(repo, box, [], NOTE);
   const result = spawnSync("node", [join(ROOT, "cli", "box.js"), "read", repo], { encoding: "utf8", env: { ...process.env, SUGGESTION_BOX_HOME: box } });
@@ -172,19 +172,19 @@ describe("changes since the drop", () => {
     return JSON.parse(readFileSync(join(box, "notes", FOLDER, `${idOf(box, 1)}.json`), "utf8"));
   };
 
-  test("nothing changed: no chip", () => {
+  test("nothing changed: no chip", async () => {
     const { repo, box } = setup();
     expect(changeFor(repo, dropped(repo, box))).toBeNull();
   });
 
-  test("a change to the note's lines on its own branch", () => {
+  test("a change to the note's lines on its own branch", async () => {
     const { repo, box } = setup();
     const n = dropped(repo, box);
     commitLine(repo, 42, "fixed line 42");
     expect(changeFor(repo, n)).toEqual({ on: "feat/8504-group-records", kind: "changed" });
   });
 
-  test("a change elsewhere in the file, or lines moved down by an insertion above, is no change", () => {
+  test("a change elsewhere in the file, or lines moved down by an insertion above, is no change", async () => {
     const { repo, box } = setup();
     const n = dropped(repo, box);
     commitLine(repo, 5, "line 5\nnew line\nanother new line");
@@ -192,7 +192,7 @@ describe("changes since the drop", () => {
     expect(changeFor(repo, n)).toBeNull();
   });
 
-  test("a change on the default branch", () => {
+  test("a change on the default branch", async () => {
     const { repo, box } = setup();
     const n = dropped(repo, box);
     git(repo, "switch", "-q", "main");
@@ -202,7 +202,7 @@ describe("changes since the drop", () => {
     expect(changeFor(repo, n, "main")).toEqual({ on: "main", kind: "changed" });
   });
 
-  test("a removed file, and a renamed file whose lines stayed", () => {
+  test("a removed file, and a renamed file whose lines stayed", async () => {
     const { repo, box } = setup();
     const n = dropped(repo, box);
     git(repo, "mv", "src/invoices.ts", "src/billing.ts");
@@ -213,7 +213,7 @@ describe("changes since the drop", () => {
     expect(changeFor(repo, n)).toEqual({ on: "feat/8504-group-records", kind: "removed" });
   });
 
-  test("after a rebase the snippet decides", () => {
+  test("after a rebase the snippet decides", async () => {
     const { repo, box } = setup();
     const n = dropped(repo, box);
     git(repo, "switch", "-q", "main");
@@ -227,7 +227,7 @@ describe("changes since the drop", () => {
     expect(changeFor(repo, n, "main")).toEqual({ on: "feat/8504-group-records", kind: "changed" });
   });
 
-  test("a note dropped on the default branch is checked against the fetched one", () => {
+  test("a note dropped on the default branch is checked against the fetched one", async () => {
     const repo = makeRepo({ branch: null });
     const box = join(tempDir(), "box");
     suggest(repo, box, [], NOTE);
@@ -241,12 +241,12 @@ describe("changes since the drop", () => {
     expect(changeFor(repo, n)).toEqual({ on: "main", kind: "changed" });
   });
 
-  test("read --changes puts the chip on open notes and shows Mark solved", () => {
+  test("read --changes puts the chip on open notes and shows Mark solved", async () => {
     const { repo, box, env } = setup();
     dropped(repo, box);
     commitLine(repo, 43, "fixed");
-    const [shown] = run(["read", repo, "--changes"], env).notes;
+    const [shown] = (await run(["read", repo, "--changes"], env)).notes;
     expect(shown.changed).toEqual({ on: "feat/8504-group-records", kind: "changed" });
-    expect(shown.actions).toEqual(["mark-solved", "bin"]);
+    expect(shown.actions).toEqual(["mark-solved", "check", "bin"]);
   });
 });

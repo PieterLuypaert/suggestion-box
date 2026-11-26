@@ -18,6 +18,9 @@ const DATA = "suggestion-box.data";
 // reload of the mod never acts twice.
 const LIVE = "suggestion-box.live";
 const CHANGES_MS = 60000;
+// The check fetches (20 s at most), takes two snapshots (45 s each at most), finds claude (10 s)
+// and waits up to 90 s on Claude: 210 s, with room to spare.
+const CHECK_MS = 240000;
 const UNDO_MS = 5000;
 const NOTICE_MS = 6000;
 const WIGGLE_MS = 700;
@@ -53,8 +56,8 @@ async function findNode() {
 }
 
 // One answer of cli/box.js: its JSON, or an error with what it said.
-async function box(node, path, args) {
-  const result = await exec(node, [path, ...args], { timeout: 60000 });
+async function box(node, path, args, timeout = 60000) {
+  const result = await exec(node, [path, ...args], { timeout });
   let answer;
   try {
     answer = JSON.parse(result.stdout);
@@ -289,6 +292,7 @@ export default class SuggestionBox extends View {
     this.queue = Promise.resolve();
     this.selected = null;
     this.undo = null;
+    this.checking = new Set();
     this.showSettings = false;
     this.handle = cx.focus_handle();
     if (checking()) return;
@@ -317,6 +321,8 @@ export default class SuggestionBox extends View {
     if (name === "collect") return this.write(cx, ["collecting", where, this.answer()?.collecting?.project ? "off" : "on"]);
     if (name === "collect-all") return this.write(cx, ["collecting", where, this.answer()?.collecting?.all ? "off" : "on", "--all"]);
     if (name === "undo") return this.unbin(cx);
+    if (name === "check") return this.check(cx, note);
+    if (name === "mark-solved-gone") return this.change(cx, "mark-solved", note, note.check?.gone?.on);
     if (["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen"].includes(name)) return this.change(cx, name, note);
     cx.notify();
   }
@@ -327,11 +333,33 @@ export default class SuggestionBox extends View {
     else this.expanded.add(note.id);
   }
 
-  change(cx, action, note) {
-    const extra = action === "mark-solved" ? ["--branch", note.changed?.on ?? ""] : [];
+  change(cx, action, note, branch = note.changed?.on) {
+    const extra = action === "mark-solved" ? ["--branch", branch ?? ""] : [];
     this.mine.set(note.id, Date.now() + 15000);
     if (action === "bin") this.showUndo(cx, note);
     return this.write(cx, ["act", this.here().folder, note.id, action, ...extra]);
+  }
+
+  // The check runs beside the queued writes: it can take a minute and a half, and a Bin meanwhile
+  // wins (the check is then dropped, as box.js writes it only over the note it read).
+  check(cx, note) {
+    if (!this.boxJs || this.checking.has(note.id)) return;
+    this.checking.add(note.id);
+    this.expanded.add(note.id);
+    this.selected = note.id;
+    const folder = this.here().folder;
+    cx.spawn(async (cx) => {
+      try {
+        await box(this.node, this.boxJs, ["check", folder, note.id, ...(note.check ? ["--again"] : [])], CHECK_MS);
+        this.error = "";
+      } catch (error) {
+        this.error = `The check did not finish: ${error.message}`;
+      }
+      this.checking.delete(note.id);
+      this.read(cx, false);
+      cx.notify();
+    });
+    cx.notify();
   }
 
   showUndo(cx, note) {
@@ -417,6 +445,7 @@ export default class SuggestionBox extends View {
     else if (k === "enter" && note) this.toggleExpanded(note);
     else if (k === "s" && can("mark-solved")) this.act("mark-solved", note, cx);
     else if (k === "x" && can("bin")) this.act("bin", note, cx);
+    else if (k === "k" && can("check")) this.act("check", note, cx);
     else if (k === "u" && this.undo) this.act("undo", null, cx);
     else if (k === "c" && can("confirm")) this.act("confirm", note, cx);
     else if (k === "n" && can("not-solved")) this.act("not-solved", note, cx);
@@ -443,6 +472,7 @@ export default class SuggestionBox extends View {
       expanded: this.expanded,
       selected: this.selected,
       undo: this.undo,
+      checking: this.checking,
       notice: this.notice,
       error: this.error,
       showSettings: this.showSettings,

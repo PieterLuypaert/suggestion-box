@@ -4,6 +4,21 @@ All notable changes to the suggestion box. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-26
+
+### Added
+
+- The check: Check (or `k`) on an open note asks your own Claude (`claude -p`, Sonnet) whether its
+  four sections hold against the code, and shows Checked, Corrected (with the agent's text under
+  Claude's) or Unsure (with Claude's question) per section.
+- Looks solved: when the problem is gone on the default branch or the note's branch, a banner says
+  why, with Mark solved and Bin.
+- The check reads read-only snapshots of both branches (`git archive` after a fetch that never waits
+  on a prompt) in a temporary folder, with only Read, Grep and Glob and none of the person's
+  settings, CLAUDE.md, memory or MCP servers; the folder is removed afterwards.
+- A check is kept on the note and reused until the note's file changes; a timeout or a failure is
+  kept as not checked, with why and Check again.
+
 ## [0.2.0] - 2026-11-26
 
 ### Added

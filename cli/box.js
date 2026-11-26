@@ -6,6 +6,7 @@
 //
 //   node cli/box.js read <folder> [--changes]
 //   node cli/box.js act <folder> <note id> <action> [--branch b] [--sha s] [--reason r]
+//   node cli/box.js check <folder> <note id> [--again]
 //   node cli/box.js collecting <folder> on|off [--all]
 //   node cli/box.js prune <folder>
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -14,7 +15,9 @@ import { pathToFileURL } from "node:url";
 import { fold, stateOf } from "../mods/suggestion-box/events.js";
 import { age } from "../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName } from "../mods/suggestion-box/project.js";
-import { applyAction, BOX_DOES, buttonsFor } from "../mods/suggestion-box/rules.js";
+import { stillHolds } from "../mods/suggestion-box/check.js";
+import { ACTS, allows, applyAction, buttonsFor } from "../mods/suggestion-box/rules.js";
+import { runCheck, stopRunning } from "./check.js";
 import { changeFor, defaultRef } from "./changes.js";
 import { repoAt } from "./git.js";
 import { boxRoot, collecting, readSettings } from "./store.js";
@@ -22,12 +25,13 @@ import { boxRoot, collecting, readSettings } from "./store.js";
 const DAY = 86400000;
 const KEEP_DAYS = 30;
 
-export function run(args, env = process.env, now = new Date()) {
+export async function run(args, env = process.env, now = new Date()) {
   const [command, folder, ...rest] = args;
   const project = projectAt(folder, env);
   if (command === "read") return read(project, rest.includes("--changes"), now);
   if (!project.dir) return { error: project.why };
   if (command === "act") return act(project, rest, now);
+  if (command === "check") return check(project, rest[0], env, now, rest.includes("--again"));
   if (command === "collecting") return switchCollecting(project, rest, env);
   if (command === "prune") return prune(project, now);
   return { error: `unknown command ${command}` };
@@ -96,7 +100,7 @@ function eventsOf(dir, id) {
 // the note at once, then the folded event files removed. An event that arrives meanwhile stays.
 function act(project, rest, now) {
   const [id, action, ...options] = rest;
-  if (!BOX_DOES.includes(action)) return { error: `${action} is not something the box does yet` };
+  if (!ACTS.includes(action)) return { error: `${action} is not something the box does yet` };
   const loaded = loadNote(project.dir, id);
   if (!loaded) return { error: `there is no note ${id}` };
   const view = fold(loaded.note, loaded.events.map((e) => e.event));
@@ -105,6 +109,22 @@ function act(project, rest, now) {
   writeOver(join(project.dir, `${id}.json`), loaded.text, result.note);
   for (const { file } of loaded.events) rmSync(file, { force: true });
   return { ok: true, state: stateOf(result.note) };
+}
+
+// The check of an open note, kept on the note. A note that is no longer open when the check ends
+// (binned, claimed, gone) keeps that, and the check is dropped.
+async function check(project, id, env, now, again) {
+  const loaded = loadNote(project.dir, id);
+  if (!loaded) return { error: `there is no note ${id}` };
+  const view = fold(loaded.note, loaded.events.map((e) => e.event));
+  if (!allows(view, "check")) return { error: `note ${view.number} is ${stateOf(view)}; only an open note is checked` };
+  const result = await runCheck({ top: project.repo.top, note: view, env, now, stillHolds, again });
+  if (result.reused) return { ok: true, reused: true };
+  const fresh = loadNote(project.dir, id);
+  const freshView = fresh && fold(fresh.note, fresh.events.map((e) => e.event));
+  if (!freshView || !allows(freshView, "check")) return { ok: true, dropped: true };
+  writeOver(join(project.dir, `${id}.json`), fresh.text, { ...fresh.note, check: result.check, updated: now.toISOString() });
+  return { ok: true, check: result.check };
 }
 
 function flags(options) {
@@ -162,8 +182,13 @@ function prune(project, now) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  // The panel gave up waiting: end a running check's claude and remove its snapshot folder.
+  process.on("SIGTERM", () => {
+    stopRunning();
+    process.exit(143);
+  });
   try {
-    const answer = run(process.argv.slice(2));
+    const answer = await run(process.argv.slice(2));
     process.stdout.write(`${JSON.stringify(answer)}\n`);
     process.exitCode = answer.error ? 1 : 0;
   } catch (error) {

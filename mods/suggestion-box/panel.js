@@ -102,14 +102,19 @@ function groups(s) {
   ]);
 }
 
-const LABELS = { "mark-solved": "Mark solved", file: "File issue", bin: "Bin", confirm: "Confirm solved", "not-solved": "Not solved", reopen: "Reopen", restore: "Restore", fix: "Fix in new tab" };
+const LABELS = { check: "Check", "mark-solved": "Mark solved", file: "File issue", bin: "Bin", confirm: "Confirm solved", "not-solved": "Not solved", reopen: "Reopen", restore: "Restore", fix: "Fix in new tab" };
 
-function actionButton(t, note, action, act, isPrimary = false) {
+function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
+  if (isBusy) {
+    return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
+      .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child("Checking…"));
+  }
+  const label = action === "check" && note.check && !note.check.error ? "Check again" : LABELS[action];
   return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
     .bg(isPrimary ? t.solid : t.background).text_color(isPrimary ? t.solid_foreground : t.foreground).border(1).border_color(isPrimary ? t.solid : t.border)
     .hover((st) => st.bg(isPrimary ? t.solid : t.hover))
     .on_click((_e, cx) => act(action, note, cx))
-    .child(LABELS[action]);
+    .child(label);
 }
 
 function chip(t, text, color) {
@@ -133,15 +138,45 @@ function noteCard(s, note) {
       .when(Boolean(note.notVerified), (el) => el.child(chip(t, `claimed on ${note.notVerified?.branch}, not verified`, t.working)))
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
       .when(note.state === "filed", (el) => el.child(chip(t, `filed #${note.issue?.number}`, t.ansi2))))
-    .when(isOpen, (el) => el.child(sections(t, note)))
-    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act)))));
+    .when(Boolean(note.check?.error) && !isChecking(s, note), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`Not checked: ${note.check.error}`)))
+    .when(Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note), (el) => el.child(goneBanner(s, note)))
+    .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
+    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, false, a === "check" && isChecking(s, note))))));
 }
 
-function sections(t, note) {
-  return v_flex().gap(4).pl(8).border_l(2).border_color(t.border).text_size(12.5)
-    .children(SECTIONS.map((name) => v_flex().gap(1)
-      .child(div().text_size(10.5).font_medium().text_color(t.dim).child(SECTION_LABELS[name].toUpperCase()))
-      .child(div().whitespace_normal().text_color(t.muted).child(note.sections?.[name] ?? ""))));
+const isChecking = (s, note) => Boolean(s.checking?.has(note.id));
+
+const VERDICT_LABELS = { checked: "Checked", corrected: "Corrected", unsure: "Unsure" };
+
+// The four sections, each with what the check said about it: Checked, Corrected (Claude's text,
+// the agent's under it) or Unsure (the agent's text, Claude's question under it).
+function sections(t, note, isBusy = false) {
+  const verdicts = !isBusy && note.check?.sections ? note.check.sections : null;
+  const colors = { checked: t.ansi2, corrected: t.accent, unsure: t.working };
+  return v_flex().gap(6).pl(8).border_l(2).border_color(t.border).text_size(12.5)
+    .children(SECTIONS.map((name) => {
+      const verdict = verdicts?.[name];
+      const label = isBusy ? chip(t, "Checking…", t.dim) : verdict ? chip(t, VERDICT_LABELS[verdict.verdict], colors[verdict.verdict]) : null;
+      const text = verdict?.verdict === "corrected" ? verdict.text : note.sections?.[name] ?? "";
+      return v_flex().gap(2)
+        .child(h_flex().gap(6).items_center().child(div().text_size(10.5).font_medium().text_color(t.dim).child(SECTION_LABELS[name].toUpperCase())).when(Boolean(label), (el) => el.child(label)))
+        .child(div().whitespace_normal().text_color(t.foreground).child(text))
+        .when(verdict?.verdict === "corrected", (el) => el.child(div().whitespace_normal().text_size(11.5).text_color(t.dim).child(`Agent wrote: ${note.sections?.[name] ?? ""}`)))
+        .when(verdict?.verdict === "unsure" && Boolean(verdict?.question), (el) => el.child(div().whitespace_normal().text_size(11.5).text_color(t.working).child(verdict.question)));
+    }));
+}
+
+// The check found the problem gone: no issue for done work. Mark solved sends it to To verify.
+function goneBanner(s, note) {
+  const { t } = s;
+  const gone = note.check.gone;
+  return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.working).bg(t.raised)
+    .child(div().text_size(12.5).whitespace_normal().child(`Looks solved on ${gone.on}: ${gone.why}`))
+    .child(h_flex().gap(6).justify_end()
+      .child(div().id(`gone-solved:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
+        .bg(t.solid).text_color(t.solid_foreground).on_click((_e, cx) => s.act("mark-solved-gone", note, cx)).child("Mark solved"))
+      .child(div().id(`gone-bin:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).cursor_pointer()
+        .border(1).border_color(t.border).hover((st) => st.bg(t.hover)).on_click((_e, cx) => s.act("bin", note, cx)).child("Bin")));
 }
 
 function verifyCard(s, note) {
@@ -183,7 +218,7 @@ function footer(s) {
   const { t, answer } = s;
   const past = answer?.history ?? [];
   const count = (state) => past.filter((n) => n.state === state).length;
-  const hints = s.view === "history" ? "esc back" : "↑↓ pick · enter open · s solved · x bin · u undo · c confirm · n not solved";
+  const hints = s.view === "history" ? "esc back" : "↑↓ pick · enter open · k check · s solved · x bin · u undo · c confirm · n not solved";
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
       .child(s.view === "history" ? "◂ Back to the notes" : `Filed ${count("filed")} · Solved ${count("solved")} · Binned ${count("binned")} ▸`))

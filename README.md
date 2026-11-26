@@ -5,8 +5,8 @@ ticket may not fix unrelated code, so what it spots outside its ticket gets lost
 suggestion box, the agent drops a note in the project's box and carries on. Later you check each
 note against the code, file it as a GitHub issue, or bin it.
 
-This is version 0.2.0: the `suggest` command, the agent instructions, and the box as a panel in the
-Herdr app. The check, filing, proving a solve and fixing follow; [PLAN.md](PLAN.md) has the whole
+This is version 0.3.0: the `suggest` command, the agent instructions, the box as a panel in the
+Herdr app, and the check. Filing, proving a solve and fixing follow; [PLAN.md](PLAN.md) has the whole
 plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
 
 ## How an agent drops a note
@@ -60,6 +60,8 @@ Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 - **Open**: the notes, newest first. Click a title for its four sections, the file to open it in
   Cursor at its line, the ticket to jump to its tab (or open it on GitHub). A note whose code
   changed since the drop says so, with Mark solved.
+- **Check** (or `k`) asks your own Claude to check the note's four sections against the code (see
+  below).
 - **Bin** takes a note away at once, with Undo for five seconds; the history keeps the last 30
   days of binned, solved and filed notes, with Restore and Reopen.
 - **Collecting** in the header switches drops off and on for this project; the ⚙ for all projects.
@@ -69,6 +71,22 @@ Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 Each note's state allows a fixed set of actions (PLAN.md section 6c), and the box refuses any
 other, also a click that races an agent's claim. All reading and writing goes through
 `cli/box.js`, which agents never run.
+
+## The check
+
+An agent writes its note while it is busy with another ticket, and code moves on. **Check** asks
+your own Claude Code (`claude -p`, Sonnet, on your own login) whether each section still holds:
+
+- **Checked**: it matches the code. **Corrected**: it was wrong or out of date; Claude's text shows,
+  with the agent's under it. **Unsure**: the code cannot settle it; Claude's question shows.
+- **Looks solved on main** (or on the note's branch): the problem is gone, with why, and Mark
+  solved or Bin, so no issue is filed for work that is already done.
+- It reads read-only snapshots: the box fetches, exports the default branch and the note's branch
+  with `git archive` into a temporary folder, and runs Claude there with only Read, Grep and Glob.
+  No git or shell for Claude, none of your settings, CLAUDE.md, memory or MCP servers, no session
+  kept; the folder is removed afterwards.
+- A check is kept on the note and reused until the code of the note's file changes. After 90
+  seconds, or when Claude cannot answer, it says why, with Check again.
 
 ## Collecting on or off
 

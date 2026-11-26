@@ -4,9 +4,11 @@
 import { stateOf } from "./events.js";
 
 // Every action the box knows. File issue and Fix in new tab come with later versions.
-export const ACTIONS = ["file", "mark-solved", "bin", "restore", "confirm", "not-solved", "reopen", "fix"];
-// What the box itself does so far.
-export const BOX_DOES = ["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen"];
+export const ACTIONS = ["check", "file", "mark-solved", "bin", "restore", "confirm", "not-solved", "reopen", "fix"];
+// The ones that change a note's state, through applyAction.
+export const ACTS = ["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen"];
+// What the box itself does so far: those, and the check.
+export const BOX_DOES = [...ACTS, "check"];
 
 // The buttons a note shows: what its state allows, what the list shows, and what the box does.
 export function buttonsFor(view) {
@@ -17,7 +19,7 @@ export function buttonsFor(view) {
 export function actionsFor(view) {
   const state = stateOf(view);
   if (state === "to verify") return ["confirm", "not-solved"];
-  if (state === "open") return ["mark-solved", "file", "bin"];
+  if (state === "open") return ["mark-solved", "check", "file", "bin"];
   if (state === "filed") return view.solved?.confirmed || view.fix ? [] : ["fix"];
   if (state === "solved") return ["reopen"];
   if (state === "binned") return ["restore"];
@@ -38,9 +40,12 @@ export function shownFor(view) {
 // the note with its events folded in; `now` an ISO time; `details` what the action needs.
 export function applyAction(view, action, now, details = {}) {
   if (!allows(view, action)) return { error: `note ${view.number} is ${stateOf(view)}; ${action} is not one of its actions` };
+  if (!ACTS.includes(action)) return { error: `${action} does not change a note's state` };
   const note = JSON.parse(JSON.stringify(view));
   delete note.changed;
   delete note.tombstone;
+  // Moved back to open, the code is read anew: an old check, and its banner, do not come back.
+  if (["not-solved", "restore", "reopen"].includes(action)) note.check = null;
   change[action](note, now, details);
   note.updated = now;
   return { note };
