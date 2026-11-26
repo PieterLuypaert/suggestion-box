@@ -25,9 +25,10 @@ const CHANGES_MS = 60000;
 // The check fetches (20 s at most), takes two snapshots (45 s each at most), finds claude (10 s)
 // and waits up to 90 s on Claude: 210 s, with room to spare.
 const CHECK_MS = 240000;
-// Filing runs up to nine gh calls, each stopped after 30 s.
-const FILE_MS = 300000;
-const LOOKUP_MS = 150000;
+// A lookup runs up to eight gh calls and a filing up to fourteen, each stopped after 20 s (GH_MS in
+// cli/file.js). A filing the panel gives up on is found again by the next Create issue.
+const FILE_MS = 330000;
+const LOOKUP_MS = 200000;
 const SHOWN_MS = 1000;
 const UNDO_MS = 5000;
 const NOTICE_MS = 6000;
@@ -348,7 +349,7 @@ export default class SuggestionBox extends View {
     if (name === "check") return this.check(cx, note);
     if (name === "file") return this.openEditor(cx, note);
     if (name === "open-url") return this.openUrl(note);
-    if (name === "copy") return this.copy(cx, note);
+    if (name === "copy") return this.copyCloses(cx, note);
     if (name === "board") return this.write(cx, ["board", where, note.id]);
     if (name.startsWith("editor-")) return this.editorAct(cx, name.slice(7), note);
     if (name === "mark-solved-gone") {
@@ -529,8 +530,8 @@ export default class SuggestionBox extends View {
     if (name === "copy") return this.copyIssue(cx);
     if (name === "fine") editor.fine.add(note.hit);
     if (name === "not-gone") {
-      editor.notGone = { reason: "" };
       editor.reason ??= this.reasonField(editor);
+      editor.notGone = { reason: editor.reason.value() };
       editor.reason.focus();
     }
     if (name === "take-back") editor.notGone = null;
@@ -580,16 +581,32 @@ export default class SuggestionBox extends View {
     cx.spawn(async (cx) => {
       const { answer, error } = await done;
       editor.isFiling = false;
-      if (error) editor.error = error.message;
+      if (error) this.filingFailed(cx, editor, value, error);
       else {
-        this.justFiled.add(editor.id);
+        // Closed meanwhile, the panel has moved what it filed to the history already.
+        if (isShown(BLOCK)) this.justFiled.add(editor.id);
         if (this.editor === editor) this.closeEditor(cx, { save: false });
-        this.say(cx, `Filed #${answer.issue.number}${answer.board?.error ? `; not on the board: ${answer.board.error}` : ""}.`);
+        const board = answer.board?.error ? `; not on the board: ${answer.board.error}` : "";
+        this.say(cx, answer.warning ?? `Filed #${answer.issue.number}${board}.`);
       }
       this.read(cx, false);
       cx.notify();
     });
     cx.notify();
+  }
+
+  // A filing that failed says so where the person looks: in its editor while that is open, else on
+  // the panel. The editor that is gone could not keep its draft while it filed, so it is kept now.
+  filingFailed(cx, editor, value, error) {
+    if (this.editor === editor) {
+      editor.error = error.message;
+      return;
+    }
+    this.error = `Note ${editor.number} was not filed: ${error.message}`;
+    const draft = { title: value.title, sections: value.sections, fine: value.fine, notGone: value.notGone };
+    // Not through write(): its success would clear the error just shown.
+    const keep = () => box(this.node, this.boxJs, ["draft", editor.folder, editor.id, JSON.stringify(draft)]).catch((failed) => console.log(`suggestion box: the draft of note ${editor.number} was not kept: ${failed.message}`));
+    this.queue = this.queue.then(keep);
   }
 
   // Copy issue, for a tracker outside GitHub: the title and the issue text on the clipboard.
@@ -603,7 +620,7 @@ export default class SuggestionBox extends View {
     cx.notify();
   }
 
-  copy(cx, note) {
+  copyCloses(cx, note) {
     cx.write_to_clipboard(note.issue?.closes ?? "");
     this.say(cx, `Copied "${note.issue?.closes}": put it in the fix's PR so the issue closes with it.`);
     cx.notify();
