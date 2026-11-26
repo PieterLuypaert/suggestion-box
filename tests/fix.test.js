@@ -1,7 +1,7 @@
 // Fix in new tab: the branch a fix gets, when the button shows, and box.js fix with a stand-in
 // launcher that logs how it was run, so no tab, worktree or ticket is ever made.
 import { describe, expect, test } from "bun:test";
-import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { loginShell } from "../cli/fix.js";
@@ -107,6 +107,19 @@ describe("box.js fix", () => {
     expect(noteOf(s).fix).toMatchObject({ branch: "fix/formatdate-throws-null-date-2", tab: "tb2", pane: "t2", space: "sp1" });
     const read = await run(["read", s.repo], s.env);
     expect(read.history[0].actions).toEqual([]);
+  });
+
+  test("a ticket the launcher started for the issue another way is its fix: shown, and never a second one", async () => {
+    const s = setup();
+    const records = join(s.repo, ".git", "herdr-parallel-issues");
+    mkdirSync(records, { recursive: true });
+    writeFileSync(join(records, "812.json"), JSON.stringify({ ticket: 812, repo: "acme/shop", branch: "fix/started-by-hand", tab: "tb7", pane: "t7", workspace: "sp1" }));
+    const note = (await run(["read", s.repo], s.env)).history[0];
+    expect(note.fix).toEqual({ branch: "fix/started-by-hand", tab: "tb7", pane: "t7", space: "sp1", byLauncher: true });
+    expect(note.actions).toEqual([]);
+    expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("note 1 is already fixing in fix/started-by-hand; nothing started");
+    writeFileSync(join(records, "812.json"), JSON.stringify({ ticket: 812, repo: "acme/other", branch: "fix/elsewhere" }));
+    expect((await run(["read", s.repo], s.env)).history[0].actions).toEqual(["fix"]);
   });
 
   test("a fix never starts twice", async () => {
