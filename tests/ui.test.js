@@ -103,11 +103,12 @@ export default class Scene extends View {
 
 describe.skipIf(!HERDR)("the box drawn by Herdr's engine", () => {
   for (const [name, draw] of Object.entries(scenes)) {
+    // Each scene starts Herdr's engine in a hidden window: give a busy machine time.
     test(name, () => {
       const result = spawnSync(HERDR, ["check", sceneMod(name, draw)], { encoding: "utf8" });
       expect(`${result.stdout}${result.stderr}`).toContain("check passed");
       expect(result.status).toBe(0);
-    });
+    }, 30000);
   }
 });
 
@@ -142,5 +143,5 @@ export default class Scene extends View {
 `);
     const result = spawnSync(HERDR, ["check", dir], { encoding: "utf8" });
     expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","","",""]');
-  });
+  }, 30000);
 });

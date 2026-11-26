@@ -1,10 +1,14 @@
 // How the suggestion box looks: the tab bar's button and the panel on the right. Only drawing; what
 // a click does comes in as `act`, from main.js.
-import { div, svg } from "gpui-kit";
+import { div, image, svg } from "gpui-kit";
 import { Input, Textarea, h_flex, v_flex } from "gpui-base";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
 
-export const ICON = "mods/workspace-chrome/archive.svg";
+// The pixel box, drawn by scripts/make-icon.js: in colour, and grey while collecting is off. An image
+// through the mod's link draws (as Parrot's does); an SVG through it does not.
+export const ICON = "mods/suggestion-box/icons/box.png";
+export const ICON_OFF = "mods/suggestion-box/icons/box-off.png";
+const ICON_LARGE = "mods/suggestion-box/icons/box-large.png";
 const stop = (_e, cx) => cx.stop_propagation();
 
 // The button, drawn as the tab bar draws Files, Changes and Quarterdeck: the box icon, "Box", the
@@ -22,7 +26,7 @@ export function button({ t, counts, isOn, isOff, isDim, why, isWiggling, onToggl
     .tooltip(why)
     .on_mouse_down("left", stop)
     .on_click(() => onToggle())
-    .child(svg(ICON).size(14).when(isOff, (el) => el.opacity(0.5)))
+    .child(image(isOff ? ICON_OFF : ICON).w(16).h(16).flex_none())
     .child("Box")
     .when(isOff, (el) => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child("off")))
     .when(open > 0, (el) => el.child(pill(String(open), t.done)))
@@ -130,9 +134,10 @@ const metaRow = (t) => h_flex().flex_wrap().gap(8).items_center().text_size(11.5
 
 const groupTitle = (t, text) => div().px(4).pt(8).pb(2).text_size(10.5).font_medium().text_color(t.dim).child(text);
 
-// A card that only says something: a title, and calm words under it.
-function messageCard(t, id, title, words) {
-  return card(t, id).child(div().font_medium().whitespace_normal().child(title)).child(div().text_size(12).text_color(t.muted).whitespace_normal().child(words));
+// A card that only says something: a title, and calm words under it; the empty box shows the box.
+function messageCard(t, id, title, words, { withBox = false } = {}) {
+  const text = v_flex().flex_1().min_w(0).gap(6).child(div().font_medium().whitespace_normal().child(title)).child(div().text_size(12).text_color(t.muted).whitespace_normal().child(words));
+  return card(t, id).child(withBox ? h_flex().gap(12).items_start().child(image(ICON_LARGE).w(32).h(32).flex_none().mt(2)).child(text) : text);
 }
 
 // A card's buttons: Bin quiet on the far left, away from the others; the main action filled, last.
@@ -167,8 +172,8 @@ function groups(s) {
   const filed = (answer.history ?? []).filter((n) => n.state === "filed" && s.justFiled?.has(n.id));
   if (!toVerify.length && !open.length && !filed.length && !s.undo) {
     return (answer.history ?? []).length
-      ? messageCard(t, "empty", `Nothing open in ${answer.project.name}'s box`, "Filed, solved and binned notes are in the history, below. Agents drop a new note here when they spot a problem outside their ticket.")
-      : messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.");
+      ? messageCard(t, "empty", `Nothing open in ${answer.project.name}'s box`, "Filed, solved and binned notes are in the history, below. Agents drop a new note here when they spot a problem outside their ticket.", { withBox: true })
+      : messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.", { withBox: true });
   }
   const group = (name, notes, draw) => notes.length ? [groupTitle(t, `${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)] : [];
   return v_flex().gap(8).children([
