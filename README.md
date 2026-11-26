@@ -5,9 +5,9 @@ ticket may not fix unrelated code, so what it spots outside its ticket gets lost
 suggestion box, the agent drops a note in the project's box and carries on. Later you check each
 note against the code, file it as a GitHub issue, or bin it.
 
-This is version 0.5.0: the `suggest` command, the agent instructions, the box as a panel in the
-Herdr app, the check, filing, and proving a solve. Fixing in a new tab follows; [PLAN.md](PLAN.md)
-has the whole plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
+This is version 0.6.0: the `suggest` command, the agent instructions, the box as a panel in the
+Herdr app, the check, filing, proving a solve, and fixing in a new tab. [PLAN.md](PLAN.md) has the
+whole plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
 
 ## How an agent drops a note
 
@@ -148,6 +148,29 @@ few minutes. Only when the PR is closed without a merge, or the branch is gone (
 itself) with nothing in main, does the note come back to To verify with `the fix never landed`.
 **Not solved** drops the claim with the check's reason (or yours), and the note is back where it
 was: open, or filed.
+
+## Fixing in a new tab
+
+**Fix in new tab** on a filed issue starts it as a ticket, exactly the way your parallel tickets
+start: through `issues launch` of the parallel-tickets launcher
+(`~/.claude/skills/parallel-tickets/scripts/issues`). The branch, the
+worktree and stack, the ticket's prompt (`/ship-issue <n>`) and the record behind
+`/parallel-tickets status` are the launcher's own; the box builds nothing by hand.
+
+- The branch is named as parallel-tickets names them: a type and the title's words, such as
+  `fix/formatdate-throws-null-date` (`docs/` or `chore/` when the note is about those). The
+  launcher's `issues branch` checks it; a name that is taken gets `-2`.
+- The launcher runs through your login shell from the project's main checkout, with
+  `--space <id>`, so the tab opens in the space you are in, and the box stays where it is.
+- The note then shows `Fixing in fix/… ↗`, which jumps to that tab, and the fix never starts twice.
+  A launcher that fails (uncommitted work in the main checkout, no network) leaves its last line
+  on the note, and the button stays to try again.
+- The button shows only for an issue on GitHub in the project's own repo, when the launcher and
+  its `hagent` are installed and the launcher knows `--space`, and when a project config, if there
+  is one, names GitHub and that repo. Without the launcher there is no button; the rest of the box
+  works the same.
+- The box looks every few minutes whether a filed issue was closed; a closed one says so and gets
+  no fix.
 
 ## Collecting on or off
 
