@@ -6,9 +6,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { filingTarget } from "../mods/suggestion-box/config.js";
-import { branchCandidates, fixGate, lastLine, pickBranch, readLaunch } from "../mods/suggestion-box/fix.js";
-import { githubRepo } from "../mods/suggestion-box/issue.js";
+import { filingTarget } from "../../mods/suggestion-box/config.js";
+import { branchCandidates, fixGate, lastLine, pickBranch, readLaunch } from "../../mods/suggestion-box/fix.js";
+import { githubRepo } from "../../mods/suggestion-box/issue.js";
 import { configText } from "./file.js";
 import { defaultRef } from "./changes.js";
 

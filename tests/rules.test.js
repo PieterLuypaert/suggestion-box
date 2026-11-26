@@ -1,4 +1,4 @@
-// The states table of PLAN.md section 6c, row by row.
+// The states table of docs/plan.md section 6c, row by row.
 import { describe, expect, test } from "bun:test";
 import { actionsFor, applyAction, buttonsFor, isWatched, recordIssue, recordLanded, shownFor } from "../mods/suggestion-box/rules.js";
 

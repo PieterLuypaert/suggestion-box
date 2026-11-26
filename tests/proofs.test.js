@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { changeProof, landedProof } from "../cli/proofs.js";
+import { changeProof, landedProof } from "../cli/box/proofs.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
 import { landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";

@@ -104,7 +104,7 @@ describe("why Create issue is off", () => {
 });
 
 describe("the target line", () => {
-  test("each row of the table in PLAN.md section 7", () => {
+  test("each row of the table in docs/plan.md section 7", () => {
     expect(targetLine({ ...target, visibility: "public", board: { owner: "acme", number: 41, column: "Backlog", title: "Shop" } })).toBe("→ acme/shop (public) · triage · board Shop › Backlog");
     expect(targetLine(target)).toBe("→ acme/shop (private) · triage · no board in the config");
     expect(targetLine({ kind: "github", repo: "acme/shop", visibility: "public", label: null, board: null, hasConfig: false })).toBe("→ acme/shop (public) · no config: no label, and no board from the box (a board that adds new issues itself still will)");

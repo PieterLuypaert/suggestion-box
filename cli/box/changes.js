@@ -1,8 +1,8 @@
 // Whether a note's code changed since the drop, on the branch it was dropped on or on the default
 // branch: plain git, no Claude. The note's lines are mapped forward through `git diff -U0 -M`, or,
 // when its commit is gone after a rebase, its snippet is looked for instead.
-import { findSnippet, noteRange, parseHunks, touches } from "../mods/suggestion-box/lines.js";
-import { gitAnswer, gitText } from "./git.js";
+import { findSnippet, noteRange, parseHunks, touches } from "../../mods/suggestion-box/lines.js";
+import { gitAnswer, gitText } from "../shared/git.js";
 
 // The default branch as the repo last fetched it: origin/HEAD, else origin/main or origin/master,
 // else a local main or master. Null when there is none.

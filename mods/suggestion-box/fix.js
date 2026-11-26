@@ -1,4 +1,4 @@
-// Fix in new tab: a filed issue started as a ticket through the parallel-tickets launcher (PLAN.md
+// Fix in new tab: a filed issue started as a ticket through the parallel-tickets launcher (docs/plan.md
 // section 7b). When the button shows, the branch it picks, and the launcher's arguments. Pure: no
 // Herdr and no Node imports.
 import { branchName } from "./issue.js";

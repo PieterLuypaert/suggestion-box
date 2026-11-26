@@ -1,4 +1,4 @@
-// The three proofs a note claimed solved shows before you confirm it (PLAN.md section 6b): the
+// The three proofs a note claimed solved shows before you confirm it (docs/plan.md section 6b): the
 // change that touched its lines, an independent check by your own Claude, and whether the fix
 // landed in main. What git and gh found comes in; what it proves goes out. Pure: no Herdr and no
 // Node imports.

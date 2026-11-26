@@ -4,10 +4,10 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { claudeArgs, prompt, readAnswer, TIMEOUT_MS } from "../mods/suggestion-box/check.js";
+import { claudeArgs, prompt, readAnswer, TIMEOUT_MS } from "../../mods/suggestion-box/check.js";
 import { defaultRef } from "./changes.js";
 import { fetch, findClaude, inSnapshots, runClaude, snapshot } from "./claude.js";
-import { gitAnswer } from "./git.js";
+import { gitAnswer } from "../shared/git.js";
 
 export { findClaude, stopRunning } from "./claude.js";
 

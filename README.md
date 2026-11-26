@@ -6,8 +6,8 @@ suggestion box, the agent drops a note in the project's box and carries on. Late
 note against the code, file it as a GitHub issue, or bin it.
 
 This is version 0.6.0: the `suggest` command, the agent instructions, the box as a panel in the
-Herdr app, the check, filing, proving a solve, and fixing in a new tab. [PLAN.md](PLAN.md) has the
-whole plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
+Herdr app, the check, filing, proving a solve, and fixing in a new tab. [docs/plan.md](docs/plan.md)
+is the plan it was built from, and [docs/blueprint.html](docs/blueprint.html) shows it.
 
 ## How an agent drops a note
 
@@ -70,7 +70,7 @@ Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 - Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `f` file, `k` check, `s` mark
   solved, `x` bin, `u` undo, `c` confirm, `n` not solved, esc closes.
 
-Each note's state allows a fixed set of actions (PLAN.md section 6c), and the box refuses any
+Each note's state allows a fixed set of actions (docs/plan.md section 6c), and the box refuses any
 other, also a click that races an agent's claim. All reading and writing goes through
 `cli/box.js`, which agents never run.
 
@@ -208,6 +208,30 @@ With the Herdr app there, `install.sh` also links the mod, adds the button and t
 layout (to a copy, `<name>-suggestion-box`, when the layout is one of Herdr's own) and binds
 `cmd-alt-s` when it is free. Every file they change is kept beside it first, and both can run
 again at any time.
+
+## How it is built
+
+```
+bin/suggest            the agents' command (a link to it sits in ~/.local/bin)
+cli/suggest/           its code: drop, list, solved, session-start; it only ever creates files
+cli/box.js             the box's own side, which the panel runs; it alone rewrites notes
+cli/box/               one module per group of the box's commands (read, act, filing, claims,
+                       fixing, settings, note-files) and their libraries (check, claude, file,
+                       proofs, fix, changes)
+cli/shared/            what both sides use: git, and the box's folder and switches
+mods/suggestion-box/   the Herdr mod
+  main.js              the view: init and render, with its parts in view-*.js
+  view-*.js            reading, the button, the panel, the editor, the proofs, Fix in new tab
+  panel.js             the panel's drawing, with its parts in panel-*.js
+  rules.js events.js notes.js lines.js check.js config.js issue.js scan.js editor.js
+  proofs.js fix.js     pure modules: no Herdr and no Node, shared by the panel and cli/box, and
+                       tested on their own
+scripts/               the pixel icon's drawing
+tests/                 one test file per module, the panel drawn by Herdr's own engine
+docs/                  the plan the box was built from, and its blueprint
+```
+
+The mod's files sit flat in one folder, as Herdr loads a mod by its folder.
 
 ## Tests
 

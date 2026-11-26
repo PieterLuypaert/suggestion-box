@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The suggest command. A dynamic import, so this extensionless file runs the same as CommonJS or
 // as a module, also through the link install.sh makes in ~/.local/bin.
-import("../cli/main.js")
+import("../cli/suggest/main.js")
   .then(({ main }) =>
     main({
       args: process.argv.slice(2),

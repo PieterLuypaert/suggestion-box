@@ -1,8 +1,11 @@
 # Suggestion box: plan
 
+> The plan the box was built from (plan 16). The box has grown since: the code, the README and the
+> CHANGELOG say what it does now, and file names in this plan are as they were planned.
+
 Plan version 16 · 2026-11-26 · reviewed twice · one open question · Nothing built yet
 
-The visual version of this plan is `sketch/blueprint.html`. Its publish label "Plan N" matches the
+The visual version of this plan is `docs/blueprint.html`. Its publish label "Plan N" matches the
 plan version here.
 
 ## 1. What we are building

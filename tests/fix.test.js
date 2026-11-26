@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { loginShell } from "../cli/fix.js";
+import { loginShell } from "../cli/box/fix.js";
 import { branchCandidates, fixGate, fixType, lastLine, pickBranch, readLaunch } from "../mods/suggestion-box/fix.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
