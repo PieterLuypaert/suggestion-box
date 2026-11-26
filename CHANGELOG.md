@@ -23,12 +23,19 @@ All notable changes to the suggestion box. The format follows
   random strings block in a repo that is not private until marked Fine to publish.
 - Similar open issues, the board step with Add to board when it fails, drafts kept in the note, a
   Just filed group, and the `Closes #n` words with Copy once a filed note is solved.
+- Filing never makes the same issue twice: a filing cut off after gh created the issue is found
+  again by the next Create issue and recorded instead.
 
 ### Changed
 
 - Filed notes are part of the history; the panel keeps the ones it just filed in sight until it closes.
 - Every write of a note reads it again when something else wrote it in between, so a check
   finishing and a click at the same moment no longer fail with "the note changed meanwhile".
+
+### Fixed
+
+- The `changed on …` chip read a file's text trimmed, so in a file starting with blank lines it
+  looked for the note's lines in the wrong place.
 
 ## [0.3.0] - 2026-11-26
 
