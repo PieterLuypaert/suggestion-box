@@ -5,6 +5,13 @@ import { stateOf } from "./events.js";
 
 // Every action the box knows. File issue and Fix in new tab come with later versions.
 export const ACTIONS = ["file", "mark-solved", "bin", "restore", "confirm", "not-solved", "reopen", "fix"];
+// What the box itself does so far.
+export const BOX_DOES = ["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen"];
+
+// The buttons a note shows: what its state allows, what the list shows, and what the box does.
+export function buttonsFor(view) {
+  return shownFor(view).filter((action) => BOX_DOES.includes(action));
+}
 
 // The actions a note's state allows, in the order the box shows them.
 export function actionsFor(view) {

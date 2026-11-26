@@ -14,15 +14,13 @@ import { pathToFileURL } from "node:url";
 import { fold, stateOf } from "../mods/suggestion-box/events.js";
 import { age } from "../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName } from "../mods/suggestion-box/project.js";
-import { applyAction, shownFor } from "../mods/suggestion-box/rules.js";
+import { applyAction, BOX_DOES, buttonsFor } from "../mods/suggestion-box/rules.js";
 import { changeFor, defaultRef } from "./changes.js";
 import { repoAt } from "./git.js";
 import { boxRoot, collecting, readSettings } from "./store.js";
 
 const DAY = 86400000;
 const KEEP_DAYS = 30;
-// What the box itself does; filing and fixing come with later versions.
-const DOES = ["bin", "restore", "mark-solved", "confirm", "not-solved", "reopen"];
 
 export function run(args, env = process.env, now = new Date()) {
   const [command, folder, ...rest] = args;
@@ -46,14 +44,16 @@ function projectAt(folder, env) {
 
 function read(project, withChanges, now) {
   if (!project.dir) return { project: null, why: project.why };
-  mkdirSync(project.dir, { recursive: true });
+  // Only the notes folder is made: a project's own folder appears with its first note, so reading
+  // a repo that never had one leaves nothing behind. The box watches the notes folder until then.
+  mkdirSync(join(project.root, "notes"), { recursive: true });
   const settings = readSettings(project.root);
   const mainRef = withChanges ? defaultRef(project.repo.top) : null;
-  const views = notesOf(project.dir).map((note) => describe(project, note, withChanges, mainRef, now));
+  const views = (existsSync(project.dir) ? notesOf(project.dir) : []).map((note) => describe(project, note, withChanges, mainRef, now));
   const live = views.filter((v) => ["open", "to verify", "filed"].includes(v.state));
   const recent = views.filter((v) => !live.includes(v) && now - Date.parse(v.updated) < KEEP_DAYS * DAY);
   return {
-    project: { key: project.key, name: project.name, dir: project.dir, top: project.repo.top, checkout: project.repo.checkout, origin: project.repo.origin },
+    project: { key: project.key, name: project.name, dir: project.dir, exists: existsSync(project.dir), notes: join(project.root, "notes"), top: project.repo.top, checkout: project.repo.checkout, origin: project.repo.origin },
     collecting: { all: settings.collecting !== false, project: collecting(settings, project.key) },
     notes: live.sort((a, b) => b.number - a.number),
     history: recent.sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated)),
@@ -64,7 +64,7 @@ function read(project, withChanges, now) {
 function describe(project, note, withChanges, mainRef, now) {
   const view = { ...note, state: stateOf(note), age: age(note.created, now.getTime()) };
   if (withChanges && view.state === "open") view.changed = changeFor(project.repo.top, note, mainRef);
-  view.actions = shownFor(view).filter((action) => DOES.includes(action));
+  view.actions = buttonsFor(view);
   return view;
 }
 
@@ -96,7 +96,7 @@ function eventsOf(dir, id) {
 // the note at once, then the folded event files removed. An event that arrives meanwhile stays.
 function act(project, rest, now) {
   const [id, action, ...options] = rest;
-  if (!DOES.includes(action)) return { error: `${action} is not something the box does yet` };
+  if (!BOX_DOES.includes(action)) return { error: `${action} is not something the box does yet` };
   const loaded = loadNote(project.dir, id);
   if (!loaded) return { error: `there is no note ${id}` };
   const view = fold(loaded.note, loaded.events.map((e) => e.event));
@@ -144,17 +144,18 @@ function switchCollecting(project, rest, env) {
 }
 
 // Filed, solved and binned notes untouched for 30 days become tombstones: what the same-note check
-// and the numbers still need, nothing more.
+// and the numbers still need, nothing more. A note waiting in To verify stays, and so does any
+// event that arrived after the notes were read.
 function prune(project, now) {
   let pruned = 0;
+  if (!existsSync(project.dir)) return { ok: true, pruned };
   for (const note of notesOf(project.dir)) {
-    if (!["filed", "solved", "binned"].includes(note.status)) continue;
-    if (now - Date.parse(note.updated) < KEEP_DAYS * DAY) continue;
+    if (!["filed", "solved", "binned"].includes(stateOf(note))) continue;
+    if (note.eventFiles.length || now - Date.parse(note.updated) < KEEP_DAYS * DAY) continue;
     const tombstone = { id: note.id, number: note.number, project: note.project, title: note.title, at: note.at, status: note.status, issue: note.issue ?? null, solved: note.solved ?? null, spotted: note.spotted, created: note.created, updated: note.updated };
     mkdirSync(join(project.dir, "tombstones"), { recursive: true });
     writeFileSync(join(project.dir, "tombstones", `${note.id}.json`), `${JSON.stringify(tombstone, null, 2)}\n`);
     rmSync(join(project.dir, `${note.id}.json`), { force: true });
-    rmSync(join(project.dir, "events", note.id), { recursive: true, force: true });
     pruned++;
   }
   return { ok: true, pruned };

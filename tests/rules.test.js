@@ -1,6 +1,6 @@
 // The states table of PLAN.md section 6c, row by row.
 import { describe, expect, test } from "bun:test";
-import { actionsFor, applyAction, shownFor } from "../mods/suggestion-box/rules.js";
+import { actionsFor, applyAction, buttonsFor, shownFor } from "../mods/suggestion-box/rules.js";
 
 const NOW = "2026-11-26T12:00:00Z";
 const claim = { branch: "feat/x", sha: "abc", how: "h", proof: "p", by: "agent", at: "t", confirmed: null };
@@ -40,6 +40,12 @@ describe("the actions each state allows", () => {
     expect(shownFor(rows.open)).toEqual(["file", "bin"]);
     expect(shownFor({ ...rows.open, changed: { on: "main", kind: "changed" } })).toEqual(["mark-solved", "file", "bin"]);
   });
+});
+
+test("the buttons leave out what the box does not do yet", () => {
+  expect(buttonsFor(rows.open)).toEqual(["bin"]);
+  expect(buttonsFor(rows.filed)).toEqual([]);
+  expect(buttonsFor({ ...rows.open, changed: { on: "main" } })).toEqual(["mark-solved", "bin"]);
 });
 
 describe("what each action does", () => {

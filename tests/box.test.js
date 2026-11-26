@@ -1,7 +1,7 @@
 // The box's own side (cli/box.js) and its git changes (cli/changes.js), in throwaway repos and boxes.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeFor } from "../cli/changes.js";
@@ -53,6 +53,15 @@ describe("read", () => {
     expect(answer.notes).toEqual([]);
     expect(answer.history.map((n) => [n.number, n.state, n.actions])).toEqual([[1, "binned", ["restore"]]]);
   });
+});
+
+test("reading a repo that never had a note leaves no folder for it", () => {
+  const { repo, box, env } = setup();
+  const answer = run(["read", repo], env);
+  expect(answer.project.exists).toBe(false);
+  expect(answer.notes).toEqual([]);
+  expect(existsSync(join(box, "notes", FOLDER))).toBe(false);
+  expect(existsSync(join(box, "notes"))).toBe(true);
 });
 
 describe("act", () => {
@@ -130,6 +139,22 @@ describe("prune", () => {
   });
 });
 
+test("prune keeps a filed note that waits in To verify, and a note with events not folded in yet", () => {
+  const { repo, box, env } = setup();
+  suggest(repo, box, [], note("Filed, then claimed"));
+  suggest(repo, box, [], note("Binned, seen again"));
+  const dir = join(box, "notes", FOLDER);
+  const filedId = idOf(box, 1);
+  const filed = JSON.parse(readFileSync(join(dir, `${filedId}.json`), "utf8"));
+  writeFileSync(join(dir, `${filedId}.json`), JSON.stringify({ ...filed, status: "filed", issue: { number: 812 } }));
+  suggest(repo, box, ["solved", "1"], "how: h\nproof: p\n");
+  run(["act", repo, idOf(box, 2), "bin"], env);
+  suggest(repo, box, [], note("Binned, seen again"));
+  const later = new Date(Date.now() + 40 * 86400000);
+  expect(run(["prune", repo], env, later)).toEqual({ ok: true, pruned: 0 });
+  expect(run(["read", repo], env).notes.map((n) => n.state)).toEqual(["to verify"]);
+});
+
 test("box.js answers one line of JSON when run as a program", () => {
   const { repo, box } = setup();
   suggest(repo, box, [], NOTE);
@@ -200,6 +225,20 @@ describe("changes since the drop", () => {
     expect(changeFor(repo, n, "main")).toBeNull();
     commitLine(repo, 42, "fixed after the rebase");
     expect(changeFor(repo, n, "main")).toEqual({ on: "feat/8504-group-records", kind: "changed" });
+  });
+
+  test("a note dropped on the default branch is checked against the fetched one", () => {
+    const repo = makeRepo({ branch: null });
+    const box = join(tempDir(), "box");
+    suggest(repo, box, [], NOTE);
+    const n = JSON.parse(readFileSync(join(box, "notes", FOLDER, `${idOf(box, 1)}.json`), "utf8"));
+    expect(n.from.branch).toBe("main");
+    git(repo, "switch", "-q", "-c", "upstream");
+    commitLine(repo, 42, "fixed upstream");
+    git(repo, "update-ref", "refs/remotes/origin/main", "upstream");
+    git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+    git(repo, "switch", "-q", "main");
+    expect(changeFor(repo, n)).toEqual({ on: "main", kind: "changed" });
   });
 
   test("read --changes puts the chip on open notes and shows Mark solved", () => {

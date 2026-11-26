@@ -22,8 +22,10 @@ export function changeFor(top, note, mainRef = defaultRef(top)) {
   if (!range || !note.from?.sha) return null;
   const refs = [];
   const branch = note.from.branch;
-  if (branch && gitAnswer(top, ["rev-parse", "-q", "--verify", `refs/heads/${branch}`])) refs.push({ on: branch, ref: `refs/heads/${branch}` });
-  if (mainRef && mainRef !== branch && `origin/${branch}` !== mainRef) refs.push({ on: mainRef.replace(/^origin\//, ""), ref: mainRef });
+  const isDefault = mainRef && (mainRef === branch || mainRef === `origin/${branch}`);
+  // A note dropped on the default branch is checked against the fetched one, not a stale local copy.
+  if (branch && !isDefault && gitAnswer(top, ["rev-parse", "-q", "--verify", `refs/heads/${branch}`])) refs.push({ on: branch, ref: `refs/heads/${branch}` });
+  if (mainRef) refs.push({ on: mainRef.replace(/^origin\//, ""), ref: mainRef });
   for (const { on, ref } of refs) {
     const kind = changeOn(top, note, range, ref);
     if (kind) return { on, kind };
