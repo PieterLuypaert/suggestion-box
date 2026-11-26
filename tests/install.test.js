@@ -120,3 +120,32 @@ test("uninstall leaves another tool called suggest alone", () => {
   run("uninstall.sh", home);
   expect(readlinkSync(join(home, ".local", "bin", "suggest"))).toBe("/usr/bin/true");
 });
+
+test("install.sh and uninstall.sh run as ./install.sh, as the readme says", () => {
+  const home = tempDir("home-");
+  const env = { ...process.env, HOME: home };
+  delete env.CLAUDE_CONFIG_DIR;
+  expect(spawnSync(join(ROOT, "install.sh"), [], { env }).status).toBe(0);
+  expect(spawnSync(join(ROOT, "uninstall.sh"), [], { env }).status).toBe(0);
+});
+
+test("uninstall leaves another tool's bin/suggest alone", () => {
+  const home = tempDir("home-");
+  const other = join(tempDir("other-"), "bin");
+  mkdirSync(other, { recursive: true });
+  writeFileSync(join(other, "suggest"), "#!/bin/sh\n");
+  mkdirSync(join(home, ".local", "bin"), { recursive: true });
+  symlinkSync(join(other, "suggest"), join(home, ".local", "bin", "suggest"));
+  run("uninstall.sh", home);
+  expect(readlinkSync(join(home, ".local", "bin", "suggest"))).toBe(join(other, "suggest"));
+});
+
+test("--purge leaves a folder alone that holds more than a box", () => {
+  const home = tempDir("home-");
+  mkdirSync(join(home, ".suggestion-box", "notes"), { recursive: true });
+  writeFileSync(join(home, ".suggestion-box", "thesis.docx"), "mine");
+  const result = run("uninstall.sh", home, ["--purge"]);
+  expect(result.code).toBe(1);
+  expect(result.err).toContain("holds more than notes and settings.json");
+  expect(existsSync(join(home, ".suggestion-box", "thesis.docx"))).toBe(true);
+});

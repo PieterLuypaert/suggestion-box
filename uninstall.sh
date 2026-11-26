@@ -24,7 +24,17 @@ for arg in "$@"; do
 done
 command -v jq >/dev/null 2>&1 || fail "needs jq on the PATH (brew install jq)"
 
-if [ -L "$link" ] && case "$(readlink "$link")" in */bin/suggest) true ;; *) false ;; esac; then
+# Only a link to a suggestion-box checkout's command, as install.sh made it: its target ends in
+# bin/suggest and has the checkout's agent instructions beside it.
+is_ours() {
+  target=$(readlink "$1")
+  case "$target" in
+    */bin/suggest) [ -f "$(dirname "$(dirname "$target")")/agent-instructions.md" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+if [ -L "$link" ] && is_ours "$link"; then
   rm "$link"
   echo "command: removed $link"
 else
@@ -44,8 +54,15 @@ if [ -f "$settings" ]; then
 fi
 
 if [ "$purge" = yes ]; then
-  rm -rf "$box"
-  echo "notes: removed $box"
+  # Only a folder that looks like a box: never a home folder or one with other things in it.
+  if [ ! -d "$box" ]; then
+    echo "notes: there is no $box"
+  elif [ "$box" = "$HOME" ] || [ "$box" = "/" ] || [ -n "$(find "$box" -mindepth 1 -maxdepth 1 ! -name notes ! -name settings.json ! -name .DS_Store)" ]; then
+    fail "$box holds more than notes and settings.json, so --purge leaves it alone; remove it yourself if you mean to"
+  else
+    rm -rf "$box"
+    echo "notes: removed $box"
+  fi
 else
   echo "notes: kept in $box (./uninstall.sh --purge removes them)"
 fi

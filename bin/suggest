@@ -20,22 +20,23 @@ import("../cli/main.js")
     process.exitCode = 1;
   });
 
-// Stdin as text: empty from a terminal, and given up on when nothing arrives within two seconds,
-// so a caller that leaves stdin open never hangs the command.
+// Stdin as text: empty from a terminal. A writer gets five seconds to start and then as long as it
+// keeps writing; only a stdin left open and silent is given up on, so a caller that never closes
+// it does not hang the command.
 function readStdin() {
   if (process.stdin.isTTY) return Promise.resolve("");
   return new Promise((resolve) => {
     let text = "";
-    const quiet = setTimeout(() => finish(), 2000);
+    const silence = setTimeout(() => finish(), 5000);
     function finish() {
-      clearTimeout(quiet);
+      clearTimeout(silence);
       process.stdin.destroy();
       resolve(text);
     }
     process.stdin.setEncoding("utf8");
     process.stdin.on("data", (chunk) => {
       text += chunk;
-      quiet.refresh();
+      silence.refresh();
     });
     process.stdin.on("end", finish);
     process.stdin.on("error", finish);
