@@ -9,6 +9,8 @@ const stop = (_e, cx) => cx.stop_propagation();
 
 // The button, drawn as the tab bar draws Files, Changes and Quarterdeck: the box icon, "Box", the
 // open count and a green ✓ for notes to verify. Dim without a box here; "off" while collecting is.
+// Its block is wide enough for both counts; the face keeps to the left of it, next to the button
+// before it, so the room the counts do not use falls at the window's edge.
 export function button({ t, counts, isOn, isOff, isDim, why, isWiggling, onToggle }) {
   const open = counts?.open ?? 0;
   const toVerify = counts?.toVerify ?? 0;
@@ -25,7 +27,7 @@ export function button({ t, counts, isOn, isOff, isDim, why, isWiggling, onToggl
     .when(isOff, (el) => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child("off")))
     .when(open > 0, (el) => el.child(pill(String(open), t.done)))
     .when(toVerify > 0, (el) => el.child(pill(`✓${toVerify}`, t.ansi2)));
-  return h_flex().size_full().pr(10).items_center().justify_end().bg(t.chrome).border_b(1).border_color(t.border).child(face);
+  return h_flex().size_full().pl(2).items_center().justify_start().bg(t.chrome).border_b(1).border_color(t.border).child(face);
 }
 
 // The panel: a header with the switches, the notes by state, and a footer.
