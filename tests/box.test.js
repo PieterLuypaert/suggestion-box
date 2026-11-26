@@ -1,7 +1,7 @@
 // The box's own side (cli/box.js) and its git changes (cli/changes.js), in throwaway repos and boxes.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeFor } from "../cli/changes.js";
@@ -280,5 +280,32 @@ describe("the settings view's projects", () => {
     await run(["collecting", repo, "on", "--key", "github.com/acme/shop"], env);
     expect((await run(["read", repo], env)).collecting).toEqual({ all: true, project: true });
     expect((await run(["collecting", repo, "off", "--key", "not a key"], env)).error).toContain("--key needs a project");
+  });
+
+  test("a stray file among the notes, or a broken note, never takes the list down", async () => {
+    const { repo, box, env } = setup();
+    suggest(repo, box, [], NOTE);
+    writeFileSync(join(box, "notes", ".DS_Store"), "x");
+    mkdirSync(join(box, "notes", "github.com__acme__broken"), { recursive: true });
+    writeFileSync(join(box, "notes", "github.com__acme__broken", "a.json"), '{"project":"github.com/acme/broken"}');
+    writeFileSync(join(box, "notes", "github.com__acme__broken", "b.json"), "{ half written");
+    const answer = await run(["projects", repo], env);
+    expect(answer.projects.map((p) => [p.name, p.counts.open])).toEqual([["shop", 1], ["broken", 0]]);
+  });
+
+  test("switches by key or for every project work without a repo here; any project name a key can have", async () => {
+    const { env } = setup();
+    const plain = tempDir("plain-");
+    expect((await run(["collecting", plain, "off", "--key", "local/Users/me/My Code/app"], env)).collecting).toEqual({ all: true, project: false });
+    expect((await run(["collecting", plain, "off", "--all"], env)).collecting.all).toBe(false);
+    expect((await run(["collecting", plain, "off"], env)).error).toBe("no git repo here");
+    expect((await run(["projects", ""], env)).projects.map((p) => p.key)).toEqual(["local/Users/me/My Code/app"]);
+  });
+
+  test("a missing key or an unknown flag is refused, never taken for the project here", async () => {
+    const { repo, env } = setup();
+    expect((await run(["collecting", repo, "off", "--key"], env)).error).toContain("--key needs a project");
+    expect((await run(["collecting", repo, "off", "--kye", "github.com/acme/billing"], env)).error).toBe("unknown --kye; use --all or --key <project>");
+    expect((await run(["read", repo], env)).collecting).toEqual({ all: true, project: true });
   });
 });

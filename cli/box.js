@@ -48,6 +48,8 @@ export async function run(args, env = process.env, now = new Date()) {
   const project = projectAt(folder, env);
   if (command === "read") return read(project, rest.includes("--changes"), now, env);
   if (command === "projects") return projects(project, rest, env);
+  // A switch by key or for every project needs no repo here; one for the project here does.
+  if (command === "collecting" && ["--key", "--all"].includes(rest[1])) return switchCollecting(project, rest, env);
   if (!project.dir) return { error: project.why };
   if (command === "act") return act(project, rest, now, env);
   if (command === "check") return check(project, rest[0], env, now, rest.includes("--again"));
@@ -440,9 +442,12 @@ function writeOver(file, expected, value) {
 }
 
 function switchCollecting(project, rest, env) {
-  const [value, scope, key = project.key] = rest;
+  const [value, scope] = rest;
   if (value !== "on" && value !== "off") return { error: "say on or off" };
-  if (scope === "--key" && !/^[^\s]+\/[^\s]+$/.test(key ?? "")) return { error: "--key needs a project, such as github.com/acme/shop" };
+  if (scope !== undefined && scope !== "--all" && scope !== "--key") return { error: `unknown ${scope}; use --all or --key <project>` };
+  // A key is a project as the box names it: a path-like name, such as github.com/acme/shop.
+  const key = scope === "--key" ? rest[2] : project.key;
+  if (scope === "--key" && !(typeof key === "string" && key.trim() === key && /\S\/\S/.test(key))) return { error: "--key needs a project, such as github.com/acme/shop" };
   const root = boxRoot(env);
   mkdirSync(root, { recursive: true });
   const settings = readSettings(root);
@@ -469,7 +474,7 @@ function projects(here, folders, env) {
   const found = new Map();
   const add = (key, name, dir) => {
     if (!key || found.has(key)) return;
-    const notes = dir && existsSync(dir) ? notesOf(dir) : [];
+    const notes = countable(dir);
     const count = (state) => notes.filter((note) => stateOf(note) === state).length;
     found.set(key, { key, name, isHere: key === here.key, isOn: !off.has(key), counts: { open: count("open"), toVerify: count("to verify"), filed: count("filed") }, hasSpace: false });
   };
@@ -481,7 +486,8 @@ function projects(here, folders, env) {
     found.get(key).hasSpace = true;
   }
   const notesRoot = join(root, "notes");
-  for (const name of existsSync(notesRoot) ? readdirSync(notesRoot) : []) {
+  const noteFolders = existsSync(notesRoot) ? readdirSync(notesRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()) : [];
+  for (const { name } of noteFolders) {
     const key = projectOf(join(notesRoot, name));
     if (key) add(key, projectName(key), join(notesRoot, name));
   }
@@ -489,6 +495,18 @@ function projects(here, folders, env) {
   for (const key of off) if (!found.has(key)) add(key, projectName(key), join(notesRoot, projectFolder(key)));
   const list = [...found.values()].sort((a, b) => Number(b.isHere) - Number(a.isHere) || a.name.localeCompare(b.name));
   return { ok: true, all: settings.collecting !== false, projects: list };
+}
+
+// A project's notes for its counts; one that cannot be read counts as none, and says so on stderr,
+// so one broken note never takes the whole list down.
+function countable(dir) {
+  if (!dir || !existsSync(dir)) return [];
+  try {
+    return notesOf(dir);
+  } catch (error) {
+    process.stderr.write(`box.js: could not count the notes in ${dir}: ${error.message}\n`);
+    return [];
+  }
 }
 
 // The project a notes folder belongs to, as its notes (or tombstones) say.
