@@ -131,7 +131,8 @@ function card(t, id, { isSelected = false, edge = null } = {}) {
 }
 
 // The line under a card's title: where, which ticket, how long ago, how it stands.
-const metaRow = (t) => h_flex().flex_wrap().gap(8).items_center().text_size(11.5).text_color(t.muted);
+// A wrapped part sits close under the first, as the next line of the same sentence.
+const metaRow = (t) => h_flex().flex_wrap().gap_x(8).gap_y(2).items_center().text_size(11.5).text_color(t.muted);
 
 const groupTitle = (t, text) => div().px(4).pt(8).pb(2).text_size(10.5).font_medium().text_color(t.dim).child(text);
 
