@@ -1,0 +1,314 @@
+// The three proofs of a claim: following the note's lines through commits, the landed rules, the
+// independent check's question and answer, and box.js proofs, verify, confirm and watch, in
+// throwaway repos with stand-ins for gh and claude.
+import { describe, expect, test } from "bun:test";
+import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { run } from "../cli/box.js";
+import { changeProof, landedProof } from "../cli/proofs.js";
+import { parseHunks } from "../mods/suggestion-box/lines.js";
+import { landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
+import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
+
+const BRANCH = "feat/8504-group-records";
+
+describe("mapping a note's lines through a diff", () => {
+  const map = (diff) => mapRange({ first: 40, last: 44 }, parseHunks(diff));
+
+  test("lines added or removed above move it; below leave it", () => {
+    expect(map("@@ -3,0 +4,2 @@")).toEqual({ first: 42, last: 46, isTouched: false });
+    expect(map("@@ -3,2 +2,0 @@")).toEqual({ first: 38, last: 42, isTouched: false });
+    expect(map("@@ -50,2 +50,9 @@")).toEqual({ first: 40, last: 44, isTouched: false });
+  });
+
+  test("a change inside it touches it; its lines follow the hunk's new lines", () => {
+    expect(map("@@ -42 +42 @@")).toEqual({ first: 40, last: 44, isTouched: true });
+    expect(map("@@ -38,10 +38,3 @@")).toEqual({ first: 38, last: 40, isTouched: true });
+    expect(map("@@ -41,2 +41,0 @@")).toEqual({ first: 40, last: 42, isTouched: true });
+    expect(map("@@ -1,5 +1,0 @@\n@@ -42,0 +38,3 @@")).toEqual({ first: 35, last: 42, isTouched: true });
+  });
+
+  test("all of it deleted shrinks to where it was", () => {
+    expect(map("@@ -40,5 +39,0 @@")).toEqual({ first: 40, last: 40, isTouched: true });
+  });
+
+  test("the diff lines shown are those of the hunks that touch it", () => {
+    const diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@ top\n-a\n+b\n@@ -42 +42 @@ fn\n-old\n+new";
+    expect(touchingLines(diff, { first: 40, last: 44 })).toEqual([{ kind: "@", text: "@@ -42 +42 @@" }, { kind: "-", text: "old" }, { kind: "+", text: "new" }]);
+  });
+});
+
+describe("the landed rules", () => {
+  test("a merged PR counts first, whatever the merge style", () => {
+    expect(landedState({ pr: { number: 44, state: "MERGED", mergeCommit: "abc" }, hasBranch: false })).toMatchObject({ state: "landed", how: "PR #44 merged", sha: "abc" });
+  });
+
+  test("else the solving commit in main, else the same patch there", () => {
+    expect(landedState({ inMain: "9f3e21c4a8" })).toMatchObject({ state: "landed", how: "in main (9f3e21c)" });
+    expect(landedState({ samePatch: "1234567890" })).toMatchObject({ state: "landed", how: "the same change is in main (1234567)" });
+  });
+
+  test("never: a PR closed unmerged, or the branch gone with nothing in main", () => {
+    expect(landedState({ pr: { number: 44, state: "CLOSED" } })).toMatchObject({ state: "never", how: "PR #44 was closed without merging" });
+    expect(landedState({ hasBranch: false })).toMatchObject({ state: "never" });
+    expect(landedState({ hasBranch: false, isDefault: true }).state).toBe("waiting");
+  });
+
+  test("waiting: an open PR, no PR yet, no commit yet", () => {
+    expect(landedState({ pr: { number: 44, state: "OPEN" } })).toMatchObject({ state: "waiting", how: "PR #44 is open" });
+    expect(landedState({})).toMatchObject({ state: "waiting", how: "no PR yet" });
+    expect(landedState({ hasCommit: false }).how).toBe("no commit with the fix yet");
+  });
+
+  test("the PR that counts: merged, then open, then the newest", () => {
+    expect(pickPr([{ number: 1, state: "CLOSED" }, { number: 2, state: "MERGED" }]).number).toBe(2);
+    expect(pickPr([{ number: 1, state: "CLOSED" }, { number: 3, state: "OPEN" }]).number).toBe(3);
+    expect(pickPr([{ number: 4, state: "CLOSED" }]).number).toBe(4);
+    expect(pickPr(null)).toBeNull();
+  });
+});
+
+describe("the independent check", () => {
+  const out = (structured) => ({ code: 0, stdout: JSON.stringify({ is_error: false, structured_output: structured }), stderr: "" });
+
+  test("it asks with the note, the claim and the change, read-only, on Sonnet", () => {
+    const text = verifyPrompt({ title: "T", sections: { problem: "p" }, at: { path: "a.ts" } }, { branch: "feat/x", how: "h", proof: "t.test.ts", by: "agent" }, { path: "a.ts", commits: [{ sha: "abc", subject: "fix: it", lines: [{ kind: "-", text: "old" }, { kind: "+", text: "new" }] }] });
+    for (const part of ['<claim branch="feat/x" by="an agent">', "<how>h</how>", "<proof>t.test.ts</proof>", '<commit sha="abc" subject="fix: it">', "-old\n+new"]) expect(text).toContain(part);
+    const args = verifyArgs("q");
+    expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
+    expect(args[args.indexOf("--tools") + 1]).toBe("Read,Grep,Glob");
+    expect(args).toContain("--no-session-persistence");
+  });
+
+  test("its answer: a verdict, why, and whether the named test asserts the fix", () => {
+    expect(readVerify(out({ verdict: "verified", why: " gone ", test: { found: true, asserts_fix: true } }))).toEqual({ verdict: "verified", why: "gone", test: { found: true, assertsFix: true, why: null } });
+    expect(readVerify(out({ verdict: "partly", why: "w", test: { found: false, asserts_fix: true } })).test.assertsFix).toBe(false);
+    expect(readVerify(out({ verdict: "maybe", why: "w", test: {} })).error).toContain("could not check the fix");
+    expect(readVerify({ code: null, stdout: "", stderr: "timed out" }).error).toContain("90 seconds");
+  });
+
+  test("a kept check holds while the branch's diff of the file is the same", () => {
+    expect(verifyHolds({ basis: "a", verdict: "verified" }, "a")).toBe(true);
+    expect(verifyHolds({ basis: "a", verdict: "verified" }, "b")).toBe(false);
+    expect(verifyHolds({ basis: "a", error: "x" }, "a")).toBe(false);
+    expect(verifyHolds(null, "a")).toBe(false);
+  });
+});
+
+// A repo whose origin is a local bare repo, a note dropped on the ticket branch at line 42.
+function setup({ verify = { verdict: "verified", why: "formatDate returns a dash now.", test: { found: true, asserts_fix: true } } } = {}) {
+  const bare = join(tempDir("bare-"), "shop.git");
+  const repo = makeRepo({ origin: null });
+  git(repo, "clone", "-q", "--bare", repo, bare);
+  git(repo, `--git-dir=${bare}`, "symbolic-ref", "HEAD", "refs/heads/main");
+  git(repo, "remote", "add", "origin", bare);
+  git(repo, "fetch", "-q", "origin");
+  git(repo, "remote", "set-head", "origin", "main");
+  const box = join(tempDir(), "box");
+  suggest(repo, box, [], NOTE);
+  const dir = tempDir("stand-");
+  const claude = join(dir, "claude");
+  writeFileSync(claude, `#!/bin/sh\n{ echo "cwd=$PWD"; ls branch/src; } > "${dir}/claude.log"\ncat <<'JSON'\n${JSON.stringify({ is_error: false, structured_output: verify })}\nJSON\n`);
+  chmodSync(claude, 0o755);
+  const notes = join(box, "notes");
+  const folder = join(notes, readdirSync(notes)[0]);
+  const file = join(folder, readdirSync(folder).find((n) => n.endsWith(".json")));
+  return { repo, bare, box, dir, file, id: JSON.parse(readFileSync(file, "utf8")).id, env: { SUGGESTION_BOX_HOME: box, SUGGESTION_BOX_CLAUDE: claude } };
+}
+
+// Rewrites lines of src/invoices.ts (1-based) and commits.
+function edit(repo, message, change) {
+  const path = join(repo, "src", "invoices.ts");
+  const lines = readFileSync(path, "utf8").split("\n");
+  change(lines);
+  writeFileSync(path, lines.join("\n"));
+  git(repo, "commit", "-qam", message);
+  return git(repo, "rev-parse", "HEAD");
+}
+
+const claimOn = (s, branch = BRANCH) => suggest(s.repo, s.box, ["solved", "1"], "how: formatDate returns a dash\nproof: invoices.test.ts: a dash for null\n");
+const noteOf = (s) => JSON.parse(readFileSync(s.file, "utf8"));
+
+describe("proof 1: the change", () => {
+  test("the commits that changed the note's lines, with those lines, and not the ones that only moved them", () => {
+    const s = setup();
+    edit(s.repo, "chore: a header", (lines) => lines.unshift("// header", ""));
+    const fix = edit(s.repo, "fix: a dash for null", (lines) => (lines[43] = "line 42 fixed"));
+    edit(s.repo, "chore: the end", (lines) => lines.push("end"));
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    expect(change.ref).toBe(`refs/heads/${BRANCH}`);
+    expect(change.commits.map((c) => [c.sha, c.subject])).toEqual([[fix, "fix: a dash for null"]]);
+    expect(change.commits[0].lines).toEqual([{ kind: "@", text: "@@ -44 +44 @@" }, { kind: "-", text: "line 42" }, { kind: "+", text: "line 42 fixed" }]);
+  });
+
+  test("followed through a rename", () => {
+    const s = setup();
+    git(s.repo, "mv", "src/invoices.ts", "src/billing.ts");
+    git(s.repo, "commit", "-qm", "refactor: rename");
+    const path = join(s.repo, "src", "billing.ts");
+    writeFileSync(path, readFileSync(path, "utf8").replace("line 43\n", "line 43 fixed\n"));
+    git(s.repo, "commit", "-qam", "fix: in the renamed file");
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    expect(change.path).toBe("src/billing.ts");
+    expect(change.commits.map((c) => c.subject)).toEqual(["fix: in the renamed file"]);
+  });
+
+  test("a deleted file is a change", () => {
+    const s = setup();
+    git(s.repo, "rm", "-q", "src/invoices.ts");
+    git(s.repo, "commit", "-qm", "chore: drop invoices");
+    expect(changeProof(s.repo, noteOf(s), { branch: BRANCH }).commits.map((c) => c.subject)).toEqual(["chore: drop invoices"]);
+  });
+
+  test("after a rebase the note's commit is gone: its lines are found by the snippet on the branch's base", () => {
+    const s = setup();
+    git(s.repo, "switch", "-q", "main");
+    edit(s.repo, "chore: main moves", (lines) => lines.unshift("// main"));
+    git(s.repo, "push", "-q", "origin", "main");
+    git(s.repo, "switch", "-q", "-c", "feat/redo");
+    const fix = edit(s.repo, "fix: on a fresh branch", (lines) => (lines[42] = "line 42 fixed"));
+    const change = changeProof(s.repo, noteOf(s), { branch: "feat/redo" });
+    expect(change.commits.map((c) => c.sha)).toEqual([fix]);
+  });
+
+  test("no commit yet, and a branch that is not here", () => {
+    const s = setup();
+    expect(changeProof(s.repo, noteOf(s), { branch: BRANCH }).commits).toEqual([]);
+    expect(changeProof(s.repo, noteOf(s), { branch: "feat/elsewhere" }).why).toBe("feat/elsewhere is not here, not even fetched");
+  });
+});
+
+describe("proof 3: landed", () => {
+  const gh = (dir, prs) => {
+    const file = join(dir, "gh");
+    writeFileSync(file, `#!/bin/sh\necho '${JSON.stringify(prs)}'\n`);
+    chmodSync(file, 0o755);
+    return { SUGGESTION_BOX_GH: file };
+  };
+  const landed = (s, branch, env = gh(s.dir, [])) => {
+    const change = changeProof(s.repo, noteOf(s), { branch });
+    return landedProof(s.repo, "github.com/acme/shop", { branch }, change, { ...s.env, ...env });
+  };
+
+  test("a merge: the solving commit is in the fetched main", () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    expect(landed(s, BRANCH).state).toBe("waiting");
+    git(s.repo, "push", "-q", "origin", `${BRANCH}:main`);
+    git(s.repo, "fetch", "-q", "origin");
+    expect(landed(s, BRANCH)).toMatchObject({ state: "landed", how: `in main (${fix.slice(0, 7)})` });
+  });
+
+  test("a squash or rebase merge: the same patch is in main", () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    git(s.repo, "switch", "-q", "main");
+    edit(s.repo, "chore: main moves", (lines) => lines.push("end"));
+    git(s.repo, "cherry-pick", fix);
+    git(s.repo, "push", "-q", "origin", "main");
+    git(s.repo, "fetch", "-q", "origin");
+    git(s.repo, "switch", "-q", BRANCH);
+    expect(landed(s, BRANCH)).toMatchObject({ state: "landed", how: `the same change is in main (${fix.slice(0, 7)})` });
+  });
+
+  test("the branch's PR: merged, open, closed unmerged", () => {
+    const s = setup();
+    edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    expect(landed(s, BRANCH, gh(s.dir, [{ number: 44, state: "MERGED", mergeCommit: { oid: "abc" } }]))).toMatchObject({ state: "landed", how: "PR #44 merged" });
+    expect(landed(s, BRANCH, gh(s.dir, [{ number: 44, state: "OPEN" }]))).toMatchObject({ state: "waiting", how: "PR #44 is open" });
+    expect(landed(s, BRANCH, gh(s.dir, [{ number: 44, state: "CLOSED" }]))).toMatchObject({ state: "never", how: "PR #44 was closed without merging" });
+  });
+
+  test("a branch that is gone here and on origin, with no merged PR and nothing in main, never landed", () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    const change = changeProof(s.repo, noteOf(s), { branch: BRANCH });
+    git(s.repo, "switch", "-q", "main");
+    git(s.repo, "branch", "-q", "-D", BRANCH);
+    const proof = () => landedProof(s.repo, "github.com/acme/shop", { branch: BRANCH }, change, { ...s.env, ...gh(s.dir, []) });
+    expect(proof().state).toBe("waiting");
+    git(s.repo, "push", "-q", "origin", "--delete", BRANCH);
+    // A fetched copy outlives a branch deleted on origin: origin itself is asked.
+    git(s.repo, "update-ref", `refs/remotes/origin/${BRANCH}`, fix);
+    expect(proof().state).toBe("never");
+  });
+});
+
+describe("box.js proofs, verify, confirm and watch", () => {
+  test("proofs: the change and where it stands, after a fetch", async () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    const answer = await run(["proofs", s.repo, s.id], s.env);
+    expect(answer.change.commits.map((c) => c.sha)).toEqual([fix]);
+    expect(answer.landed.state).toBe("waiting");
+  });
+
+  test("verify: your claude reads a snapshot of the claim's branch; kept until the file's diff moves", async () => {
+    const s = setup();
+    edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    const first = await run(["verify", s.repo, s.id], s.env);
+    expect(first.verify).toMatchObject({ verdict: "verified", why: "formatDate returns a dash now.", test: { found: true, assertsFix: true } });
+    expect(readFileSync(join(s.dir, "claude.log"), "utf8")).toContain("invoices.ts");
+    expect(noteOf(s).verify.verdict).toBe("verified");
+    expect(await run(["verify", s.repo, s.id], s.env)).toEqual({ ok: true, reused: true });
+    edit(s.repo, "fix: more", (lines) => (lines[42] = "line 43 fixed"));
+    expect((await run(["verify", s.repo, s.id], s.env)).verify).toBeDefined();
+    expect((await run(["verify", s.repo, s.id, "--again"], s.env)).verify).toBeDefined();
+  });
+
+  test("verify only a claim waiting to be verified", async () => {
+    const s = setup();
+    expect((await run(["verify", s.repo, s.id], s.env)).error).toBe("note 1 is open; only a claim waiting to be verified is checked");
+  });
+
+  test("confirm keeps the proofs as they stood; not solved drops the claim and its check", async () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    await run(["verify", s.repo, s.id], s.env);
+    await run(["act", s.repo, s.id, "confirm"], s.env);
+    const confirmed = noteOf(s).solved;
+    expect(confirmed.confirmed.proofs.commits).toEqual([{ sha: fix, subject: "fix: a dash" }]);
+    expect(confirmed.confirmed.proofs.verify.verdict).toBe("verified");
+    expect(confirmed.landed.state).toBe("waiting");
+    const t = setup({ verify: { verdict: "not_fixed", why: "still throws", test: { found: false, asserts_fix: false } } });
+    claimOn(t);
+    await run(["verify", t.repo, t.id], t.env);
+    await run(["act", t.repo, t.id, "not-solved", "--reason", "still throws"], t.env);
+    expect(noteOf(t)).toMatchObject({ status: "open", solved: null, verify: null, notVerified: { reason: "still throws" } });
+  });
+
+  test("watch: a confirmed fix that lands says so; one that never lands comes back to To verify", async () => {
+    const s = setup();
+    edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    await run(["act", s.repo, s.id, "confirm"], s.env);
+    expect((await run(["watch", s.repo], s.env)).results).toEqual([{ number: 1, state: "waiting", how: "no PR yet" }]);
+    git(s.repo, "push", "-q", "origin", `${BRANCH}:main`);
+    const watched = await run(["watch", s.repo], s.env);
+    expect(watched.results[0].state).toBe("landed");
+    expect(noteOf(s).solved.landed).toMatchObject({ state: "landed" });
+    expect((await run(["watch", s.repo], s.env)).watched).toBe(0);
+
+    const t = setup();
+    edit(t.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(t);
+    await run(["act", t.repo, t.id, "confirm"], t.env);
+    git(t.repo, "switch", "-q", "main");
+    git(t.repo, "branch", "-q", "-D", BRANCH);
+    git(t.repo, "push", "-q", "origin", "--delete", BRANCH);
+    await run(["watch", t.repo], t.env);
+    const back = (await run(["read", t.repo], t.env)).notes[0];
+    expect(back).toMatchObject({ state: "to verify", status: "open", solved: { confirmed: null, neverLanded: { how: "its branch is gone, with no merged PR and no same change in main" } } });
+  });
+
+  test("show: the file as the solving commit has it", async () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    const shown = await run(["show", s.repo, fix, "src/invoices.ts", "42"], s.env);
+    expect(readFileSync(shown.file, "utf8")).toContain("line 42 fixed");
+    expect(shown.line).toBe(42);
+  });
+});
