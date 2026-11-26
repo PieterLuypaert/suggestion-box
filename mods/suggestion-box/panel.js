@@ -139,7 +139,7 @@ function noteCard(s, note) {
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
       .when(note.state === "filed", (el) => el.child(chip(t, `filed #${note.issue?.number}`, t.ansi2))))
     .when(Boolean(note.check?.error) && !isChecking(s, note), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`Not checked: ${note.check.error}`)))
-    .when(Boolean(note.check?.gone) && !isChecking(s, note), (el) => el.child(goneBanner(s, note)))
+    .when(Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note), (el) => el.child(goneBanner(s, note)))
     .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
     .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, false, a === "check" && isChecking(s, note))))));
 }

@@ -18,8 +18,9 @@ const DATA = "suggestion-box.data";
 // reload of the mod never acts twice.
 const LIVE = "suggestion-box.live";
 const CHANGES_MS = 60000;
-// The check fetches (20 s at most), takes two snapshots and waits up to 90 s on Claude.
-const CHECK_MS = 150000;
+// The check fetches (20 s at most), takes two snapshots (45 s each at most), finds claude (10 s)
+// and waits up to 90 s on Claude: 210 s, with room to spare.
+const CHECK_MS = 240000;
 const UNDO_MS = 5000;
 const NOTICE_MS = 6000;
 const WIGGLE_MS = 700;
@@ -349,7 +350,7 @@ export default class SuggestionBox extends View {
     const folder = this.here().folder;
     cx.spawn(async (cx) => {
       try {
-        await box(this.node, this.boxJs, ["check", folder, note.id], CHECK_MS);
+        await box(this.node, this.boxJs, ["check", folder, note.id, ...(note.check ? ["--again"] : [])], CHECK_MS);
         this.error = "";
       } catch (error) {
         this.error = `The check did not finish: ${error.message}`;
