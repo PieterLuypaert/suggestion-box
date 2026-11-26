@@ -42,9 +42,10 @@ describe("the actions each state allows", () => {
   });
 });
 
-test("the buttons leave out what the box does not do yet: Fix in new tab", () => {
+test("the buttons are every action the state allows", () => {
   expect(buttonsFor(rows.open)).toEqual(["check", "file", "bin"]);
-  expect(buttonsFor(rows.filed)).toEqual([]);
+  expect(buttonsFor(rows.filed)).toEqual(["fix"]);
+  expect(buttonsFor({ ...rows.filed, issue: { number: 812, closed: { at: "t" } } })).toEqual([]);
   expect(buttonsFor({ ...rows.open, changed: { on: "main" } })).toEqual(["mark-solved", "check", "file", "bin"]);
 });
 

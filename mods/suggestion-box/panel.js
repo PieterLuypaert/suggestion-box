@@ -104,10 +104,12 @@ function groups(s) {
 
 const LABELS = { check: "Check", "mark-solved": "Mark solved", file: "File issue", bin: "Bin", confirm: "Confirm solved", "not-solved": "Not solved", reopen: "Reopen", restore: "Restore", fix: "Fix in new tab" };
 
+const BUSY = { check: "Checking…", fix: "Starting the tab…" };
+
 function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
   if (isBusy) {
     return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
-      .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child("Checking…"));
+      .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child(BUSY[action] ?? "Working…"));
   }
   const label = action === "check" && note.check && !note.check.error ? "Check again" : LABELS[action];
   return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
@@ -257,6 +259,11 @@ function filedLines(s, note) {
     .child(h_flex().gap(8).items_center()
       .child(link(t, `issue:${note.id}`, `Filed #${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
       .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
+    .when(Boolean(note.issue?.closed), (el) => el.child(div().text_color(t.muted).child(`Issue #${issue.number} closed`)))
+    .when(Boolean(note.fix?.branch) && !note.issue?.closed, (el) => el.child(link(t, `fixing:${note.id}`, `Fixing in ${note.fix.branch} ↗`, (_e, cx) => s.act("jump-fix", note, cx))))
+    .when(Boolean(note.fix?.starting) && !note.fix?.isStale, (el) => el.child(div().text_color(t.muted).child("A fix is starting in a new tab…")))
+    .when(Boolean(note.fix?.isStale), (el) => el.child(div().text_color(t.working).whitespace_normal().child("A fix was starting but never reported back. Look for its tab before you start it again.")))
+    .when(Boolean(note.fixError) && !note.fix, (el) => el.child(div().text_color(t.blocked).whitespace_normal().child(`Fix in new tab did not start: ${note.fixError.why}`)))
     .when(Boolean(note.board?.error), (el) => el.child(h_flex().gap(8).items_center()
       .child(div().flex_1().min_w(0).whitespace_normal().text_color(t.working).child(`Not on the board: ${note.board.error}`))
       .child(plainButton(t, `board:${note.id}`, "Add to board", (_e, cx) => s.act("board", note, cx)))))
@@ -270,7 +277,7 @@ function filedCard(s, note) {
   return v_flex().id(`filed:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1).border_color(t.chrome).bg(t.chrome)
     .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
     .child(filedLines(s, note))
-    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act)))));
+    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, a === "fix", a === "fix" && Boolean(s.fixing?.has(note.id)))))));
 }
 
 const VERDICT_LABELS = { checked: "Checked", corrected: "Corrected", unsure: "Unsure" };
@@ -419,7 +426,7 @@ function history(s) {
       .when(note.state === "filed", (el) => el.child(filedLines(s, note)))
       .child(h_flex().gap(8).text_size(11.5).text_color(t.muted).when(Boolean(what), (row) => row.child(what)).child(note.age))
       .when(Boolean(note.solved?.how), (el) => el.child(div().pl(8).border_l(2).border_color(t.border).text_size(12).text_color(t.muted).whitespace_normal().child(note.solved.how)))
-      .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act)))));
+      .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, false, a === "fix" && Boolean(s.fixing?.has(note.id)))))));
   }));
 }
 

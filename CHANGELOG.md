@@ -4,6 +4,22 @@ All notable changes to the suggestion box. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-26
+
+### Added
+
+- Fix in new tab: a filed GitHub issue of the project's own repo starts as a ticket through the
+  parallel-tickets launcher (`issues launch --space`), in the space you are in, on a branch named
+  as parallel-tickets names them and checked with `issues branch` (`-2` when taken). The note shows
+  `Fixing in <branch> ↗`, which jumps to the tab, so a fix never starts twice; a failing launcher
+  leaves its last line on the note.
+- The button shows only where the launcher, its hagent and `--space` are there and the project's
+  config, if any, names GitHub and this repo.
+- The watch also asks GitHub about the filed issues: a closed one says so and gets no fix, and one
+  opened again gets its button back.
+- A fix never starts twice: the note is marked before the launcher runs, also against a second
+  panel or window; a start that never reported back is called out after ten minutes.
+
 ## [0.5.0] - 2026-11-26
 
 ### Added

@@ -15,6 +15,7 @@
 //   node cli/box.js verify <folder> <note id> [--again]
 //   node cli/box.js watch <folder>
 //   node cli/box.js show <folder> <sha> <path> [line]
+//   node cli/box.js fix <folder> <note id> <space id>
 //   node cli/box.js collecting <folder> on|off [--all]
 //   node cli/box.js prune <folder>
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -24,7 +25,8 @@ import { fold, stateOf } from "../mods/suggestion-box/events.js";
 import { age } from "../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName } from "../mods/suggestion-box/project.js";
 import { stillHolds } from "../mods/suggestion-box/check.js";
-import { ACTS, allows, applyAction, buttonsFor, isWatched, recordIssue, recordLanded } from "../mods/suggestion-box/rules.js";
+import { ACTS, allows, applyAction, buttonsFor, isWatched, recordClosed, recordFix, recordIssue, recordLanded, startFix, withStaleFix } from "../mods/suggestion-box/rules.js";
+import { freeBranch, gateFor, launchFix } from "./fix.js";
 import { verifyHolds } from "../mods/suggestion-box/proofs.js";
 import { changeProof, fileAt, landedProof, runVerify } from "./proofs.js";
 import { fetch } from "./claude.js";
@@ -32,7 +34,7 @@ import { fillProblem, isPublicTarget, scanTexts } from "../mods/suggestion-box/e
 import { githubRepo, issueText } from "../mods/suggestion-box/issue.js";
 import { scanBlock } from "../mods/suggestion-box/scan.js";
 import { runCheck, stopRunning } from "./check.js";
-import { addToBoard, codeLinkFor, createIssue, issueSince, similarIssues, targetFor } from "./file.js";
+import { addToBoard, codeLinkFor, createIssue, gh, issueSince, similarIssues, targetFor } from "./file.js";
 import { changeFor, defaultRef } from "./changes.js";
 import { repoAt } from "./git.js";
 import { boxRoot, collecting, readSettings } from "./store.js";
@@ -43,7 +45,7 @@ const KEEP_DAYS = 30;
 export async function run(args, env = process.env, now = new Date()) {
   const [command, folder, ...rest] = args;
   const project = projectAt(folder, env);
-  if (command === "read") return read(project, rest.includes("--changes"), now);
+  if (command === "read") return read(project, rest.includes("--changes"), now, env);
   if (!project.dir) return { error: project.why };
   if (command === "act") return act(project, rest, now, env);
   if (command === "check") return check(project, rest[0], env, now, rest.includes("--again"));
@@ -55,6 +57,7 @@ export async function run(args, env = process.env, now = new Date()) {
   if (command === "verify") return verify(project, rest[0], env, now, rest.includes("--again"));
   if (command === "watch") return watch(project, env, now);
   if (command === "show") return fileAt(project.repo.top, rest[0], rest[1], Number(rest[2]) || null);
+  if (command === "fix") return fix(project, rest[0], rest[1], env, now);
   if (command === "collecting") return switchCollecting(project, rest, env);
   if (command === "prune") return prune(project, now);
   return { error: `unknown command ${command}` };
@@ -69,14 +72,17 @@ function projectAt(folder, env) {
   return { repo, key, name: projectName(key), root, dir: join(root, "notes", projectFolder(key)) };
 }
 
-function read(project, withChanges, now) {
+function read(project, withChanges, now, env) {
   if (!project.dir) return { project: null, why: project.why };
   // Only the notes folder is made: a project's own folder appears with its first note, so reading
   // a repo that never had one leaves nothing behind. The box watches the notes folder until then.
   mkdirSync(join(project.root, "notes"), { recursive: true });
   const settings = readSettings(project.root);
   const mainRef = withChanges ? defaultRef(project.repo.top) : null;
-  const views = (existsSync(project.dir) ? notesOf(project.dir) : []).map((note) => describe(project, note, withChanges, mainRef, now));
+  const notes = existsSync(project.dir) ? notesOf(project.dir) : [];
+  // Whether the launcher can start a fix here matters only once a note is filed.
+  const fixing = notes.some((note) => stateOf(note) === "filed") ? gateFor(project.repo.top, project.key, env) : null;
+  const views = notes.map((note) => describe(project, withStaleFix(note, now.toISOString()), withChanges, mainRef, now, fixing));
   // A filed note is history; the panel keeps the ones it just filed in sight until it closes.
   const live = views.filter((v) => ["open", "to verify"].includes(v.state));
   // A fix still watched stays in sight, however long it waits to land.
@@ -84,16 +90,19 @@ function read(project, withChanges, now) {
   return {
     project: { key: project.key, name: project.name, dir: project.dir, exists: existsSync(project.dir), notes: join(project.root, "notes"), top: project.repo.top, checkout: project.repo.checkout, origin: project.repo.origin },
     collecting: { all: settings.collecting !== false, project: collecting(settings, project.key) },
+    fixing,
     notes: live.sort((a, b) => b.number - a.number),
     history: recent.sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated)),
     counts: { open: views.filter((v) => v.state === "open").length, toVerify: views.filter((v) => v.state === "to verify").length },
   };
 }
 
-function describe(project, note, withChanges, mainRef, now) {
+// Fix in new tab only where the launcher can start it, and for an issue in this very repo.
+function describe(project, note, withChanges, mainRef, now, fixing) {
   const view = { ...note, state: stateOf(note), age: age(note.created, now.getTime()) };
   if (withChanges && view.state === "open") view.changed = changeFor(project.repo.top, note, mainRef);
-  view.actions = buttonsFor(view);
+  const canFix = fixing?.can && String(note.issue?.repo ?? "").toLowerCase() === githubRepo(project.key);
+  view.actions = buttonsFor(view).filter((action) => action !== "fix" || canFix);
   return view;
 }
 
@@ -309,12 +318,79 @@ async function verify(project, id, env, now, again) {
   return written.skipped ? { ok: true, dropped: true } : { ok: true, verify: result.verify };
 }
 
+// Fix in new tab: a free branch, then `issues launch --space` opens the ticket's tab. The note
+// keeps the branch, so the fix never starts twice, or the launcher's last line when it failed.
+function fix(project, id, space, env, now) {
+  const loaded = loadNote(project.dir, id);
+  if (!loaded) return { error: `there is no note ${id}` };
+  const view = fold(loaded.note, loaded.events.map((e) => e.event));
+  if (String(view.issue?.repo ?? "").toLowerCase() !== githubRepo(project.key)) return { error: `issue #${view.issue?.number} is not in this repo, so a ticket cannot start here` };
+  const gate = gateFor(project.repo.top, project.key, env);
+  if (!gate.can) return { error: gate.why };
+  if (!space) return { error: "say which space of the Herdr app the tab opens in" };
+  // The marker goes on with the state checked under the same write, so a second start, from
+  // another panel or window, finds it and stops.
+  const at = now.toISOString();
+  const started = update(project, id, ({ view: fresh }) => {
+    const current = withStaleFix(fresh, at);
+    if (!allows(current, "fix")) return { error: refusedFix(current) };
+    return { note: startFix(current, at, space) };
+  }, { foldEvents: true });
+  if (started.error) return started;
+  const named = freeBranch(project.repo.top, view.filed?.title ?? view.title, env);
+  const opened = named.error ? named : launchFix(project.repo.top, { space, ticket: view.issue.number, branch: named.branch }, env);
+  update(project, id, ({ view: fresh }) => ({ note: recordFix(fresh, now.toISOString(), { ...opened, space }) }), { foldEvents: true });
+  return opened.error ? { error: opened.error } : { ok: true, ...opened };
+}
+
+function refusedFix(view) {
+  if (view.fix?.starting) return `a fix for note ${view.number} is starting already; nothing started`;
+  if (view.fix) return `note ${view.number} is already fixing in ${view.fix.branch}; nothing started`;
+  return `note ${view.number} is ${stateOf(view)}${view.issue?.closed ? ` and issue #${view.issue.number} is closed` : ""}; nothing started`;
+}
+
+// Filed notes learn whether their issue is closed, or open again: per repo, one question to
+// GitHub about exactly those issue numbers.
+function closedIssues(project, env, now) {
+  const filed = notesOf(project.dir).filter((note) => stateOf(note) === "filed" && note.issue?.repo && note.issue?.number);
+  let changed = 0;
+  for (const repo of [...new Set(filed.map((note) => note.issue.repo))]) {
+    const notes = filed.filter((note) => note.issue.repo === repo);
+    const states = issueStates(repo, notes.map((note) => note.issue.number), env);
+    if (!states) continue;
+    for (const note of notes) {
+      const state = states.get(note.issue.number);
+      if (!state) continue;
+      const closedAt = state.state === "CLOSED" ? state.closedAt ?? now.toISOString() : null;
+      if (Boolean(closedAt) === Boolean(note.issue.closed)) continue;
+      update(project, note.id, ({ view }) => ({ note: recordClosed(view, now.toISOString(), closedAt) }), { foldEvents: true });
+      changed++;
+    }
+  }
+  return changed;
+}
+
+// The state of each of these issues of a repo, from one GraphQL query, or null when gh could not ask.
+function issueStates(repo, numbers, env) {
+  const [owner, name] = repo.split("/");
+  const fields = numbers.map((n) => `i${n}: issue(number: ${Number(n)}) { number state closedAt }`).join(" ");
+  const answer = gh(["api", "graphql", "-f", `query=query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, "-F", `owner=${owner}`, "-F", `name=${name}`], { env });
+  if (answer.code !== 0) return null;
+  try {
+    const found = Object.values(JSON.parse(answer.stdout).data?.repository ?? {}).filter(Boolean);
+    return new Map(found.map((issue) => [issue.number, issue]));
+  } catch {
+    return null;
+  }
+}
+
 // Confirmed notes whose fix has not landed, looked at again after one fetch: landed, still waiting,
-// or back to To verify when it never landed.
+// or back to To verify when it never landed. Filed notes learn when their issue closed.
 function watch(project, env, now) {
   if (!existsSync(project.dir)) return { ok: true, watched: 0 };
+  const closed = closedIssues(project, env, now);
   const watched = notesOf(project.dir).filter(isWatched);
-  if (!watched.length) return { ok: true, watched: 0 };
+  if (!watched.length) return { ok: true, watched: 0, closed };
   fetch(project.repo.top);
   const mainRef = defaultRef(project.repo.top);
   const results = [];
@@ -324,7 +400,7 @@ function watch(project, env, now) {
     update(project, note.id, ({ view }) => (isWatched(view) ? { note: recordLanded(view, now.toISOString(), landed) } : { skip: true }), { foldEvents: true });
     results.push({ number: note.number, state: landed.state, how: landed.how });
   }
-  return { ok: true, watched: watched.length, results };
+  return { ok: true, watched: watched.length, results, closed };
 }
 
 function flags(options) {

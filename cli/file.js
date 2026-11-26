@@ -27,7 +27,7 @@ function json(result) {
 }
 
 // The config as the fresh default branch has it, else null.
-function configText(top, mainRef) {
+export function configText(top, mainRef) {
   for (const file of [".ai-tooling/config.yml", ".claude/project.yml"]) {
     const text = mainRef ? gitAnswer(top, ["show", `${mainRef}:${file}`]) : null;
     if (text !== null) return text;

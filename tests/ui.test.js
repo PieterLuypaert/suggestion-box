@@ -28,7 +28,11 @@ const answer = {
     { id: "h2", number: 5, title: "Stale cache key", state: "solved", age: "2d", solved: { branch: "feat/c", how: "The key has the currency now.", confirmed: { at: "t" }, landed: { state: "landed", how: "PR #40 merged" } }, actions: ["reopen"] },
     { id: "h5", number: 9, title: "Slow export", state: "solved", age: "1h", solved: { branch: "feat/e", how: "Streams now.", confirmed: { at: "t" } }, actions: ["reopen"] },
     { id: "h3", number: 6, title: "README env vars", state: "filed", issue: { number: 799, url: "https://github.com/acme/shop/issues/799", closes: "Closes #799" }, solved: { branch: "feat/d", how: "Documented.", confirmed: { at: "t" } }, age: "6d", actions: [] },
-    { id: "h4", number: 8, title: "Rounding in totals", filed: { title: "Totals round each line instead of the sum" }, state: "filed", issue: { number: 812, url: "https://github.com/acme/shop/issues/812", closes: "Closes #812" }, board: { error: "run gh auth refresh -s project" }, age: "now", actions: [] },
+    { id: "h4", number: 8, title: "Rounding in totals", filed: { title: "Totals round each line instead of the sum" }, state: "filed", issue: { number: 812, url: "https://github.com/acme/shop/issues/812", closes: "Closes #812" }, board: { error: "run gh auth refresh -s project" }, fixError: { why: "the primary checkout has uncommitted work" }, age: "now", actions: ["fix"] },
+    { id: "h6", number: 10, title: "Fee rounding on trials", state: "filed", issue: { number: 813, url: "u" }, fix: { branch: "fix/fee-rounding-trials", pane: "t9" }, age: "now", actions: [] },
+    { id: "h7", number: 11, title: "Old cache header", state: "filed", issue: { number: 790, url: "u", closed: { at: "t" } }, age: "3d", actions: [] },
+    { id: "h8", number: 12, title: "A fix on its way", state: "filed", issue: { number: 814, url: "u" }, fix: { starting: true, at: "t" }, age: "now", actions: [] },
+    { id: "h9", number: 13, title: "A fix that never answered", state: "filed", issue: { number: 815, url: "u" }, fix: { starting: true, at: "t", isStale: true }, age: "1h", actions: ["fix"] },
   ],
   counts: { open: 2, toVerify: 1 },
 };
@@ -45,6 +49,7 @@ const scenes = {
   "panel with the editor: checking, the gone banner, a failed filing": `panel({ ...base, editor: editor({ isChecking: true, labels: { problem: { label: "checking" }, evidence: { label: "checking" }, current: { label: "checking" }, desired: { label: "checking" } }, gone: { on: "main", why: "formatDate returns a dash now" }, similar: null, off: "Waiting for the check", error: "gh could not create the issue: HTTP 410" }) })`,
   "panel with the editor: not solved after all, copy for monday, not checked": `panel({ ...base, editor: editor({ gone: { on: "main", why: "it looks fixed" }, notGone: { reason: "" }, reason, canCopy: true, checkError: "Claude took longer than 90 seconds", line: "This project's tracker is monday: Copy issue puts it on your clipboard", off: null }) })`,
   "panel history with filed notes": `panel({ ...base, view: "history" })`,
+  "panel with just filed notes: Fix in new tab, a fix running, one starting": `panel({ ...base, justFiled: new Set(["h4", "h6"]), fixing: new Set(["h4"]) })`,
   "panel with the three proofs: found, running, never landed": `panel({ ...base, expanded: new Set(["n1", "n6"]), proofs: new Map([["n1", proofsFound], ["n6", { isLoading: true }]]), verifying: new Set(["n6"]) })`,
   "panel with the proofs failing": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], verify: { error: "Claude took longer than 90 seconds" } }] }, proofs: new Map([["n1", { change: { why: "feat/8511-groups is not here, not even fetched" }, landed: { state: "never", how: "its branch is gone, with no merged PR and no same change in main" } }]]) })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
@@ -79,7 +84,7 @@ export default class Scene extends View {
     const reason = this.reason;
     const labels = { problem: { label: "checked" }, evidence: { label: "agent", swap: "claude" }, current: { label: "corrected", swap: "agent" }, desired: { label: "unsure", question: "A dash, or refuse the invoice?" } };
     const editor = (over) => ({ id: "n4", fields, reason: null, texts, labels, hits: [], isChecking: false, target: { kind: "github" }, line: "→ acme/shop (public) · triage · board Shop › Backlog", similar: [], off: null, error: "", isFiling: false, notGone: null, gone: null, checkError: null, canCopy: false, canStartOver: false, ...over });
-    const base = { t, answer, view: "list", expanded: new Set(), selected: null, undo: null, checking: new Set(), editor: null, justFiled: new Set(), proofs: new Map(), verifying: new Set(), mono: "Menlo", notice: null, error: "", showSettings: false, collecting: answer.collecting, noProject: null, act: () => {} };
+    const base = { t, answer, view: "list", expanded: new Set(), selected: null, undo: null, checking: new Set(), editor: null, justFiled: new Set(), proofs: new Map(), verifying: new Set(), fixing: new Set(), mono: "Menlo", notice: null, error: "", showSettings: false, collecting: answer.collecting, noProject: null, act: () => {} };
     return ${draw};
   }
 }

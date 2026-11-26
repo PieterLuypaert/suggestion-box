@@ -12,6 +12,9 @@ import { SECTIONS } from "./notes.js";
 import { button, panel } from "./panel.js";
 import { buttonsFor, isWatched } from "./rules.js";
 
+// A filed note whose issue may still close, or open again: the watch looks for that too.
+const hasOpenIssue = (note) => note.state === "filed" && Boolean(note.issue);
+
 const BLOCK = "suggestion-box";
 const MOD = "suggestion-box";
 // The other right-hand panels: Quarterdeck, Chartroom, and Herdr's Files and Changes.
@@ -28,6 +31,8 @@ const CHECK_MS = 240000;
 // A lookup runs up to eight gh calls and a filing up to fourteen, each stopped after 20 s (GH_MS in
 // cli/file.js). A filing the panel gives up on is found again by the next Create issue.
 const FILE_MS = 330000;
+// Fix in new tab: issues branch (60 s at most), then issues launch (240 s at most).
+const FIX_MS = 330000;
 const LOOKUP_MS = 200000;
 const SHOWN_MS = 1000;
 // A fetch (20 s at most) and, per claim, git and gh for its PR (20 s at most).
@@ -246,15 +251,18 @@ export default class SuggestionBox extends View {
   // Confirmed fixes not landed yet: every few minutes, did they land, or never will?
   watchFixes(cx) {
     const answer = this.answer();
-    if (!answer?.project || !(answer.history ?? []).some(isWatched) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
+    const history = answer?.history ?? [];
+    if (!answer?.project || !history.some((note) => isWatched(note) || hasOpenIssue(note)) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
     this.watchedAt = Date.now();
     const folder = this.here().folder;
-    // A fetch, then per watched fix gh and git ls-remote, each 20 s at most.
-    const timeout = PROOFS_MS + (answer.history ?? []).filter(isWatched).length * 45000;
+    // One question per repo about its filed issues, a fetch, then per watched fix gh and git
+    // ls-remote, each 20 s at most.
+    const repos = new Set(history.filter(hasOpenIssue).map((note) => note.issue.repo)).size;
+    const timeout = PROOFS_MS + repos * 25000 + history.filter(isWatched).length * 45000;
     cx.spawn(async (cx) => {
       try {
         const result = await box(this.node, this.boxJs, ["watch", folder], timeout);
-        if (result.watched) this.read(cx, false);
+        if (result.watched || result.closed) this.read(cx, false);
       } catch (error) {
         console.log(`suggestion box: watching fixes failed: ${error.message}`);
       }
@@ -339,6 +347,8 @@ export default class SuggestionBox extends View {
     // Proofs 1 and 3 of each claim opened since the panel showed, and the claims Claude is checking.
     this.proofs = new Map();
     this.verifying = new Set();
+    // Notes whose fix is starting in a new tab.
+    this.fixing = new Set();
     // Notes filed while the panel is open: they stay in sight until it closes.
     this.justFiled = new Set();
     this.handle = cx.focus_handle();
@@ -377,6 +387,8 @@ export default class SuggestionBox extends View {
     if (name === "expand") this.toggleExpanded(note, cx);
     if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
     if (name === "open-at") return this.openAt(note);
+    if (name === "fix") return this.startFix(cx, note);
+    if (name === "jump-fix") return this.jumpToFix(note);
     if (name === "open-file") return this.openFile(note);
     if (name === "jump") return this.jump(note);
     if (name === "collect") return this.write(cx, ["collecting", where, this.answer()?.collecting?.project ? "off" : "on"]);
@@ -442,6 +454,42 @@ export default class SuggestionBox extends View {
       cx.notify();
     });
     cx.notify();
+  }
+
+  // Fix in new tab: the ticket starts in this space through the parallel-tickets launcher, and the
+  // box stays where it is.
+  startFix(cx, note) {
+    const space = this.spaceId();
+    if (!this.boxJs || this.fixing.has(note.id) || !space) return;
+    this.fixing.add(note.id);
+    this.mine.set(note.id, Date.now() + 15000);
+    const folder = this.here().folder;
+    cx.spawn(async (cx) => {
+      try {
+        const answer = await box(this.node, this.boxJs, ["fix", folder, note.id, space], FIX_MS);
+        this.error = "";
+        this.say(cx, `Fixing note ${note.number} in ${answer.branch}: its tab is open in this space.`);
+      } catch (error) {
+        this.error = `Fix in new tab did not start for note ${note.number}: ${error.message}`;
+      }
+      this.fixing.delete(note.id);
+      this.read(cx, false);
+      cx.notify();
+    });
+    cx.notify();
+  }
+
+  spaceId() {
+    const at = focused();
+    return (spaces().find((one) => one.id === at?.space) ?? spaces().find((one) => one.active))?.id ?? null;
+  }
+
+  // The tab the fix runs in, while it is open.
+  jumpToFix(note) {
+    const id = note.fix?.pane;
+    const terminal = id && terminals().find((one) => one.address === id || one.id === id);
+    if (terminal) return run("pane.focus", { terminal: terminal.address ?? id });
+    notify({ title: "Suggestion box", body: `The tab of ${note.fix?.branch} is closed.`, level: "info" });
   }
 
   // The note's file as the solving commit has it, in the editor at the note's line there.
@@ -875,6 +923,7 @@ export default class SuggestionBox extends View {
       editor: this.editorView(),
       proofs: this.proofs,
       verifying: this.verifying,
+      fixing: this.fixing,
       mono: settings()?.font || "Menlo",
       justFiled: this.justFiled,
       notice: this.notice,
