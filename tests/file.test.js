@@ -41,7 +41,7 @@ function setup({ config = null, check = CHECKED, gh = {} } = {}) {
   writeFileSync(stand, `#!/bin/sh
 printf '%s\\n' "---" "$@" >> "${dir}/log"
 case "$1 $2" in
-  "repo view") echo '{"visibility":"${gh.visibility ?? "PUBLIC"}"}' ;;
+  "repo view") echo '{"visibility":"${gh.visibility ?? "PUBLIC"}","nameWithOwner":"${gh.name ?? "acme/shop"}"}' ;;
   "label list") echo '${JSON.stringify(gh.labels ?? [{ name: "triage" }])}' ;;
   "issue list") ${gh.searchFails ? "echo 'HTTP 502' >&2; exit 1" : `echo '[{"number":12,"title":"PDF export crashes","url":"https://github.com/acme/shop/issues/12"}]'`} ;;
   "issue create") cat > "${dir}/body"; ${gh.during ?? ":"}; ${gh.createFails ? "echo 'GraphQL: Could not resolve to a Repository' >&2; exit 1" : "echo 'Creating issue in acme/shop'; echo 'https://github.com/acme/shop/issues/812'"} ;;
@@ -93,6 +93,18 @@ describe("box.js target", () => {
     expect(answer.target.labelMissing).toBe(true);
     expect(answer.target.board.problem).toBe("run gh auth refresh -s project");
     expect(answer.similar).toBeNull();
+  });
+
+  test("GitHub's own spelling of the repo, which a code link needs to show as code", async () => {
+    const s = setup({ gh: { name: "Acme/Shop" } });
+    const answer = await run(["target", s.repo, s.id], s.env);
+    expect(answer.target.repo).toBe("Acme/Shop");
+    expect(answer.link.url).toStartWith("https://github.com/Acme/Shop/blob/");
+  });
+
+  test("a board without the config's column says so before anything is created", async () => {
+    const s = setup({ config: CONFIG.replace("todo: Backlog", "todo: Doing") });
+    expect((await run(["target", s.repo, s.id], s.env)).target.board.problem).toBe("the board has no Status column called Doing");
   });
 
   test("a tracker on monday copies instead", async () => {
@@ -147,6 +159,21 @@ describe("box.js file", () => {
     rmSync(join(s.dir, "no-scope"));
     expect(await run(["board", s.repo, s.id], s.env)).toEqual({ ok: true });
     expect(noteOf(s).board).toEqual({ ok: true });
+  });
+
+  test("a board without the column gets no card: the issue stays, and the note says why", async () => {
+    const s = setup({ config: CONFIG.replace("todo: Backlog", "todo: Doing") });
+    const answer = await run(["file", s.repo, s.id, filing()], s.env);
+    expect(answer).toMatchObject({ ok: true, board: { error: "the board has no Status column called Doing" } });
+    expect(calls(s).some((c) => c[1] === "item-add")).toBe(false);
+  });
+
+  test("GitHub's spelling: the issue goes there, and the closing words stay short", async () => {
+    const s = setup({ gh: { name: "Acme/Shop" } });
+    expect((await run(["file", s.repo, s.id, filing({ repo: "acme/shop" })], s.env)).ok).toBe(true);
+    expect(calls(s).find((c) => c[1] === "create").slice(2, 4)).toEqual(["--repo", "Acme/Shop"]);
+    expect(readFileSync(join(s.dir, "body"), "utf8")).toContain("https://github.com/Acme/Shop/blob/");
+    expect(noteOf(s).issue.closes).toBe("Closes #812");
   });
 
   test("gh failing to create: its message, and the note stays open with its draft", async () => {

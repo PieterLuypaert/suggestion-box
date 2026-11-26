@@ -43,18 +43,34 @@ export function targetFor(top, key, env) {
   const target = { kind: config?.kind ?? "github", repo, label: config?.label ?? null, labelMissing: false, board, linkKeyword: config?.linkKeyword ?? "Closes", visibility: null, hasConfig: Boolean(config) };
   if (target.kind !== "github") return { ...target, why: `This project's tracker is ${target.kind}: Copy issue puts it on your clipboard` };
   if (!repo) return { ...target, why: "This project has no GitHub repo to file in" };
-  const view = json(gh(["repo", "view", repo, "--json", "visibility"], { env }));
+  // GitHub's own spelling of the repo: a code link only shows as code when it matches.
+  const view = json(gh(["repo", "view", repo, "--json", "visibility,nameWithOwner"], { env }));
   target.visibility = view?.visibility ? String(view.visibility).toLowerCase() : null;
+  if (view?.nameWithOwner) target.repo = view.nameWithOwner;
   if (target.label) {
     const labels = json(gh(["label", "list", "--repo", repo, "--search", target.label, "--json", "name", "--limit", "50"], { env })) ?? [];
     target.labelMissing = !labels.some((one) => one.name === target.label);
   }
   if (board) {
-    const found = gh(["project", "view", String(board.number), "--owner", board.owner, "--format", "json"], { env });
-    if (found.code === 0) board.title = json(found)?.title ?? null;
-    else board.problem = boardError(found.stderr);
+    const found = findBoard(board, env);
+    if (found.error) board.problem = found.error;
+    else board.title = found.title;
   }
   return target;
+}
+
+// The board's id and title, and the ids of its column field and the column, found by name; or
+// { error } saying what to do.
+function findBoard(board, env) {
+  const view = gh(["project", "view", String(board.number), "--owner", board.owner, "--format", "json"], { env });
+  if (view.code !== 0) return { error: boardError(view.stderr) };
+  const fields = gh(["project", "field-list", String(board.number), "--owner", board.owner, "--format", "json", "--limit", "100"], { env });
+  if (fields.code !== 0) return { error: boardError(fields.stderr) };
+  const field = json(fields)?.fields?.find((one) => one.name === board.field);
+  const option = field?.options?.find((one) => one.name === board.column);
+  if (!option) return { error: `the board has no ${board.field} column called ${board.column}` };
+  const project = json(view);
+  return { id: project?.id ?? "", title: project?.title ?? null, fieldId: field.id, optionId: option.id };
 }
 
 const COMMON = new Set(["with", "from", "that", "this", "when", "into", "than", "then", "there", "which", "while", "still", "does", "have"]);
@@ -102,17 +118,16 @@ export function createIssue({ repo, title, body, label }, env) {
   return { number, url };
 }
 
-// Puts an issue on the board in its first column: { ok } or { error } saying what to do.
+// Puts an issue on the board in its first column: { ok } or { error } saying what to do. The column
+// is found first, so a board without it never gets a card without a column.
 export function addToBoard(board, url, env) {
+  const found = findBoard(board, env);
+  if (found.error) return { error: found.error };
   const item = gh(["project", "item-add", String(board.number), "--owner", board.owner, "--url", url, "--format", "json"], { env });
   if (item.code !== 0) return { error: boardError(item.stderr) };
   const itemId = json(item)?.id;
-  const fields = json(gh(["project", "field-list", String(board.number), "--owner", board.owner, "--format", "json", "--limit", "100"], { env }));
-  const field = fields?.fields?.find((one) => one.name === board.field);
-  const option = field?.options?.find((one) => one.name === board.column);
-  if (!itemId || !field || !option) return { error: `the board has no ${board.field} column called ${board.column}` };
-  const project = json(gh(["project", "view", String(board.number), "--owner", board.owner, "--format", "json"], { env }));
-  const edit = gh(["project", "item-edit", "--id", itemId, "--project-id", project?.id ?? "", "--field-id", field.id, "--single-select-option-id", option.id], { env });
+  if (!itemId) return { error: "gh added the issue to the board but gave no item id; set its column by hand" };
+  const edit = gh(["project", "item-edit", "--id", itemId, "--project-id", found.id, "--field-id", found.fieldId, "--single-select-option-id", found.optionId], { env });
   return edit.code === 0 ? { ok: true } : { error: boardError(edit.stderr) };
 }
 

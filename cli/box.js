@@ -174,7 +174,7 @@ function file(project, id, text, env, now) {
   const issue = createIssue({ repo: where.repo, title: value.title.trim(), body, label: where.labelMissing ? null : where.label }, env);
   if (issue.error) return { error: `gh could not create the issue: ${issue.error}` };
   const board = where.board ? addToBoard(where.board, issue.url, env) : null;
-  const ref = where.repo === githubRepo(project.key) ? `#${issue.number}` : `${where.repo}#${issue.number}`;
+  const ref = where.repo.toLowerCase() === githubRepo(project.key) ? `#${issue.number}` : `${where.repo}#${issue.number}`;
   const details = { issue, repo: where.repo, closes: `${where.linkKeyword} ${ref}`, title: value.title.trim(), sections: value.sections, notGone: value.notGone ?? null, board };
   update(project, id, ({ view: fresh }) => ({ note: recordIssue(fresh, now.toISOString(), details) }), { foldEvents: true });
   return { ok: true, issue, board };
@@ -184,7 +184,7 @@ function refuseFiling(view, value, where) {
   if (!allows(view, "file")) return `note ${view.number} is ${stateOf(view)}; only an open note is filed`;
   if (!view.check) return "check the note first";
   if (where.kind !== "github" || where.why) return where.why;
-  if (value.repo !== where.repo) return `the project's config now files in ${where.repo}; open the editor again to see it`;
+  if (String(value.repo ?? "").toLowerCase() !== where.repo.toLowerCase()) return `the project's config now files in ${where.repo}; open the editor again to see it`;
   if (view.check.gone && !value.notGone) return "the check says the problem is gone; say it is not solved to file it anyway";
   const texts = { title: value.title, sections: value.sections };
   return fillProblem(texts) ?? scanBlock(scanTexts(texts), { isPublic: isPublicTarget(where), fine: value.fine ?? [] });
