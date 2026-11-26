@@ -1,6 +1,6 @@
 // The states table of PLAN.md section 6c, row by row.
 import { describe, expect, test } from "bun:test";
-import { actionsFor, applyAction, buttonsFor, shownFor } from "../mods/suggestion-box/rules.js";
+import { actionsFor, applyAction, buttonsFor, recordIssue, shownFor } from "../mods/suggestion-box/rules.js";
 
 const NOW = "2026-11-26T12:00:00Z";
 const claim = { branch: "feat/x", sha: "abc", how: "h", proof: "p", by: "agent", at: "t", confirmed: null };
@@ -42,10 +42,10 @@ describe("the actions each state allows", () => {
   });
 });
 
-test("the buttons leave out what the box does not do yet", () => {
-  expect(buttonsFor(rows.open)).toEqual(["check", "bin"]);
+test("the buttons leave out what the box does not do yet: Fix in new tab", () => {
+  expect(buttonsFor(rows.open)).toEqual(["check", "file", "bin"]);
   expect(buttonsFor(rows.filed)).toEqual([]);
-  expect(buttonsFor({ ...rows.open, changed: { on: "main" } })).toEqual(["mark-solved", "check", "bin"]);
+  expect(buttonsFor({ ...rows.open, changed: { on: "main" } })).toEqual(["mark-solved", "check", "file", "bin"]);
 });
 
 describe("what each action does", () => {
@@ -76,6 +76,21 @@ describe("what each action does", () => {
 
   test("reopen puts a solved note back with the open ones", () => {
     expect(applyAction(rows.solved, "reopen", NOW).note).toMatchObject({ status: "open", solved: null, reopened: { by: "you" } });
+  });
+
+  const filing = { issue: { number: 812, url: "https://github.com/acme/shop/issues/812" }, repo: "acme/shop", closes: "Closes #812", title: "T", sections: { problem: "p" }, board: { ok: true } };
+
+  test("file makes an open note filed, with its issue, and its draft goes", () => {
+    const note = applyAction({ ...rows.open, draft: { title: "x" } }, "file", NOW, filing).note;
+    expect(note).toMatchObject({ status: "filed", issue: { number: 812, closes: "Closes #812", at: NOW }, filed: { title: "T" }, board: { ok: true }, draft: null });
+    expect(actionsFor(note)).toEqual(["fix"]);
+  });
+
+  test("an issue that exists is recorded whatever happened meanwhile: a claim that came in stays", () => {
+    const note = recordIssue(rows["to verify"], NOW, filing);
+    expect(note.status).toBe("filed");
+    expect(note.solved).toEqual(claim);
+    expect(actionsFor(note)).toEqual(["confirm", "not-solved"]);
   });
 
   test("an action the state does not allow is refused", () => {
