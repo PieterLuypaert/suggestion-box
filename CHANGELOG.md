@@ -4,6 +4,30 @@ All notable changes to the suggestion box. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-11-26
+
+### Added
+
+- Proving a solve: a note claimed solved shows three proofs in To verify. The change: the commits
+  since the drop that changed its lines, with those lines in red and green and Open at that commit,
+  followed through moves, renames and a rebase. An independent check: your own Claude, read-only
+  on a snapshot of the claim's branch, answers Verified, Partly or Not fixed, and whether the named
+  test asserts the fix; it is kept until the branch's diff of the file changes. Landed: a merged PR
+  first, then the solving commit in main, then the same patch there.
+- Confirm solved keeps the proofs; the box watches the fix every few minutes until it lands
+  (`waiting to land`, then `landed`), and brings the note back to To verify with `the fix never
+  landed` only when its PR closed unmerged or its branch is gone on origin with nothing in main.
+- Not solved keeps the independent check's reason.
+
+### Changed
+
+- The check and the independent check share one runner for Claude and the code snapshots.
+
+### Fixed
+
+- The scan no longer calls macOS's shared folder `/Users/Shared` a home path. Found through the box
+  itself: noted, fixed, claimed and proven on this version's own branch.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added

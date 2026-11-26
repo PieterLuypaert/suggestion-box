@@ -46,6 +46,11 @@ describe("other hits", () => {
     expect(scan("the sk-some-long-kebab-case-name-here package")).toEqual([]);
   });
 
+  test("macOS's shared folder is nobody's home; a home next to it still is", () => {
+    expect(scan("the fixture lives in /Users/Shared/fixtures")).toEqual([]);
+    expect(kinds("from /Users/Shared/x and /Users/jan/y")).toEqual(["a home path"]);
+  });
+
   test("a token is not found again as a long random string", () => {
     expect(kinds("ghp_0123456789abcdefghijABCDEFGHIJ0123")).toEqual(["a GitHub token"]);
   });

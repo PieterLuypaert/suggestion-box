@@ -46,10 +46,32 @@ export function applyAction(view, action, now, details = {}) {
   delete note.tombstone;
   // Moved back to open, the code is read anew: an old check, and its banner, do not come back.
   if (["not-solved", "restore", "reopen"].includes(action)) note.check = null;
+  // A claim's independent check belongs to that claim only.
+  if (["mark-solved", "not-solved", "reopen"].includes(action)) note.verify = null;
   change[action](note, now, details);
   note.updated = now;
   return { note };
 }
+
+// A confirmed note after the watch looked again at its fix: landed, still waiting, or never landed,
+// which brings it back to To verify, as open or filed as it was underneath.
+export function recordLanded(view, now, landed) {
+  const note = JSON.parse(JSON.stringify(view));
+  if (!note.solved?.confirmed) return note;
+  if (landed.state !== "never") {
+    note.solved.landed = { ...landed, at: now };
+    return note;
+  }
+  note.solved.confirmed = null;
+  note.solved.landed = null;
+  note.solved.neverLanded = { how: landed.how, at: now };
+  if (note.status === "solved") note.status = "open";
+  note.updated = now;
+  return note;
+}
+
+// Whether the watch still looks at a note: confirmed solved, its fix not landed yet.
+export const isWatched = (view) => Boolean(view.solved?.confirmed) && view.solved?.landed?.state !== "landed";
 
 // The note once its issue exists. Create issue is only offered for an open note, but the issue is
 // real by the time this runs, so it is recorded whatever happened to the note meanwhile: an agent's
@@ -85,9 +107,12 @@ const change = {
       confirmed: null,
     };
   },
-  // A filed note stays filed underneath; an open one is solved.
-  confirm(note, now) {
-    note.solved.confirmed = { at: now };
+  // A filed note stays filed underneath; an open one is solved. The proofs are kept as they stood,
+  // and the box watches the fix until it lands.
+  confirm(note, now, details) {
+    note.solved.confirmed = { at: now, proofs: details.proofs ?? null };
+    note.solved.landed = details.proofs?.landed ? { ...details.proofs.landed, at: now } : null;
+    note.solved.neverLanded = null;
     if (note.status === "open") note.status = "solved";
   },
   // The claim goes; the note is back exactly where it was, marked not verified.

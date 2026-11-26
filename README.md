@@ -5,9 +5,9 @@ ticket may not fix unrelated code, so what it spots outside its ticket gets lost
 suggestion box, the agent drops a note in the project's box and carries on. Later you check each
 note against the code, file it as a GitHub issue, or bin it.
 
-This is version 0.4.0: the `suggest` command, the agent instructions, the box as a panel in the
-Herdr app, the check, and filing. Proving a solve and fixing follow; [PLAN.md](PLAN.md) has the whole
-plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
+This is version 0.5.0: the `suggest` command, the agent instructions, the box as a panel in the
+Herdr app, the check, filing, and proving a solve. Fixing in a new tab follows; [PLAN.md](PLAN.md)
+has the whole plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
 
 ## How an agent drops a note
 
@@ -56,7 +56,8 @@ notes, and a green ✓ for notes an agent claims solved. It wiggles once when a 
 the panel is shut. Click it or press `cmd-alt-s` and the panel opens on the right, like
 Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 
-- **To verify**: notes claimed solved, with Confirm solved and Not solved.
+- **To verify**: notes claimed solved, with their three proofs, Confirm solved and Not solved (see
+  below).
 - **Open**: the notes, newest first. Click a title for its four sections, the file to open it in
   Cursor at its line, the ticket to jump to its tab (or open it on GitHub). A note whose code
   changed since the drop says so, with Mark solved.
@@ -125,6 +126,28 @@ press **It is not solved**), or what the scan found.
 - **Your draft** is kept in the note when you leave a field, close the editor or close the panel.
 - A filed note shows `Filed #812 ↗` until the panel closes, then sits in the history. Once it is
   solved, the box gives you the words for the fix's PR, such as `Closes #812`, with Copy.
+
+## Proving a solve
+
+An agent saying a note is solved is not proof. A claimed note waits in **To verify** until you
+confirm it, and opening it shows three proofs, each with a dot for how it stands:
+
+- **The change**: the commits since the drop that changed the note's lines, with those lines in
+  red and green, and **Open** for the file as that commit has it. The lines are followed through
+  moves and renames with plain git, and found again by their snippet after a rebase.
+- **Independent check**: your own Claude, in a fresh read-only session on a snapshot of the claim's
+  branch (Sonnet, as for the check), answers **Verified**, **Partly** or **Not fixed** with why,
+  and says whether the test the claim names really asserts the fix. It is kept until the branch's
+  diff of the note's file changes.
+- **Landed**: the branch's merged PR counts first, whatever the merge style; else the solving
+  commit in the fetched main, else the same patch there (`git cherry`), for squash and rebase merges.
+
+**Confirm solved** keeps the proofs as they stood and moves the note to the history, where it says
+`waiting to land` until the fix is in main, then `landed: PR #44 merged`. The box looks again every
+few minutes. Only when the PR is closed without a merge, or the branch is gone (asked of origin
+itself) with nothing in main, does the note come back to To verify with `the fix never landed`.
+**Not solved** drops the claim with the check's reason (or yours), and the note is back where it
+was: open, or filed.
 
 ## Collecting on or off
 

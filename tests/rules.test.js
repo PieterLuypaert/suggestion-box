@@ -1,6 +1,6 @@
 // The states table of PLAN.md section 6c, row by row.
 import { describe, expect, test } from "bun:test";
-import { actionsFor, applyAction, buttonsFor, recordIssue, shownFor } from "../mods/suggestion-box/rules.js";
+import { actionsFor, applyAction, buttonsFor, isWatched, recordIssue, recordLanded, shownFor } from "../mods/suggestion-box/rules.js";
 
 const NOW = "2026-11-26T12:00:00Z";
 const claim = { branch: "feat/x", sha: "abc", how: "h", proof: "p", by: "agent", at: "t", confirmed: null };
@@ -91,6 +91,33 @@ describe("what each action does", () => {
     expect(note.status).toBe("filed");
     expect(note.solved).toEqual(claim);
     expect(actionsFor(note)).toEqual(["confirm", "not-solved"]);
+  });
+
+  test("confirm keeps the proofs and starts watching the fix; a landed one is no longer watched", () => {
+    const proofs = { commits: [{ sha: "abc", subject: "fix" }], verify: { verdict: "verified" }, landed: { state: "waiting", how: "PR #44 is open" } };
+    const note = applyAction({ ...rows["to verify"], verify: { verdict: "verified" } }, "confirm", NOW, { proofs }).note;
+    expect(note.solved).toMatchObject({ confirmed: { at: NOW, proofs }, landed: { state: "waiting", at: NOW } });
+    expect(isWatched(note)).toBe(true);
+    const landed = recordLanded(note, NOW, { state: "landed", how: "PR #44 merged" });
+    expect(landed.solved.landed).toMatchObject({ state: "landed", how: "PR #44 merged" });
+    expect(isWatched(landed)).toBe(false);
+  });
+
+  test("a fix that never landed brings the note back to To verify, open or filed as it was", () => {
+    const solved = applyAction(rows["to verify"], "confirm", NOW).note;
+    const back = recordLanded(solved, NOW, { state: "never", how: "PR #44 was closed without merging" });
+    expect(back).toMatchObject({ status: "open", solved: { confirmed: null, neverLanded: { how: "PR #44 was closed without merging" } } });
+    expect(actionsFor(back)).toEqual(["confirm", "not-solved"]);
+    const filed = recordLanded(applyAction(rows["filed, then claimed"], "confirm", NOW).note, NOW, { state: "never", how: "x" });
+    expect(filed.status).toBe("filed");
+    expect(actionsFor(filed)).toEqual(["confirm", "not-solved"]);
+  });
+
+  test("a claim's independent check goes with the claim", () => {
+    const checked = { ...rows["to verify"], verify: { verdict: "verified" } };
+    expect(applyAction(checked, "not-solved", NOW).note.verify).toBeNull();
+    expect(applyAction({ ...rows.solved, verify: { verdict: "verified" } }, "reopen", NOW).note.verify).toBeNull();
+    expect(applyAction(checked, "confirm", NOW).note.verify).toEqual({ verdict: "verified" });
   });
 
   test("an action the state does not allow is refused", () => {

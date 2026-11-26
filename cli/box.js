@@ -11,6 +11,10 @@
 //   node cli/box.js draft <folder> <note id> <{"title","sections","fine","notGone"} as JSON, or null>
 //   node cli/box.js file <folder> <note id> <{"title","sections","fine","notGone","repo"} as JSON>
 //   node cli/box.js board <folder> <note id>
+//   node cli/box.js proofs <folder> <note id>
+//   node cli/box.js verify <folder> <note id> [--again]
+//   node cli/box.js watch <folder>
+//   node cli/box.js show <folder> <sha> <path> [line]
 //   node cli/box.js collecting <folder> on|off [--all]
 //   node cli/box.js prune <folder>
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -20,7 +24,10 @@ import { fold, stateOf } from "../mods/suggestion-box/events.js";
 import { age } from "../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName } from "../mods/suggestion-box/project.js";
 import { stillHolds } from "../mods/suggestion-box/check.js";
-import { ACTS, allows, applyAction, buttonsFor, recordIssue } from "../mods/suggestion-box/rules.js";
+import { ACTS, allows, applyAction, buttonsFor, isWatched, recordIssue, recordLanded } from "../mods/suggestion-box/rules.js";
+import { verifyHolds } from "../mods/suggestion-box/proofs.js";
+import { changeProof, fileAt, landedProof, runVerify } from "./proofs.js";
+import { fetch } from "./claude.js";
 import { fillProblem, isPublicTarget, scanTexts } from "../mods/suggestion-box/editor.js";
 import { githubRepo, issueText } from "../mods/suggestion-box/issue.js";
 import { scanBlock } from "../mods/suggestion-box/scan.js";
@@ -38,12 +45,16 @@ export async function run(args, env = process.env, now = new Date()) {
   const project = projectAt(folder, env);
   if (command === "read") return read(project, rest.includes("--changes"), now);
   if (!project.dir) return { error: project.why };
-  if (command === "act") return act(project, rest, now);
+  if (command === "act") return act(project, rest, now, env);
   if (command === "check") return check(project, rest[0], env, now, rest.includes("--again"));
   if (command === "target") return target(project, rest[0], env);
   if (command === "draft") return draft(project, rest[0], rest[1], now);
   if (command === "file") return file(project, rest[0], rest[1], env, now);
   if (command === "board") return board(project, rest[0], env, now);
+  if (command === "proofs") return proofs(project, rest[0], env);
+  if (command === "verify") return verify(project, rest[0], env, now, rest.includes("--again"));
+  if (command === "watch") return watch(project, env, now);
+  if (command === "show") return fileAt(project.repo.top, rest[0], rest[1], Number(rest[2]) || null);
   if (command === "collecting") return switchCollecting(project, rest, env);
   if (command === "prune") return prune(project, now);
   return { error: `unknown command ${command}` };
@@ -68,7 +79,8 @@ function read(project, withChanges, now) {
   const views = (existsSync(project.dir) ? notesOf(project.dir) : []).map((note) => describe(project, note, withChanges, mainRef, now));
   // A filed note is history; the panel keeps the ones it just filed in sight until it closes.
   const live = views.filter((v) => ["open", "to verify"].includes(v.state));
-  const recent = views.filter((v) => !live.includes(v) && now - Date.parse(v.updated) < KEEP_DAYS * DAY);
+  // A fix still watched stays in sight, however long it waits to land.
+  const recent = views.filter((v) => !live.includes(v) && (now - Date.parse(v.updated) < KEEP_DAYS * DAY || isWatched(v)));
   return {
     project: { key: project.key, name: project.name, dir: project.dir, exists: existsSync(project.dir), notes: join(project.root, "notes"), top: project.repo.top, checkout: project.repo.checkout, origin: project.repo.origin },
     collecting: { all: settings.collecting !== false, project: collecting(settings, project.key) },
@@ -111,10 +123,17 @@ function eventsOf(dir, id) {
 
 // One of the user's actions: the note with its events folded in, the action applied, written over
 // the note at once, then the folded event files removed. An event that arrives meanwhile stays.
-function act(project, rest, now) {
+function act(project, rest, now, env) {
   const [id, action, ...options] = rest;
   if (!ACTS.includes(action) || action === "file") return { error: `${action} is not something the box does here` };
-  const result = update(project, id, ({ view }) => applyAction(view, action, now.toISOString(), flags(options)), { foldEvents: true });
+  const details = flags(options);
+  // Confirm keeps the proofs as they stand: the change and whether it landed, as last fetched.
+  if (action === "confirm") {
+    const loaded = loadNote(project.dir, id);
+    const view = loaded && fold(loaded.note, loaded.events.map((e) => e.event));
+    if (view?.solved) details.proofs = keptProofs(project, view, env);
+  }
+  const result = update(project, id, ({ view }) => applyAction(view, action, now.toISOString(), details), { foldEvents: true });
   return result.error ? result : { ok: true, state: stateOf(result.note) };
 }
 
@@ -243,6 +262,71 @@ function update(project, id, change, { foldEvents = false } = {}) {
   }
 }
 
+// Proofs 1 and 3 of a claim, after a fetch: the change and whether it landed. Not kept: git and gh
+// say it anew each time the panel shows the project.
+function proofs(project, id, env) {
+  const loaded = loadNote(project.dir, id);
+  if (!loaded) return { error: `there is no note ${id}` };
+  const view = fold(loaded.note, loaded.events.map((e) => e.event));
+  if (!view.solved) return { error: `note ${view.number} has no claim` };
+  const fetched = fetch(project.repo.top);
+  return { ok: true, fetched, ...proofsOf(project, view, env) };
+}
+
+// The proofs Confirm keeps, or null when they could not be found: Confirm never fails over them.
+function keptProofs(project, view, env) {
+  try {
+    return proofsOf(project, view, env);
+  } catch (error) {
+    process.stderr.write(`box.js: kept no proofs for note ${view.number}: ${error.message}\n`);
+    return null;
+  }
+}
+
+function proofsOf(project, view, env) {
+  const top = project.repo.top;
+  const mainRef = defaultRef(top);
+  const change = changeProof(top, view, view.solved, mainRef);
+  const landed = landedProof(top, project.key, view.solved, change, env, { mainRef, since: view.created });
+  const commits = (change.commits ?? []).map(({ sha, subject }) => ({ sha, subject }));
+  return { change, landed, verify: view.verify ?? null, commits };
+}
+
+// Proof 2, kept on the note: the independent check of a claim waiting to be verified. A claim that
+// was confirmed or dropped meanwhile keeps that, and the check is dropped.
+async function verify(project, id, env, now, again) {
+  const loaded = loadNote(project.dir, id);
+  if (!loaded) return { error: `there is no note ${id}` };
+  const view = fold(loaded.note, loaded.events.map((e) => e.event));
+  if (stateOf(view) !== "to verify") return { error: `note ${view.number} is ${stateOf(view)}; only a claim waiting to be verified is checked` };
+  const top = project.repo.top;
+  const change = changeProof(top, view, view.solved);
+  const result = await runVerify({ top, note: view, change, env, now, again, holds: verifyHolds });
+  if (result.reused) return { ok: true, reused: true };
+  const claim = JSON.stringify(view.solved);
+  const written = update(project, id, ({ note, view: fresh }) => (stateOf(fresh) === "to verify" && JSON.stringify(fresh.solved) === claim ? { note: { ...note, verify: result.verify, updated: now.toISOString() } } : { skip: true }));
+  if (written.error) return written;
+  return written.skipped ? { ok: true, dropped: true } : { ok: true, verify: result.verify };
+}
+
+// Confirmed notes whose fix has not landed, looked at again after one fetch: landed, still waiting,
+// or back to To verify when it never landed.
+function watch(project, env, now) {
+  if (!existsSync(project.dir)) return { ok: true, watched: 0 };
+  const watched = notesOf(project.dir).filter(isWatched);
+  if (!watched.length) return { ok: true, watched: 0 };
+  fetch(project.repo.top);
+  const mainRef = defaultRef(project.repo.top);
+  const results = [];
+  for (const note of watched) {
+    const change = changeProof(project.repo.top, note, note.solved, mainRef);
+    const landed = landedProof(project.repo.top, project.key, note.solved, change, env, { mainRef, since: note.created });
+    update(project, note.id, ({ view }) => (isWatched(view) ? { note: recordLanded(view, now.toISOString(), landed) } : { skip: true }), { foldEvents: true });
+    results.push({ number: note.number, state: landed.state, how: landed.how });
+  }
+  return { ok: true, watched: watched.length, results };
+}
+
 function flags(options) {
   const details = {};
   for (let i = 0; i < options.length; i += 2) details[options[i].replace(/^--/, "")] = options[i + 1];
@@ -286,7 +370,7 @@ function prune(project, now) {
   let pruned = 0;
   if (!existsSync(project.dir)) return { ok: true, pruned };
   for (const note of notesOf(project.dir)) {
-    if (!["filed", "solved", "binned"].includes(stateOf(note))) continue;
+    if (!["filed", "solved", "binned"].includes(stateOf(note)) || isWatched(note)) continue;
     if (note.eventFiles.length || now - Date.parse(note.updated) < KEEP_DAYS * DAY) continue;
     const tombstone = { id: note.id, number: note.number, project: note.project, title: note.title, at: note.at, status: note.status, issue: note.issue ?? null, solved: note.solved ?? null, spotted: note.spotted, created: note.created, updated: note.updated };
     mkdirSync(join(project.dir, "tombstones"), { recursive: true });

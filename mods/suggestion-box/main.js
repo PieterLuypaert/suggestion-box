@@ -5,12 +5,12 @@
 // only keeps state, and panel.js draws.
 import { View } from "gpui-kit";
 import { InputState, TextareaState } from "gpui-base";
-import { appHome, checking, exec, focused, layout, nextCommand, notify, props, run, setShared, shared, spaces, terminals, theme, watchFolder, window } from "herdr";
+import { appHome, checking, exec, focused, layout, nextCommand, notify, props, run, setShared, settings, shared, spaces, terminals, theme, watchFolder, window } from "herdr";
 import { checkedText, fieldLabel, offReason, scanTexts, startTexts, swapText, targetLine } from "./editor.js";
 import { issueText } from "./issue.js";
 import { SECTIONS } from "./notes.js";
 import { button, panel } from "./panel.js";
-import { buttonsFor } from "./rules.js";
+import { buttonsFor, isWatched } from "./rules.js";
 
 const BLOCK = "suggestion-box";
 const MOD = "suggestion-box";
@@ -30,6 +30,10 @@ const CHECK_MS = 240000;
 const FILE_MS = 330000;
 const LOOKUP_MS = 200000;
 const SHOWN_MS = 1000;
+// A fetch (20 s at most) and, per claim, git and gh for its PR (20 s at most).
+const PROOFS_MS = 90000;
+// Confirmed fixes are looked at again this often until they land.
+const WATCH_MS = 300000;
 const UNDO_MS = 5000;
 const NOTICE_MS = 6000;
 const WIGGLE_MS = 700;
@@ -75,6 +79,13 @@ async function box(node, path, args, timeout = 60000) {
   }
   if (answer.error) throw new Error(answer.error);
   return answer;
+}
+
+// Why a claim is not solved, kept on the note: what the independent check found, else the person's say.
+function notSolvedReason(note) {
+  const verify = note.verify;
+  if (verify && !verify.error && verify.verdict !== "verified") return verify.why;
+  return "You said it is not solved.";
 }
 
 export default class SuggestionBox extends View {
@@ -210,6 +221,7 @@ export default class SuggestionBox extends View {
       if (window()?.visible === false) return;
       this.read(cx, true);
       this.pruneOnceADay(cx);
+      this.watchFixes(cx);
     });
     cx.spawn(async (cx) => this.watchBox(cx));
   }
@@ -229,6 +241,24 @@ export default class SuggestionBox extends View {
       if (changed.length && still && (still.exists ? still.dir : still.notes) === dir) this.read(cx, false);
       else await sleep(cx, 500);
     }
+  }
+
+  // Confirmed fixes not landed yet: every few minutes, did they land, or never will?
+  watchFixes(cx) {
+    const answer = this.answer();
+    if (!answer?.project || !(answer.history ?? []).some(isWatched) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
+    this.watchedAt = Date.now();
+    const folder = this.here().folder;
+    // A fetch, then per watched fix gh and git ls-remote, each 20 s at most.
+    const timeout = PROOFS_MS + (answer.history ?? []).filter(isWatched).length * 45000;
+    cx.spawn(async (cx) => {
+      try {
+        const result = await box(this.node, this.boxJs, ["watch", folder], timeout);
+        if (result.watched) this.read(cx, false);
+      } catch (error) {
+        console.log(`suggestion box: watching fixes failed: ${error.message}`);
+      }
+    });
   }
 
   pruneOnceADay(cx) {
@@ -306,6 +336,9 @@ export default class SuggestionBox extends View {
     this.showSettings = false;
     // The note being filed, with its fields; one at a time.
     this.editor = null;
+    // Proofs 1 and 3 of each claim opened since the panel showed, and the claims Claude is checking.
+    this.proofs = new Map();
+    this.verifying = new Set();
     // Notes filed while the panel is open: they stay in sight until it closes.
     this.justFiled = new Set();
     this.handle = cx.focus_handle();
@@ -323,6 +356,7 @@ export default class SuggestionBox extends View {
       if (this.wasShown && !shown) {
         this.closeEditor(cx);
         this.justFiled.clear();
+        this.proofs.clear();
         cx.notify();
       }
       this.wasShown = shown;
@@ -340,7 +374,9 @@ export default class SuggestionBox extends View {
     if (name === "close") return this.close();
     if (name === "settings") this.showSettings = !this.showSettings;
     if (name === "history") this.view = this.view === "history" ? "list" : "history";
-    if (name === "expand") this.toggleExpanded(note);
+    if (name === "expand") this.toggleExpanded(note, cx);
+    if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
+    if (name === "open-at") return this.openAt(note);
     if (name === "open-file") return this.openFile(note);
     if (name === "jump") return this.jump(note);
     if (name === "collect") return this.write(cx, ["collecting", where, this.answer()?.collecting?.project ? "off" : "on"]);
@@ -363,14 +399,68 @@ export default class SuggestionBox extends View {
     cx.notify();
   }
 
-  toggleExpanded(note) {
+  toggleExpanded(note, cx) {
     this.selected = note.id;
-    if (this.expanded.has(note.id)) this.expanded.delete(note.id);
-    else this.expanded.add(note.id);
+    if (this.expanded.has(note.id)) return this.expanded.delete(note.id);
+    this.expanded.add(note.id);
+    // A claim opened: its proofs, and Claude's independent check of it (kept while it holds).
+    if (note.state === "to verify") {
+      this.loadProofs(cx, note);
+      this.verifyClaim(cx, note);
+    }
+  }
+
+  loadProofs(cx, note) {
+    if (!this.boxJs || this.proofs.get(note.id)?.isLoading) return;
+    if (this.proofs.has(note.id) && !this.proofs.get(note.id).error) return;
+    this.proofs.set(note.id, { isLoading: true });
+    const folder = this.here().folder;
+    cx.spawn(async (cx) => {
+      try {
+        const answer = await box(this.node, this.boxJs, ["proofs", folder, note.id], PROOFS_MS);
+        this.proofs.set(note.id, { change: answer.change, landed: answer.landed });
+      } catch (error) {
+        this.proofs.set(note.id, { error: error.message });
+      }
+      cx.notify();
+    });
+  }
+
+  // Proof 2 beside the queued writes, like the check: a Confirm meanwhile wins, and it is dropped.
+  verifyClaim(cx, note, { again = false } = {}) {
+    if (!this.boxJs || this.verifying.has(note.id)) return;
+    this.verifying.add(note.id);
+    const folder = this.here().folder;
+    cx.spawn(async (cx) => {
+      try {
+        await box(this.node, this.boxJs, ["verify", folder, note.id, ...(again ? ["--again"] : [])], CHECK_MS);
+      } catch (error) {
+        this.error = `The independent check did not finish: ${error.message}`;
+      }
+      this.verifying.delete(note.id);
+      this.read(cx, false);
+      cx.notify();
+    });
+    cx.notify();
+  }
+
+  // The note's file as the solving commit has it, in the editor at the note's line there.
+  async openAt({ sha, path, line }) {
+    try {
+      const shown = await box(this.node, this.boxJs, ["show", this.here().folder, sha, path, String(line ?? "")]);
+      const target = shown.line ? `${shown.file}:${shown.line}` : shown.file;
+      for (const editor of EDITORS) {
+        const opened = await exec(editor, ["-g", target]).catch(() => null);
+        if (opened?.code === 0) return;
+      }
+      await exec("open", [shown.file]);
+    } catch (error) {
+      notify({ title: "Suggestion box", body: `${path} at ${sha.slice(0, 7)} did not open: ${error.message}`, level: "error" });
+    }
   }
 
   change(cx, action, note, branch = note.changed?.on) {
-    const extra = action === "mark-solved" ? ["--branch", branch ?? ""] : [];
+    const extra = action === "mark-solved" ? ["--branch", branch ?? ""] : action === "not-solved" ? ["--reason", notSolvedReason(note)] : [];
     this.mine.set(note.id, Date.now() + 15000);
     if (action === "bin") this.showUndo(cx, note);
     return this.write(cx, ["act", this.here().folder, note.id, action, ...extra]);
@@ -738,7 +828,7 @@ export default class SuggestionBox extends View {
     const k = e.key;
     const can = (action) => note?.actions.includes(action);
     if (k === "down" || k === "up") this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
-    else if (k === "enter" && note) this.toggleExpanded(note);
+    else if (k === "enter" && note) this.toggleExpanded(note, cx);
     else if (k === "s" && can("mark-solved")) this.act("mark-solved", note, cx);
     else if (k === "x" && can("bin")) this.act("bin", note, cx);
     else if (k === "k" && can("check")) this.act("check", note, cx);
@@ -763,6 +853,7 @@ export default class SuggestionBox extends View {
       this.expanded.clear();
       this.selected = null;
       this.justFiled.clear();
+      this.proofs.clear();
     }
     // The note being filed left Open (claimed, binned, another project): the editor closes, and
     // its draft stays in the note.
@@ -782,6 +873,9 @@ export default class SuggestionBox extends View {
       undo: this.undo,
       checking: this.checking,
       editor: this.editorView(),
+      proofs: this.proofs,
+      verifying: this.verifying,
+      mono: settings()?.font || "Menlo",
       justFiled: this.justFiled,
       notice: this.notice,
       error: this.error,
