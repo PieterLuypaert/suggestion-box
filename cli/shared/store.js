@@ -9,7 +9,7 @@
 import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { fold } from "../mods/suggestion-box/events.js";
+import { fold } from "../../mods/suggestion-box/events.js";
 
 export function boxRoot(env) {
   return env.SUGGESTION_BOX_HOME || join(homedir(), ".suggestion-box");

@@ -1,10 +1,10 @@
-// The box's own side (cli/box.js) and its git changes (cli/changes.js), in throwaway repos and boxes.
+// The box's own side (cli/box.js) and its git changes (cli/box/changes.js), in throwaway repos and boxes.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { changeFor } from "../cli/changes.js";
+import { changeFor } from "../cli/box/changes.js";
 import { git, makeRepo, note, NOTE, ROOT, suggest, tempDir } from "./helpers.js";
 
 const FOLDER = "github.com__acme__shop";

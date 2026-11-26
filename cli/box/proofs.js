@@ -6,13 +6,13 @@ import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { githubRepo } from "../mods/suggestion-box/issue.js";
-import { findSnippet, noteRange, parseHunks } from "../mods/suggestion-box/lines.js";
-import { landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyPrompt, VERIFY_TIMEOUT_MS } from "../mods/suggestion-box/proofs.js";
+import { githubRepo } from "../../mods/suggestion-box/issue.js";
+import { findSnippet, noteRange, parseHunks } from "../../mods/suggestion-box/lines.js";
+import { landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyPrompt, VERIFY_TIMEOUT_MS } from "../../mods/suggestion-box/proofs.js";
 import { defaultRef } from "./changes.js";
 import { findClaude, inSnapshots, runClaude, snapshot } from "./claude.js";
 import { gh } from "./file.js";
-import { gitAnswer, gitText } from "./git.js";
+import { gitAnswer, gitText } from "../shared/git.js";
 
 const SHOWN_COMMITS = 3;
 // The branch's other changes kept for the panel and the independent check.

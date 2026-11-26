@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { searchWords } from "../cli/file.js";
+import { searchWords } from "../cli/box/file.js";
 import { BIN, git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
 const CONFIG = `tracker:

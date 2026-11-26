@@ -4,13 +4,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canClaim, stateOf, waitsToVerify } from "../mods/suggestion-box/events.js";
-import { age, dropProblem, noteId, parseAt, parseFields, SECTIONS, sameNoteKey, snippetAround } from "../mods/suggestion-box/notes.js";
-import { projectFolder, projectKey, projectName, ticketFor } from "../mods/suggestion-box/project.js";
-import { repoAt, ticketRecords } from "./git.js";
-import * as store from "./store.js";
+import { canClaim, stateOf, waitsToVerify } from "../../mods/suggestion-box/events.js";
+import { age, dropProblem, noteId, parseAt, parseFields, SECTIONS, sameNoteKey, snippetAround } from "../../mods/suggestion-box/notes.js";
+import { projectFolder, projectKey, projectName, ticketFor } from "../../mods/suggestion-box/project.js";
+import { repoAt, ticketRecords } from "../shared/git.js";
+import * as store from "../shared/store.js";
 
-const HERE = fileURLToPath(new URL("..", import.meta.url));
+// The checkout: this file sits in cli/suggest/.
+const HERE = fileURLToPath(new URL("../..", import.meta.url));
 const VERSION = JSON.parse(readFileSync(join(HERE, "package.json"), "utf8")).version;
 const CARRY_ON = "Carry on with your task.";
 

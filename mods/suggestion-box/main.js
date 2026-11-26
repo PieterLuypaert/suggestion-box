@@ -29,7 +29,7 @@ const CHANGES_MS = 60000;
 // and waits up to 90 s on Claude: 210 s, with room to spare.
 const CHECK_MS = 240000;
 // A lookup runs up to eight gh calls and a filing up to fourteen, each stopped after 20 s (GH_MS in
-// cli/file.js). A filing the panel gives up on is found again by the next Create issue.
+// cli/box/file.js). A filing the panel gives up on is found again by the next Create issue.
 const FILE_MS = 330000;
 // Fix in new tab: issues branch (60 s at most), then issues launch (240 s at most).
 const FIX_MS = 330000;

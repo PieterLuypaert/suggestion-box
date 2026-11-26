@@ -3,11 +3,11 @@
 // board in its first column, finding the field and column ids by name each time, as the team's
 // skills do. A failed board step never undoes the issue.
 import { spawnSync } from "node:child_process";
-import { filingTarget } from "../mods/suggestion-box/config.js";
-import { githubRepo, permalink } from "../mods/suggestion-box/issue.js";
-import { findSnippet, noteRange } from "../mods/suggestion-box/lines.js";
+import { filingTarget } from "../../mods/suggestion-box/config.js";
+import { githubRepo, permalink } from "../../mods/suggestion-box/issue.js";
+import { findSnippet, noteRange } from "../../mods/suggestion-box/lines.js";
 import { defaultRef } from "./changes.js";
-import { gitAnswer, gitText } from "./git.js";
+import { gitAnswer, gitText } from "../shared/git.js";
 
 // One gh call's limit; the panel waits for a lookup's and a filing's calls together.
 export const GH_MS = 20000;
