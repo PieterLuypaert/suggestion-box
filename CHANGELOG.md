@@ -8,12 +8,29 @@ All notable changes to the suggestion box. The format follows
 
 ### Added
 
+- One card design across the panel, as Settings' Collecting everywhere card: every note, claim, filed
+  note, history entry and project is a raised card with its title, a calm line under it and its
+  buttons; the main action is filled and last, Bin sits quiet on the far left; the header takes two
+  lines so the project's name is never cut off; the footer shows only the keys of the picked note.
+- A pixel icon for the box, as Parrot has: a wooden box with a note going into its slot, in colour,
+  grey while collecting is off, and larger in an empty box.
+- A checked note says who checked it, when and what it found ("Checked by your Claude · 2m ago · 3
+  hold, 1 corrected"), and every button says on hover what it does.
+- The change proof shows a fix that is not in the note's lines: the claim branch's own other changes
+  (never the default branch's in between), also after the branch is merged, and the independent
+  check reads them too.
+
 - Settings (the ⚙ in the panel's header): collecting everywhere, and a switch per project for the
   projects of your open spaces and every project with notes, each with its notes and On or Off in
   words, and what a switch does written above them.
 
 ### Fixed
 
+- Text that fits the panel: a claim's branch stays whole, the proofs put their answer under their
+  name at full width, and the footer no longer cuts off its keys.
+- Moving between tabs of a project no longer flashes the panel or closes what you opened; every
+  button acts on the box shown.
+- A note just filed stays in sight through a reload of the box, per project.
 - File issue did nothing: the link to a note's file had the same element id as the button.
 - A button whose action fails says why in the panel, and the editor no longer closes on a read that
   is missing for a moment.

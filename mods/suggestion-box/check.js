@@ -1,7 +1,7 @@
 // The check: your own Claude reads a note's four sections against the code and says, per section,
 // whether it holds. What to ask, the shape of the answer, and reading that answer back. Pure: no
 // Herdr and no Node imports, so the box's side and the tests share it.
-import { SECTIONS } from "./notes.js";
+import { age, SECTIONS } from "./notes.js";
 
 export const MODEL = "sonnet";
 export const TIMEOUT_MS = 90000;
@@ -110,6 +110,17 @@ export function explain(why, timeout = TIMEOUT_MS) {
   if (/overloaded|\b529\b/i.test(text)) return "Claude is overloaded right now. Check again in a minute.";
   if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|getaddrinfo|fetch failed|network/i.test(text)) return "The box could not reach Claude. Check your internet connection and check again.";
   return null;
+}
+
+// The line a checked note shows: who checked it, how long ago, and what it found. null without a
+// finished check (none yet, or one that failed: that says why itself).
+export function checkedSummary(check, now = Date.now()) {
+  if (!check || check.error) return null;
+  const when = check.at && !Number.isNaN(Date.parse(check.at)) ? age(check.at, now) : null;
+  const ago = when === null ? "" : when === "now" ? " · just now" : ` · ${when} ago`;
+  const count = (verdict) => SECTIONS.filter((name) => check.sections?.[name]?.verdict === verdict).length;
+  const found = [count("checked") ? `${count("checked")} hold` : "", count("corrected") ? `${count("corrected")} corrected` : "", count("unsure") ? `${count("unsure")} unsure` : ""].filter(Boolean).join(", ");
+  return `Checked by your Claude${ago}${found ? ` · ${found}` : ""}${check.gone ? " · looks solved" : ""}`;
 }
 
 // Whether a kept check still holds: the code it read is the code there now.

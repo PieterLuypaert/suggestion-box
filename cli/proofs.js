@@ -15,6 +15,8 @@ import { gh } from "./file.js";
 import { gitAnswer, gitText } from "./git.js";
 
 const SHOWN_COMMITS = 3;
+// The branch's other changes kept for the panel and the independent check.
+const ELSEWHERE_KEPT = 10;
 
 const commitOf = (top, ref) => (ref ? gitAnswer(top, ["rev-parse", "-q", "--verify", `${ref}^{commit}`]) : null);
 const isDefaultBranch = (branch, mainRef) => Boolean(branch && mainRef && (mainRef === branch || mainRef === `origin/${branch}`));
@@ -31,10 +33,13 @@ export function claimRef(top, branch, mainRef = defaultRef(top), sha = null) {
   return holding ?? (isDefault ? mainRef : there[0] ?? null);
 }
 
-// Proof 1: { ref, path, commits: [{ sha, subject, lines, path, at }] } for the commits since the
-// drop whose diff touched the note's lines, oldest first, or { why } when there is nothing to look
-// at. The branch is walked along its first parents: a merge of main into it moves the lines like
-// any commit, but is never taken for the fix.
+// Proof 1: { ref, path, commits: [{ sha, subject, lines, path, at }], elsewhere, elsewhereMore } for
+// the commits since the drop whose diff touched the note's lines, oldest first, or { why } when there
+// is nothing to look at. The branch is walked along its first parents: a merge of main into it moves
+// the lines like any commit, but is never taken for the fix. A fix often lands elsewhere than the
+// lines the note names: `elsewhere` holds the claim branch's own other changes, its commits that are
+// not on the default branch's own line (its first parents), so a teammate's work in between never
+// counts, and a fix merged since (merge, squash or rebase) still does.
 export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
   const ref = claimRef(top, claim?.branch, mainRef, claim?.sha);
   if (!ref) return { why: claim?.branch ? `${claim.branch} is not here, not even fetched` : "the claim names no branch" };
@@ -42,14 +47,21 @@ export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
   if (!start) return { ref, why: "the note's lines cannot be found where its branch started" };
   let { range, path } = start;
   const commits = [];
+  const elsewhere = [];
+  const isOwnBranch = !isDefaultBranch(claim?.branch, mainRef);
+  const mainLine = isOwnBranch && mainRef ? new Set((gitAnswer(top, ["rev-list", "--first-parent", mainRef, `^${start.base}`]) ?? "").split("\n").filter(Boolean)) : new Set();
   for (const commit of commitsOn(top, `${start.base}..${ref}`)) {
     const step = stepThrough(top, commit, path, range);
+    if (!step || !step.isTouched) {
+      if (isOwnBranch && !mainLine.has(commit.sha) && !commit.isMerge && commit.files.length) elsewhere.push({ sha: commit.sha, subject: commit.subject, files: commit.files.map((file) => file.to ?? file.from) });
+    } else if (!commit.isMerge) {
+      commits.push({ sha: commit.sha, subject: commit.subject, lines: step.lines, path: step.shownPath, at: step.shownAt });
+    }
     if (!step) continue;
-    if (step.isTouched && !commit.isMerge) commits.push({ sha: commit.sha, subject: commit.subject, lines: step.lines, path: step.shownPath, at: step.shownAt });
     ({ range, path } = step);
     if (step.isGone) break;
   }
-  return { ref, path, commits: commits.slice(-SHOWN_COMMITS), more: Math.max(0, commits.length - SHOWN_COMMITS) };
+  return { ref, path, commits: commits.slice(-SHOWN_COMMITS), more: Math.max(0, commits.length - SHOWN_COMMITS), elsewhere: elsewhere.slice(-ELSEWHERE_KEPT), elsewhereMore: Math.max(0, elsewhere.length - ELSEWHERE_KEPT) };
 }
 
 // The first-parent commits of a range, oldest first, each with the files it changed against its
@@ -108,7 +120,7 @@ export function landedProof(top, key, claim, change, env, { mainRef = defaultRef
   const listed = prs?.code === 0 ? parsed(prs.stdout) : null;
   const knowsPrs = Boolean(listed);
   const pr = pickPr(listed ?? [], since);
-  const solving = change?.commits?.at(-1)?.sha ?? claim?.sha ?? null;
+  const solving = change?.commits?.at(-1)?.sha ?? change?.elsewhere?.at(-1)?.sha ?? claim?.sha ?? null;
   const inMain = solving && mainRef && gitAnswer(top, ["merge-base", "--is-ancestor", solving, mainRef]) !== null ? solving : null;
   const cherry = solving && mainRef && !inMain ? gitAnswer(top, ["cherry", mainRef, solving, `${solving}^`]) : null;
   const samePatch = cherry?.startsWith("- ") ? solving : null;

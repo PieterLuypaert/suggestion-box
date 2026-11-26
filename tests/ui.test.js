@@ -16,7 +16,7 @@ const reopened = { ...open, id: "n3", number: 3, title: "A note that came back",
 const claimed = { ...open, id: "n1", number: 1, title: "N+1 query in the group list", state: "to verify", solved: { by: "agent", branch: "feat/8511-groups", how: "One query loads all members now.", proof: "groups.test.ts: loads members once" }, actions: ["confirm", "not-solved"], verify: { verdict: "verified", why: "listGroups loads members with one query in groups.ts.", test: { found: true, assertsFix: true } } };
 const neverLanded = { ...claimed, id: "n6", number: 6, title: "A fix that never landed", issue: { number: 812, url: "u", closes: "Closes #812" }, solved: { ...claimed.solved, neverLanded: { how: "PR #44 was closed without merging" } }, verify: { verdict: "partly", why: "One of the two queries is gone.", test: { found: true, assertsFix: false, why: "it only counts calls" } } };
 const proofsFound = { change: { ref: "refs/heads/feat/8511-groups", path: "src/groups.ts", commits: [{ sha: "9f3e21c4a8b7d6e5f4a3", subject: "fix: load group members in one query", lines: [{ kind: "@", text: "@@ -40,3 +40,2 @@" }, { kind: "-", text: "for (const g of groups) g.members = await members(g.id);" }, { kind: "+", text: "const all = await membersOf(groups.map((g) => g.id));" }] }], more: 0 }, landed: { state: "waiting", how: "PR #44 is open" } };
-const checkedNote = { ...open, id: "n4", number: 4, title: "A checked note", changed: null, actions: ["check", "bin"], check: { sections: { problem: { verdict: "checked" }, evidence: { verdict: "checked" }, current: { verdict: "corrected", text: "It throws a TypeError, and the export answers 500." }, desired: { verdict: "unsure", question: "A dash, or refuse the invoice?" } }, gone: { on: "main", why: "formatDate returns a dash now" } } };
+const checkedNote = { ...open, id: "n4", number: 4, title: "A checked note", changed: null, actions: ["check", "bin"], check: { at: new Date(Date.now() - 120000).toISOString(), sections: { problem: { verdict: "checked" }, evidence: { verdict: "checked" }, current: { verdict: "corrected", text: "It throws a TypeError, and the export answers 500." }, desired: { verdict: "unsure", question: "A dash, or refuse the invoice?" } }, gone: { on: "main", why: "formatDate returns a dash now" } } };
 const failedNote = { ...open, id: "n5", number: 5, title: "A note whose check failed", changed: null, actions: ["check", "bin"], check: { error: "Claude took longer than 90 seconds, so the box stopped waiting. Check again." } };
 const checkedNoteTitle = "A checked note";
 const answer = {
@@ -55,6 +55,7 @@ const scenes = {
   "panel history with filed notes": `panel({ ...base, view: "history" })`,
   "panel with just filed notes: Fix in new tab, a fix running, one starting": `panel({ ...base, justFiled: new Set(["h4", "h6"]), fixing: new Set(["h4"]) })`,
   "panel with the three proofs: found, running, never landed": `panel({ ...base, expanded: new Set(["n1", "n6"]), proofs: new Map([["n1", proofsFound], ["n6", { isLoading: true }]]), verifying: new Set(["n6"]) })`,
+  "panel with a long claim, a fix in another file and a long answer": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], solved: { ...answer.notes[0].solved, branch: "fix/add-activity-drawer-reopens-on-the-next-trajectory-page" }, verify: { verdict: "verified", why: "index.tsx line 25 adds a useEffect whose cleanup calls hideAddActivityDrawer. The store's actions object is created once, so the reference is stable and the cleanup runs only on unmount.", test: { found: true, assertsFix: true } } }] }, proofs: new Map([["n1", { change: { ref: "r", path: "src/store.ts", commits: [], elsewhere: [{ sha: "415d818b35aa", subject: "fix: hide the add activity drawer when its page unmounts", files: ["apps/web/src/add-event-mobile/index.tsx", "apps/web/src/add-event-mobile/index.test.tsx", "a.ts", "b.ts"] }] }, landed: { state: "waiting", how: "no PR yet" } }]]) })`,
   "panel with the proofs failing": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], verify: { error: "Claude took longer than 90 seconds" } }] }, proofs: new Map([["n1", { change: { why: "feat/8511-groups is not here, not even fetched" }, landed: { state: "never", how: "its branch is gone, with no merged PR and no same change in main" } }]]) })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
 };
@@ -103,10 +104,53 @@ export default class Scene extends View {
 
 describe.skipIf(!HERDR)("the box drawn by Herdr's engine", () => {
   for (const [name, draw] of Object.entries(scenes)) {
+    // Each scene starts Herdr's engine in a hidden window: give a busy machine time.
     test(name, () => {
       const result = spawnSync(HERDR, ["check", sceneMod(name, draw)], { encoding: "utf8" });
       expect(`${result.stdout}${result.stderr}`).toContain("check passed");
       expect(result.status).toBe(0);
-    });
+    }, 30000);
   }
+});
+
+// "Just filed" lives in the app's storage, so a reload of the mod keeps it: checked with Herdr's own
+// engine, as localStorage only exists there.
+describe.skipIf(!HERDR)("Just filed in the app's storage", () => {
+  test("kept across a reload, per project, gone after two hours or when cleared", () => {
+    const dir = join(tempDir("ui-"), "just-filed");
+    mkdirSync(dir, { recursive: true });
+    for (const file of readdirSync(join(ROOT, "mods", "suggestion-box"))) {
+      if (file.endsWith(".js")) copyFileSync(join(ROOT, "mods", "suggestion-box", file), join(dir, file === "main.js" ? "box-main.js" : file));
+    }
+    writeFileSync(join(dir, "mod.json"), '{ "place": "none", "title": "scene" }\n');
+    writeFileSync(join(dir, "main.js"), `import { View } from "gpui-kit";
+import { JustFiled } from "./box-main.js";
+export default class Scene extends View {
+  render() {
+    const store = "suggestion-box.just-filed.test";
+    const a = new JustFiled(store);
+    a.clear();
+    a.add("github.com/acme/shop", "n1");
+    a.add("github.com/acme/billing", "b1");
+    a.add("github.com/acme/shop", "n2");
+    const b = new JustFiled(store);
+    const found = [[...b.for("github.com/acme/shop")].join(","), [...b.for("github.com/acme/billing")].join(","), [...b.for("github.com/acme/other")].join(",")];
+    b.clear("github.com/acme/shop");
+    found.push([...b.for("github.com/acme/shop")].join(",") + "|" + [...b.for("github.com/acme/billing")].join(","));
+    localStorage.setItem(store, JSON.stringify({ "github.com/acme/shop": [{ id: "old", at: Date.now() - 3 * 3600000 }, { id: "new", at: Date.now() }] }));
+    found.push([...b.for("github.com/acme/shop")].join(","));
+    localStorage.setItem(store, JSON.stringify({ key: "github.com/acme/shop", ids: 5, at: Date.now() }));
+    found.push([...b.for("github.com/acme/shop")].join(","));
+    b.add("github.com/acme/shop", "n3");
+    b.clear();
+    found.push([...b.for("github.com/acme/shop")].join(","));
+    throw new Error("REPORT " + JSON.stringify(found));
+  }
+}
+`);
+    const result = spawnSync(HERDR, ["check", dir], { encoding: "utf8" });
+    // Kept across a reload and per project (filing in one never wipes another), one project cleared on
+    // leaving it, each note for two hours, any other shape as nothing, everything cleared on closing.
+    expect(`${result.stdout}${result.stderr}`).toContain('REPORT ["n1,n2","b1","","|b1","new","",""]');
+  }, 30000);
 });

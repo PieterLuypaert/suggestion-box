@@ -1,10 +1,15 @@
 // How the suggestion box looks: the tab bar's button and the panel on the right. Only drawing; what
 // a click does comes in as `act`, from main.js.
-import { div, svg } from "gpui-kit";
+import { div, image, svg } from "gpui-kit";
 import { Input, Textarea, h_flex, v_flex } from "gpui-base";
+import { checkedSummary } from "./check.js";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
 
-export const ICON = "mods/workspace-chrome/archive.svg";
+// The pixel box, drawn by scripts/make-icon.js: in colour, and grey while collecting is off. An image
+// through the mod's link draws (as Parrot's does); an SVG through it does not.
+export const ICON = "mods/suggestion-box/icons/box.png";
+export const ICON_OFF = "mods/suggestion-box/icons/box-off.png";
+const ICON_LARGE = "mods/suggestion-box/icons/box-large.png";
 const stop = (_e, cx) => cx.stop_propagation();
 
 // The button, drawn as the tab bar draws Files, Changes and Quarterdeck: the box icon, "Box", the
@@ -22,7 +27,7 @@ export function button({ t, counts, isOn, isOff, isDim, why, isWiggling, onToggl
     .tooltip(why)
     .on_mouse_down("left", stop)
     .on_click(() => onToggle())
-    .child(svg(ICON).size(14).when(isOff, (el) => el.opacity(0.5)))
+    .child(image(isOff ? ICON_OFF : ICON).w(16).h(16).flex_none())
     .child("Box")
     .when(isOff, (el) => el.child(div().flex_none().text_size(10.5).text_color(t.dim).child("off")))
     .when(open > 0, (el) => el.child(pill(String(open), t.done)))
@@ -36,24 +41,29 @@ export function panel(s) {
   return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13).text_color(t.foreground)
     .child(header(s))
     .when(Boolean(s.collecting && !s.collecting.project), (el) => el.child(offLine(s)))
-    .when(Boolean(s.notice), (el) => el.child(div().flex_none().mx(10).mt(8).px(10).py(7).rounded(8).text_size(12).bg(t.raised).border(1).border_color(t.border).child(s.notice)))
-    .when(Boolean(s.error), (el) => el.child(div().flex_none().px(14).py(6).text_size(12).text_color(t.blocked).child(s.error)))
-    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(6).child(s.view === "history" ? history(s) : s.view === "settings" ? settingsView(s) : groups(s)))
+    .when(Boolean(s.notice), (el) => el.child(div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).text_size(12).whitespace_normal().child(s.notice)))
+    .when(Boolean(s.error), (el) => el.child(div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).border(1).border_color(t.blocked).text_size(12).text_color(t.blocked).whitespace_normal().child(s.error)))
+    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(8).child(s.view === "history" ? history(s) : s.view === "settings" ? settingsView(s) : groups(s)))
     .child(footer(s));
 }
 
+// Two lines, so nothing is cut off: the box and its buttons, then the project, its counts and its
+// Collecting switch with On or Off in words.
 function header(s) {
   const { t, answer } = s;
   const name = answer?.project?.name ?? "";
   const counts = answer?.counts;
   const sum = counts ? [counts.open ? `${counts.open} open` : "", counts.toVerify ? `${counts.toVerify} to verify` : ""].filter(Boolean).join(" · ") || "empty" : "";
-  return h_flex().h(42).flex_none().pl(14).pr(6).gap(8).items_center().border_b(1).border_color(t.border)
-    .child(div().flex_none().font_semibold().child("Suggestion box"))
-    .child(div().flex_1().min_w(0).truncate().text_color(t.muted).child(name ? `· ${name}` : ""))
-    .child(div().flex_none().text_size(11.5).text_color(t.dim).child(sum))
-    .when(Boolean(s.collecting), (el) => el.child(toggle(t, "collect", "Collecting", s.collecting.project, `Collecting notes for ${name}`, (_e, cx) => s.act("collect", null, cx))))
-    .child(iconButton(t, "settings", svg("mods/workspace-chrome/settings.svg").size(14), s.view === "settings" ? "Back to the notes" : "Settings: which projects use the box", (_e, cx) => s.act("settings", null, cx), s.view === "settings"))
-    .child(iconButton(t, "close", svg("mods/workspace-chrome/x.svg").size(14), "Close (⌥⌘S)", (_e, cx) => s.act("close", null, cx)));
+  const title = s.view === "settings" ? "Suggestion box · Settings" : s.view === "history" ? "Suggestion box · History" : "Suggestion box";
+  const isOn = Boolean(s.collecting?.project);
+  return v_flex().flex_none().pl(14).pr(6).py(8).gap(4).border_b(1).border_color(t.border)
+    .child(h_flex().gap(6).items_center()
+      .child(div().flex_1().min_w(0).truncate().font_semibold().child(title))
+      .child(iconButton(t, "settings", svg("mods/workspace-chrome/settings.svg").size(14), s.view === "settings" ? "Back to the notes" : "Settings: which projects use the box", (_e, cx) => s.act("settings", null, cx), s.view === "settings"))
+      .child(iconButton(t, "close", svg("mods/workspace-chrome/x.svg").size(14), "Close (⌥⌘S)", (_e, cx) => s.act("close", null, cx))))
+    .when(Boolean(name), (el) => el.child(h_flex().gap(8).items_center().pr(8)
+      .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child([name, sum].filter(Boolean).join(" · ")))
+      .when(Boolean(s.collecting), (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))));
 }
 
 function toggle(t, id, label, isOn, tip, onClick) {
@@ -70,8 +80,8 @@ function iconButton(t, id, icon, tip, onClick, isOn = false) {
 
 function offLine(s) {
   const { t } = s;
-  return div().flex_none().px(14).py(6).text_size(12).text_color(t.muted).bg(t.raised).border_b(1).border_color(t.border)
-    .child(`Collecting off for ${s.answer?.project?.name}: new sessions don't hear of the box; a running agent that tries is told to carry on.`);
+  return div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).text_size(12).text_color(t.muted).whitespace_normal()
+    .child(`Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
 }
 
 // Settings: whether agents hear of the box at all, and per project. Every switch says On or Off in
@@ -82,8 +92,8 @@ function settingsView(s) {
   if (!found) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Looking at your spaces…");
   if (found.error) return div().px(8).py(10).text_size(12).text_color(t.blocked).whitespace_normal().child(`Could not list the projects: ${found.error}`);
   const isAll = found.all !== false;
-  return v_flex().gap(10).px(6).py(6)
-    .child(v_flex().gap(6).px(10).py(10).rounded(8).bg(t.raised)
+  return v_flex().gap(8)
+    .child(v_flex().gap(6).px(12).py(10).rounded(8).bg(t.raised)
       .child(h_flex().gap(8).items_center()
         .child(div().flex_1().font_medium().child("Collecting everywhere"))
         .child(toggle(t, "collect-all", isAll ? "On" : "Off", isAll, "Turn the box on or off for every project", (_e, cx) => s.act("collect-all", null, cx))))
@@ -101,7 +111,7 @@ function projectRow(s, project, isAll) {
   const counts = project.counts ?? {};
   const words = [counts.open ? `${counts.open} open` : "", counts.toVerify ? `${counts.toVerify} to verify` : "", counts.filed ? `${counts.filed} filed` : ""].filter(Boolean).join(" · ") || "no notes";
   const isOn = isAll && project.isOn;
-  return h_flex().id(`project:${project.key}`).px(10).py(8).gap(10).items_center().rounded(8).border(1).border_color(project.isHere ? t.input : t.border)
+  return h_flex().id(`project:${project.key}`).px(12).py(10).gap(10).items_center().rounded(8).bg(t.raised).border(1).border_color(project.isHere ? t.input : t.raised)
     .when(!isAll, (el) => el.opacity(0.5))
     .child(v_flex().flex_1().min_w(0).gap(2)
       .child(h_flex().gap(6).items_center()
@@ -113,21 +123,63 @@ function projectRow(s, project, isAll) {
       : div().flex_none().text_size(11.5).text_color(t.dim).child("off everywhere"));
 }
 
+// The card every part of the panel is drawn in, as Settings' Collecting everywhere: raised, with room
+// around its words. A selected card gets an outline; a claim keeps its green one, and shows it is
+// selected by a lighter fill.
+function card(t, id, { isSelected = false, edge = null } = {}) {
+  return v_flex().id(id).px(12).py(10).gap(6).rounded(8).bg(isSelected && edge ? t.hover : t.raised).border(1).border_color(edge ?? (isSelected ? t.input : t.raised));
+}
+
+// The line under a card's title: where, which ticket, how long ago, how it stands.
+// A wrapped part sits close under the first, as the next line of the same sentence.
+const metaRow = (t) => h_flex().flex_wrap().gap_x(8).gap_y(2).items_center().text_size(11.5).text_color(t.muted);
+
+const groupTitle = (t, text) => div().px(4).pt(8).pb(2).text_size(10.5).font_medium().text_color(t.dim).child(text);
+
+// A card that only says something: a title, and calm words under it; the empty box shows the box.
+function messageCard(t, id, title, words, { withBox = false } = {}) {
+  const text = v_flex().flex_1().min_w(0).gap(6).child(div().font_medium().whitespace_normal().child(title)).child(div().text_size(12).text_color(t.muted).whitespace_normal().child(words));
+  return card(t, id).child(withBox ? h_flex().gap(12).items_start().child(image(ICON_LARGE).w(32).h(32).flex_none().mt(2)).child(text) : text);
+}
+
+// A card's buttons: Bin quiet on the far left, away from the others; the main action filled, last.
+const QUIET = ["bin"];
+
+function actionsRow(s, note, { primary = null, isBusy = () => false, leave = [] } = {}) {
+  const { t } = s;
+  const actions = note.actions.filter((a) => !leave.includes(a));
+  if (!actions.length) return div();
+  const rest = actions.filter((a) => !QUIET.includes(a));
+  const ordered = [...rest.filter((a) => a !== primary), ...rest.filter((a) => a === primary)];
+  return h_flex().gap(6).items_center().pt(2)
+    .children(actions.filter((a) => QUIET.includes(a)).map((a) => quietButton(t, note, a, s.act)))
+    .child(div().flex_1())
+    .children(ordered.map((a) => actionButton(t, note, a, s.act, a === primary, isBusy(a))));
+}
+
+function quietButton(t, note, action, act) {
+  return div().id(`${action}:${note.id}`).flex_none().h(24).px(8).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
+    .hover((st) => st.bg(t.hover).text_color(t.foreground))
+    .tooltip(action === "bin" ? "Bin: take the note away (Undo for a few seconds, Restore in the history)" : LABELS[action])
+    .on_click((_e, cx) => act(action, note, cx))
+    .child(LABELS[action]);
+}
+
 function groups(s) {
   const { t, answer } = s;
-  if (s.noProject) return div().px(8).py(10).text_size(12).text_color(t.dim).child(s.noProject);
+  if (s.noProject) return messageCard(t, "no-box", "No box here", s.noProject);
   if (!answer) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Opening the box…");
-  if (!answer.project) return div().px(8).py(10).text_size(12).text_color(t.dim).child(s.noProject ?? "No git repo in this space, so there is no box here.");
+  if (!answer.project) return messageCard(t, "no-box", "No box here", "No git repo in this space, so there is no box here.");
   const toVerify = answer.notes.filter((n) => n.state === "to verify");
   const open = answer.notes.filter((n) => n.state === "open");
   const filed = (answer.history ?? []).filter((n) => n.state === "filed" && s.justFiled?.has(n.id));
   if (!toVerify.length && !open.length && !filed.length && !s.undo) {
-    return div().px(8).py(10).text_size(12).text_color(t.dim).child(`Nothing in ${answer.project.name}'s box. Agents drop notes here when they spot a problem outside their ticket.`);
+    return (answer.history ?? []).length
+      ? messageCard(t, "empty", `Nothing open in ${answer.project.name}'s box`, "Filed, solved and binned notes are in the history, below. Agents drop a new note here when they spot a problem outside their ticket.", { withBox: true })
+      : messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.", { withBox: true });
   }
-  const group = (name, notes, draw) => notes.length
-    ? [div().px(4).pt(10).pb(4).text_size(10.5).font_medium().text_color(t.dim).child(`${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)]
-    : [];
-  return v_flex().gap(4).children([
+  const group = (name, notes, draw) => notes.length ? [groupTitle(t, `${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)] : [];
+  return v_flex().gap(8).children([
     ...group("To verify", toVerify, (n) => verifyCard(s, n)),
     ...(s.undo ? [undoRow(s, s.undo)] : []),
     ...group("Open", open, (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : noteCard(s, n))),
@@ -139,13 +191,28 @@ const LABELS = { check: "Check", "mark-solved": "Mark solved", file: "File issue
 
 const BUSY = { check: "Checking…", fix: "Starting the tab…" };
 
+// What each button does, on hover. The check says who does it: your own Claude, read-only.
+const TIPS = {
+  check: "Your own Claude (Sonnet, read-only) checks this note against the code on main and on its branch",
+  "check-again": "Check again: your own Claude reads the code anew, also when it did not change",
+  file: "Turn it into a GitHub issue: you see and edit the text first, nothing is created until you press Create issue",
+  "mark-solved": "It is solved already: the note waits in To verify until you confirm it",
+  confirm: "The fix holds: the note leaves the box, and the box watches until the fix lands in main",
+  "not-solved": "The claim goes; the note is back where it was",
+  reopen: "Back to the open notes",
+  restore: "Back to the open notes",
+  fix: "Start this issue as a ticket in a new tab, through the parallel-tickets launcher",
+};
+
 function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
   if (isBusy) {
     return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
       .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child(BUSY[action] ?? "Working…"));
   }
-  const label = action === "check" && note.check && !note.check.error ? "Check again" : LABELS[action];
+  const isAgain = action === "check" && note.check && !note.check.error;
+  const label = isAgain ? "Check again" : LABELS[action];
   return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
+    .tooltip(TIPS[isAgain ? "check-again" : action] ?? label)
     .bg(isPrimary ? t.solid : t.background).text_color(isPrimary ? t.solid_foreground : t.foreground).border(1).border_color(isPrimary ? t.solid : t.border)
     .hover((st) => st.bg(isPrimary ? t.solid : t.hover))
     .on_click((_e, cx) => act(action, note, cx))
@@ -171,28 +238,37 @@ function chip(t, text, color) {
 
 function noteCard(s, note) {
   const { t } = s;
-  const isSelected = s.selected === note.id;
   const isOpen = s.expanded.has(note.id);
   const where = note.at ? `${note.at.path.split("/").pop()}${note.at.line ? `:${note.at.line}` : ""}` : null;
-  return v_flex().id(`note:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1)
-    .border_color(isSelected ? t.input : t.chrome).bg(s.fresh?.has(note.id) ? t.raised : t.chrome).hover((st) => st.bg(t.hover))
-    .child(div().id(`title:${note.id}`).font_medium().cursor_pointer().whitespace_normal().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
-    .child(h_flex().flex_wrap().gap(8).items_center().text_size(11.5).text_color(t.muted)
+  return card(t, `note:${note.id}`, { isSelected: s.selected === note.id })
+    .child(div().id(`title:${note.id}`).font_medium().cursor_pointer().whitespace_normal().tooltip(isOpen ? "Close its sections" : "Open its four sections").on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
+    .child(metaRow(t)
       .when(Boolean(where), (el) => el.child(div().id(`at:${note.id}`).text_color(t.accent).cursor_pointer().tooltip(`Open ${note.at.path} in Cursor`).on_click((_e, cx) => s.act("open-file", note, cx)).child(where)))
       .when(Boolean(note.from?.ticket), (el) => el.child(div().id(`ticket:${note.id}`).cursor_pointer().tooltip("Its tab, or the ticket on GitHub").on_click((_e, cx) => s.act("jump", note, cx)).child(`#${note.from.ticket}`)))
       .child(div().child(note.age))
-      .when(note.spotted > 1, (el) => el.child(div().text_color(t.working).child(`${note.spotted}×`)))
+      .when(note.spotted > 1, (el) => el.child(div().text_color(t.working).child(`seen ${note.spotted}×`)))
       .when(Boolean(note.changed), (el) => el.child(chip(t, note.changed?.kind === "removed" ? "file removed" : `changed on ${note.changed?.on}`, t.working)))
       .when(Boolean(note.notVerified), (el) => el.child(chip(t, `claimed on ${note.notVerified?.branch}, not verified`, t.working)))
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
       .when(note.state === "filed", (el) => el.child(chip(t, `filed #${note.issue?.number}`, t.ansi2))))
+    .when(Boolean(checkedSummary(note.check)) && !isChecking(s, note), (el) => el.child(checkedLine(t, note)))
     .when(Boolean(note.check?.error) && !isChecking(s, note), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`Not checked: ${note.check.error}`)))
-    .when(Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note), (el) => el.child(goneBanner(s, note)))
+    .when(hasGoneBanner(s, note), (el) => el.child(goneBanner(s, note)))
     .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
-    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, false, a === "check" && isChecking(s, note))))));
+    .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "file", isBusy: (a) => a === "check" && isChecking(s, note), leave: hasGoneBanner(s, note) ? ["bin"] : [] })));
 }
 
+// The check says the problem is gone: its banner holds Mark solved and Bin.
+const hasGoneBanner = (s, note) => Boolean(note.check?.gone) && note.state === "open" && !isChecking(s, note);
+
 const isChecking = (s, note) => Boolean(s.checking?.has(note.id));
+
+// Who checked the note, when, and what it found, so that shows without opening it.
+function checkedLine(t, note) {
+  return h_flex().gap(6).items_center().text_size(11.5).text_color(t.muted)
+    .child(div().flex_none().size(6).rounded(3).bg(note.check?.gone ? t.working : t.ansi2))
+    .child(div().min_w(0).whitespace_normal().child(checkedSummary(note.check)));
+}
 
 const FIELD_LABELS = { checking: "Checking…", "not-checked": "Not checked", checked: "Checked", corrected: "Corrected", agent: "The agent's text", unsure: "Unsure" };
 
@@ -202,10 +278,11 @@ const FIELD_LABELS = { checking: "Checking…", "not-checked": "Not checked", ch
 function editorCard(s, note, ed) {
   const { t } = s;
   const act = (name, what = note) => (_e, cx) => s.act(`editor-${name}`, what, cx);
-  return v_flex().id(`editor:${note.id}`).px(10).py(10).gap(8).rounded(8).border(1).border_color(t.input).bg(t.raised)
+  return v_flex().id(`editor:${note.id}`).px(12).py(10).gap(8).rounded(8).border(1).border_color(t.input).bg(t.raised)
     .child(h_flex().gap(8).items_center().text_size(11.5).text_color(t.muted)
       .child(div().flex_1().min_w(0).truncate().child(`Filing note ${note.number}`))
       .when(ed.canStartOver, (el) => el.child(link(t, `start-over:${note.id}`, "Start over", act("start-over")))))
+    .when(!ed.isChecking && Boolean(checkedSummary(note.check)), (el) => el.child(checkedLine(t, note)))
     .when(ed.isChecking, (el) => el.child(h_flex().gap(6).items_center().text_size(12).text_color(t.muted)
       .child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child("Checking the note against the code…")))
     .when(Boolean(ed.checkError), (el) => el.child(h_flex().gap(8).items_start().text_size(12)
@@ -308,10 +385,10 @@ function filedLines(s, note) {
 
 function filedCard(s, note) {
   const { t } = s;
-  return v_flex().id(`filed:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1).border_color(t.chrome).bg(t.chrome)
+  return card(t, `filed:${note.id}`)
     .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
     .child(filedLines(s, note))
-    .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, a === "fix", a === "fix" && Boolean(s.fixing?.has(note.id)))))));
+    .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "fix", isBusy: (a) => a === "fix" && Boolean(s.fixing?.has(note.id)) })));
 }
 
 const VERDICT_LABELS = { checked: "Checked", corrected: "Corrected", unsure: "Unsure" };
@@ -338,24 +415,27 @@ function sections(t, note, isBusy = false) {
 function goneBanner(s, note) {
   const { t } = s;
   const gone = note.check.gone;
-  return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.working).bg(t.raised)
+  return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.working).bg(t.chrome)
     .child(div().text_size(12.5).whitespace_normal().child(`Looks solved on ${gone.on}: ${gone.why}`))
-    .child(h_flex().gap(6).justify_end()
+    .child(h_flex().gap(6).items_center()
+      .child(div().id(`gone-bin:${note.id}`).flex_none().h(24).px(8).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
+        .hover((st) => st.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => s.act("bin", note, cx)).child("Bin"))
+      .child(div().flex_1())
       .child(div().id(`gone-solved:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
-        .bg(t.solid).text_color(t.solid_foreground).on_click((_e, cx) => s.act("mark-solved-gone", note, cx)).child("Mark solved"))
-      .child(div().id(`gone-bin:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).cursor_pointer()
-        .border(1).border_color(t.border).hover((st) => st.bg(t.hover)).on_click((_e, cx) => s.act("bin", note, cx)).child("Bin")));
+        .bg(t.solid).text_color(t.solid_foreground).on_click((_e, cx) => s.act("mark-solved-gone", note, cx)).child("Mark solved")));
 }
 
 function verifyCard(s, note) {
   const { t } = s;
   const claim = note.solved ?? {};
-  const isSelected = s.selected === note.id;
   const isOpen = s.expanded.has(note.id);
-  return v_flex().id(`note:${note.id}`).px(10).py(8).gap(5).rounded(8).border(1).border_color(isSelected ? t.input : t.border).bg(t.raised)
+  return card(t, `note:${note.id}`, { isSelected: s.selected === note.id, edge: t.ansi2 })
     .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
-    .child(h_flex().flex_wrap().gap(8).items_center().text_size(11.5).text_color(t.muted)
-      .child(div().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"} on ${claim.branch ?? "a branch"}`))
+    .child(metaRow(t)
+      .child(div().flex_none().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"}`))
+      // The branch stays whole: it moves to the next line as one piece, and only a branch wider than
+      // the card ends in an ellipsis.
+      .child(div().min_w(0).max_w_full().truncate().child(`on ${claim.branch ?? "a branch"}`))
       .when(Boolean(claim.neverLanded), (el) => el.child(chip(t, "the fix never landed", t.blocked))))
     .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed, but ${claim.neverLanded.how}.`)))
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
@@ -364,7 +444,7 @@ function verifyCard(s, note) {
       .when(Boolean(claim.proof), (el) => el.child(div().whitespace_normal().text_color(t.muted).child(`proof: ${claim.proof}`))))
     .when(isOpen, (el) => el.child(proofList(s, note)))
     .when(!isOpen, (el) => el.child(div().id(`show-proofs:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child("Show the three proofs")))
-    .child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, a === "confirm"))));
+    .child(actionsRow(s, note, { primary: "confirm" }));
 }
 
 // The three proofs of a claim (PLAN.md section 6b), each with a dot that says how it stands.
@@ -372,18 +452,22 @@ function proofList(s, note) {
   const { t } = s;
   const found = s.proofs?.get(note.id) ?? null;
   return v_flex().gap(8).pt(2)
-    .child(proofRow(t, "The change", ...changeState(t, found)).when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change))))
+    .child(proofRow(t, "The change", ...changeState(t, found))
+      .when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change)))
+      .when(!found?.change?.commits?.length && Boolean(found?.change?.elsewhere?.length), (el) => el.child(elsewhereList(s, found.change))))
     .child(proofRow(t, "Independent check", ...verifyState(t, note, s.verifying?.has(note.id)))
       .when(Boolean(note.verify?.error) && !s.verifying?.has(note.id), (el) => el.child(h_flex().child(div().id(`verify-again:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("verify-again", note, cx)).child("Check again")))))
     .child(proofRow(t, "Landed", ...landedState(t, found)));
 }
 
+// A proof: its dot and name on a line of their own, then what it found under it, the full width of
+// the card, so a long answer never squeezes into a narrow column beside the name.
 function proofRow(t, name, color, text, detail = null) {
   return v_flex().gap(3)
     .child(h_flex().gap(7).items_center().text_size(12)
       .child(div().flex_none().size(8).rounded(4).bg(color))
-      .child(div().flex_none().font_medium().child(name))
-      .child(div().flex_1().min_w(0).text_color(t.muted).whitespace_normal().child(text)))
+      .child(div().flex_none().font_medium().child(name)))
+    .child(div().pl(15).text_size(12).text_color(t.muted).whitespace_normal().child(text))
     .when(Boolean(detail), (el) => el.child(div().pl(15).text_size(11.5).text_color(t.muted).whitespace_normal().child(detail)));
 }
 
@@ -393,7 +477,9 @@ function changeState(t, found) {
   const { change } = found;
   if (change.why) return [t.dim, change.why];
   const count = change.commits.length + (change.more ?? 0);
-  return count ? [t.ansi2, `${count === 1 ? "1 commit" : `${count} commits`} since the drop changed these lines`] : [t.working, "No commit since the drop changed these lines"];
+  if (count) return [t.ansi2, `${count === 1 ? "1 commit" : `${count} commits`} since the drop changed the note's lines`];
+  if (change.elsewhere?.length) return [t.working, "The note's lines did not change; these are the branch's other changes, which the independent check reads too."];
+  return [t.working, "No commit since the drop changed the note's lines"];
 }
 
 const VERIFY_WORDS = { verified: "Verified", partly: "Partly", not_fixed: "Not fixed" };
@@ -434,6 +520,19 @@ function commitList(s, note, change) {
       .when(commit.lines.length > MAX_LINES, (el) => el.child(div().px(6).text_color(t.dim).child(`… ${commit.lines.length - MAX_LINES} more lines`))))));
 }
 
+// The branch's commits that changed other files than the note's: each with the files it touched.
+function elsewhereList(s, change) {
+  const { t } = s;
+  const short = (path) => path.split("/").slice(-2).join("/");
+  const shown = change.elsewhere.slice(-3);
+  const more = change.elsewhere.length - shown.length + (change.elsewhereMore ?? 0);
+  return v_flex().gap(4).pl(15).pt(2).when(more > 0, (el) => el.child(div().text_size(11.5).text_color(t.dim).child(`and ${more} earlier ${more === 1 ? "change" : "changes"} on the branch`))).children(shown.map((commit) => v_flex().gap(1).text_size(11.5)
+    .child(h_flex().gap(8).items_center()
+      .child(div().flex_none().font_family(s.mono).text_color(t.muted).child(commit.sha.slice(0, 7)))
+      .child(div().flex_1().min_w(0).truncate().child(commit.subject)))
+    .child(div().text_color(t.muted).whitespace_normal().child(`${commit.files.slice(0, 3).map(short).join(", ")}${commit.files.length > 3 ? ` and ${commit.files.length - 3} more` : ""}`))));
+}
+
 // The new file's first line in a hunk header, so Open lands on the change.
 function firstNewLine(lines) {
   const header = lines.find((line) => line.kind === "@")?.text ?? "";
@@ -443,35 +542,46 @@ function firstNewLine(lines) {
 
 function undoRow(s, note) {
   const { t } = s;
-  return h_flex().id(`undo:${note.id}`).px(10).py(8).gap(8).rounded(8).bg(t.raised).items_center().text_size(12.5).text_color(t.muted)
+  return h_flex().id(`undo:${note.id}`).px(12).py(8).gap(8).rounded(8).bg(t.raised).items_center().text_size(12.5).text_color(t.muted)
     .child(div().flex_1().min_w(0).truncate().child(`Binned: ${note.title}`))
-    .child(div().id(`undo-button:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).border(1).border_color(t.border).cursor_pointer()
+    .child(div().id(`undo-button:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).border(1).border_color(t.border).bg(t.background).cursor_pointer()
       .hover((st) => st.bg(t.hover)).on_click((_e, cx) => s.act("undo", note, cx)).child("Undo"));
 }
 
 function history(s) {
   const { t, answer } = s;
   const notes = (answer?.history ?? []).filter((note) => !s.justFiled?.has(note.id));
-  if (!notes.length) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Nothing filed, solved or binned in the last 30 days.");
-  return v_flex().gap(4).children(notes.map((note) => {
+  if (!notes.length) return messageCard(t, "empty-history", "Nothing here yet", "Filed, solved and binned notes stay here for 30 days, with Restore and Reopen.");
+  return v_flex().gap(8).children(notes.map((note) => {
     const what = note.state === "binned" ? "Binned" : note.state === "solved" ? solvedLine(note) : null;
-    return v_flex().id(`past:${note.id}`).px(10).py(8).gap(4).rounded(8).hover((st) => st.bg(t.hover))
+    return card(t, `past:${note.id}`)
       .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
       .when(note.state === "filed", (el) => el.child(filedLines(s, note)))
-      .child(h_flex().gap(8).text_size(11.5).text_color(t.muted).when(Boolean(what), (row) => row.child(what)).child(note.age))
+      .child(metaRow(t).when(Boolean(what), (row) => row.child(what)).child(note.age))
       .when(Boolean(note.solved?.how), (el) => el.child(div().pl(8).border_l(2).border_color(t.border).text_size(12).text_color(t.muted).whitespace_normal().child(note.solved.how)))
-      .when(note.actions.length > 0, (el) => el.child(h_flex().gap(6).justify_end().children(note.actions.map((a) => actionButton(t, note, a, s.act, false, a === "fix" && Boolean(s.fixing?.has(note.id)))))));
+      .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { isBusy: (a) => a === "fix" && Boolean(s.fixing?.has(note.id)) })));
   }));
+}
+
+// The keys of the note you picked, so the line fits: only what that note can do.
+const KEYS = { file: "f file", check: "k check", "mark-solved": "s solved", bin: "x bin", confirm: "c confirm", "not-solved": "n not solved" };
+
+function hintsFor(s) {
+  if (s.view !== "list") return "esc back";
+  if (s.editor) return "esc leaves a field · again closes, the draft is kept";
+  // The keys reach the notes of the list: To verify and Open.
+  const note = (s.answer?.notes ?? []).find((one) => one.id === s.selected && (one.state === "open" || one.state === "to verify"));
+  return ["↑↓ pick", note ? "enter open" : null, ...(note?.actions ?? []).map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean).join(" · ");
 }
 
 function footer(s) {
   const { t, answer } = s;
   const past = answer?.history ?? [];
   const count = (state) => past.filter((n) => n.state === state).length;
-  const hints = s.view !== "list" ? "esc back" : s.editor ? "esc leaves a field, then closes the editor; the draft is kept" : "↑↓ pick · enter open · f file · k check · s solved · x bin · u undo · c confirm · n not solved";
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
-      .child(s.view !== "list" ? "◂ Back to the notes" : `Filed ${count("filed")} · Solved ${count("solved")} · Binned ${count("binned")} ▸`))
-    .child(div().flex_1())
-    .child(div().flex_none().truncate().child(hints));
+      .tooltip(s.view !== "list" ? "Back to the notes" : `${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned in the last 30 days`)
+      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.filter((n) => !s.justFiled?.has(n.id)).length} ▸`))
+    .child(div().flex_1().min_w(0).truncate().text_right().child(hintsFor(s)));
 }
+
