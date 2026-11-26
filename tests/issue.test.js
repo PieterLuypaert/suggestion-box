@@ -1,4 +1,4 @@
-// The issue text a note becomes, exactly as PLAN.md section 7 shows it.
+// The issue text a note becomes, exactly as docs/plan.md section 7 shows it.
 import { expect, test } from "bun:test";
 import { branchName, githubRepo, issueText, permalink } from "../mods/suggestion-box/issue.js";
 

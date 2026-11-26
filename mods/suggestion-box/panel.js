@@ -447,7 +447,7 @@ function verifyCard(s, note) {
     .child(actionsRow(s, note, { primary: "confirm" }));
 }
 
-// The three proofs of a claim (PLAN.md section 6b), each with a dot that says how it stands.
+// The three proofs of a claim (docs/plan.md section 6b), each with a dot that says how it stands.
 function proofList(s, note) {
   const { t } = s;
   const found = s.proofs?.get(note.id) ?? null;

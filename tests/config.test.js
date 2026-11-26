@@ -1,5 +1,5 @@
 // Reading the project's config: the small part of YAML it uses, and where an issue goes for each
-// row of the table in PLAN.md section 7.
+// row of the table in docs/plan.md section 7.
 import { describe, expect, test } from "bun:test";
 import { filingTarget, readYaml } from "../mods/suggestion-box/config.js";
 

@@ -1,4 +1,4 @@
-// The states table (PLAN.md section 6c) as code: which actions each note state allows, and what
+// The states table (docs/plan.md section 6c) as code: which actions each note state allows, and what
 // each of the box's actions does to a note. The box shows only these buttons, and its store refuses
 // anything else, also a click that races an agent's claim. Pure: no Herdr and no Node imports.
 import { stateOf } from "./events.js";

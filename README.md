@@ -6,8 +6,8 @@ suggestion box, the agent drops a note in the project's box and carries on. Late
 note against the code, file it as a GitHub issue, or bin it.
 
 This is version 0.6.0: the `suggest` command, the agent instructions, the box as a panel in the
-Herdr app, the check, filing, proving a solve, and fixing in a new tab. [PLAN.md](PLAN.md) has the
-whole plan, and [sketch/blueprint.html](sketch/blueprint.html) shows it.
+Herdr app, the check, filing, proving a solve, and fixing in a new tab. [docs/plan.md](docs/plan.md)
+is the plan it was built from, and [docs/blueprint.html](docs/blueprint.html) shows it.
 
 ## How an agent drops a note
 
@@ -70,7 +70,7 @@ Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 - Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `f` file, `k` check, `s` mark
   solved, `x` bin, `u` undo, `c` confirm, `n` not solved, esc closes.
 
-Each note's state allows a fixed set of actions (PLAN.md section 6c), and the box refuses any
+Each note's state allows a fixed set of actions (docs/plan.md section 6c), and the box refuses any
 other, also a click that races an agent's claim. All reading and writing goes through
 `cli/box.js`, which agents never run.
 
