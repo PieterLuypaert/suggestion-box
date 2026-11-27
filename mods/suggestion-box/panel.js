@@ -54,9 +54,10 @@ function header(s) {
   const { t, answer } = s;
   const name = answer?.project?.name ?? "";
   const counts = answer?.counts;
-  const needs = filedGroups(answer?.history, s.justFiled).needs.length;
+  const filed = filedGroups(answer?.history, s.justFiled);
+  const needs = filed.needs.length;
   // In the order the groups come: what asks for you first.
-  const sum = counts ? [counts.toVerify ? `${counts.toVerify} to verify` : "", needs ? `${needs} need${needs === 1 ? "s" : ""} you` : "", counts.open ? `${counts.open} open` : ""].filter(Boolean).join(" · ") || "empty" : "";
+  const sum = counts ? [counts.toVerify ? `${counts.toVerify} to verify` : "", needs ? `${needs} need${needs === 1 ? "s" : ""} you` : "", counts.open ? `${counts.open} open` : "", filed.justFiled.length ? `${filed.justFiled.length} just filed` : ""].filter(Boolean).join(" · ") || "empty" : "";
   const title = s.view === "settings" ? "Suggestion box · Settings" : s.view === "history" ? "Suggestion box · History" : "Suggestion box";
   const isOn = Boolean(s.collecting?.project);
   return v_flex().flex_none().pl(14).pr(6).py(8).gap(4).border_b(1).border_color(t.border)
@@ -121,18 +122,19 @@ function hintsFor(s) {
   const keys = [...(note?.actions ?? []).map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean);
   return {
     text: keys.length ? keys.join(" · ") : notes.length ? "↑↓ pick a note" : "",
-    tip: notes.length ? "↑↓ picks a note · enter opens its sections · esc closes the panel" : null,
+    tip: notes.length ? "↑↓ picks a note · enter opens it · esc closes the panel" : null,
   };
 }
 
 function footer(s) {
   const { t, answer } = s;
-  const past = answer?.history ?? [];
+  // What the history shows: the list keeps what needs you and what was just filed.
+  const past = inHistory(answer?.history, s.justFiled);
   const count = (state) => past.filter((n) => n.state === state).length;
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
       .tooltip(s.view !== "list" ? "Back to the notes" : `${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned in the last 30 days`)
-      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${inHistory(past, s.justFiled).length} ▸`))
+      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.length} ▸`))
     .child(keyHints(s));
 }
 

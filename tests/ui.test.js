@@ -73,7 +73,7 @@ const words = {
     hasNot: ["JUST FILED", "↑↓ pick"],
   },
   "panel with just filed notes: Fix in new tab, a fix running, one starting": {
-    has: ["NEEDS YOU · 2", "JUST FILED · 3", "Being fixed in its own tab", "Closed on GitHub", "Not on the board: run gh auth refresh -s project", "↑↓ pick a note"],
+    has: ["shop · 1 to verify · 2 need you · 2 open · 3 just filed", "NEEDS YOU · 2", "JUST FILED · 3", "Being fixed in its own tab", "Closed on GitHub", "Not on the board: run gh auth refresh -s project", "↑↓ pick a note"],
     hasNot: ["NEED YOU", "NEEDS YOU · 3"],
   },
   "panel history by state, one row open": {
@@ -129,6 +129,10 @@ export default class Scene extends View {
 `);
   return dir;
 }
+
+test("every scene with words to check exists", () => {
+  expect(Object.keys(words).filter((name) => !scenes[name])).toEqual([]);
+});
 
 describe.skipIf(!HERDR)("the box drawn by Herdr's engine", () => {
   for (const [name, draw] of Object.entries(scenes)) {

@@ -116,7 +116,7 @@ function verifyState(t, note, isRunning) {
 function landedState(t, found) {
   if (!found || found.isLoading) return [t.dim, "Looking for its PR…"];
   if (found.error) return [t.dim, "Could not look"];
-  const color = { landed: t.ansi2, waiting: t.working, never: t.blocked }[found.landed.state];
+  const color = { landed: t.ansi2, waiting: t.ansi4, never: t.blocked }[found.landed.state];
   return [color, found.landed.state === "landed" ? `Landed: ${found.landed.how}` : found.landed.how];
 }
 
