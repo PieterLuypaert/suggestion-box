@@ -70,6 +70,7 @@ export function filedCard(s, note) {
       .child(link(t, `issue:${note.id}`, `#${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
       .when(Boolean(note.fix?.branch) && !issue.closed, (el) => el.child(link(t, `fixing:${note.id}`, "Go to its tab ↗", (_e, cx) => s.act("jump-fix", note, cx))))
       .child(div().child(note.age)))
-    .child(needsYou(s, note, { saysBoard: false }))
+    // The board's failure is said once: in the first line, or here when something else came first.
+    .child(needsYou(s, note, { saysBoard: !step.isBoard }))
     .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "fix", isBusy: (a) => a === "fix" && Boolean(s.fixing?.has(note.id)) })));
 }

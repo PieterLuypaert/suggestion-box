@@ -12,7 +12,8 @@ test("ready: on its board, start the fix whenever you like", () => {
 test("needs you: a fix that did not start, one that never reported back, not on the board", () => {
   expect(filedStep({ ...filed, fixError: { why: "uncommitted work" } })).toEqual({ kind: "needs", text: "Fix in new tab did not start: uncommitted work" });
   expect(filedStep({ ...filed, fix: { starting: true, isStale: true } }).kind).toBe("needs");
-  expect(filedStep({ ...filed, board: { error: "run gh auth refresh -s project" } })).toEqual({ kind: "needs", text: "Not on the board: run gh auth refresh -s project" });
+  expect(filedStep({ ...filed, board: { error: "run gh auth refresh -s project" } })).toEqual({ kind: "needs", text: "Not on the board: run gh auth refresh -s project", isBoard: true });
+  expect(filedStep({ ...filed, board: { error: "e" }, fixError: { why: "w" } }).isBoard).toBeUndefined();
 });
 
 test("under way, and done", () => {

@@ -47,6 +47,8 @@ All notable changes to the suggestion box. The format follows
 
 ### Fixed
 
+- A filed issue with two things to do (a fix that did not start, and not on the board) showed the
+  board's Add to board button without saying why.
 - A test run no longer leaves its throwaway repos and folders in the temporary folder (gigabytes
   after a few hundred runs): it keeps them in one folder of its own and removes it at the end.
 - A file opened from a claim's commit in the editor is a copy in the temporary folder; the daily
