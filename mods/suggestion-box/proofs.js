@@ -185,6 +185,17 @@ export function verifyHolds(verify, basis) {
 // check of its own, never the last claim's.
 export const claimKey = (note) => `${note.id}:${note.solved?.at ?? ""}`;
 
+// While the panel is open, a claim's change and landing are looked at again this often, until its
+// fix has landed: a merged PR then shows within half a minute.
+export const PROOFS_REFRESH_MS = 30000;
+
+// Whether a claim's proofs, as last found, are due another look: not while one runs, never once landed.
+export function proofsDue(found, now = Date.now()) {
+  if (!found) return true;
+  if (found.isLoading || found.isRefreshing || found.landed?.state === "landed") return false;
+  return now - (found.at ?? 0) > PROOFS_REFRESH_MS;
+}
+
 const base = (path) => String(path ?? "").split("/").pop();
 
 // The change in a few words: the last commit that changed the note's lines, else the branch's last

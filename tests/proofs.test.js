@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeProof, landedProof } from "../cli/box/proofs.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
-import { changeRow, claimKey, claimVerdict, landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
+import { changeRow, claimKey, claimVerdict, landedState, mapRange, pickPr, PROOFS_REFRESH_MS, proofsDue, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
 const BRANCH = "feat/8504-group-records";
@@ -494,6 +494,18 @@ describe("the verdict a claim's card leads with", () => {
 
   test("a claim's own key: a new claim on the same note is another key", () => {
     expect(claimKey({ id: "n1", solved: { at: "a" } })).not.toBe(claimKey({ id: "n1", solved: { at: "b" } }));
+  });
+
+  test("proofs are looked at again every half minute until the fix landed", () => {
+    const at = 1_000_000;
+    const waiting = { change: {}, landed: { state: "waiting", how: "PR #3 is open" }, at };
+    expect(proofsDue(undefined, at)).toBe(true);
+    expect(proofsDue(waiting, at + PROOFS_REFRESH_MS - 1)).toBe(false);
+    expect(proofsDue(waiting, at + PROOFS_REFRESH_MS + 1)).toBe(true);
+    expect(proofsDue({ ...waiting, isRefreshing: true }, at + PROOFS_REFRESH_MS + 1)).toBe(false);
+    expect(proofsDue({ isLoading: true }, at + PROOFS_REFRESH_MS + 1)).toBe(false);
+    expect(proofsDue({ ...waiting, landed: { state: "landed", how: "PR #3 merged" } }, at + 10 * PROOFS_REFRESH_MS)).toBe(false);
+    expect(proofsDue({ error: "gh failed", at }, at + PROOFS_REFRESH_MS + 1)).toBe(true);
   });
 
   test("a fix in another file names that file, and how many more", () => {

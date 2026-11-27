@@ -1,6 +1,6 @@
 // A claim's proofs in the panel: the change and landed, the independent check, and Open at a commit.
 import { exec, notify } from "herdr";
-import { claimKey } from "./proofs.js";
+import { claimKey, proofsDue } from "./proofs.js";
 import { box, CHECK_MS, EDITORS, PROOFS_MS } from "./view-host.js";
 
 // The view's methods for this part, added to it in main.js.
@@ -11,24 +11,28 @@ export const proving = {
   ensureProofs(cx, note) {
     if (!this.boxJs) return;
     const key = claimKey(note);
-    if (!this.proofs.has(key)) this.loadProofs(cx, note);
+    const found = this.proofs.get(key);
+    // Looked at again every half minute until the fix landed, so a merge shows soon.
+    if (proofsDue(found)) this.loadProofs(cx, note, { isRefresh: Boolean(found) });
     if (this.verifyAsked.has(key) || this.verifying.size > 0) return;
     this.verifyAsked.add(key);
     this.verifyClaim(cx, note, { isAuto: true });
   },
 
-  loadProofs(cx, note) {
+  // A refresh keeps showing what was found until the new look is in, so the card never flickers.
+  loadProofs(cx, note, { isRefresh = false } = {}) {
     const key = claimKey(note);
-    if (!this.boxJs || this.proofs.get(key)?.isLoading) return;
-    if (this.proofs.has(key) && !this.proofs.get(key).error) return;
-    this.proofs.set(key, { isLoading: true });
+    const known = this.proofs.get(key);
+    if (!this.boxJs || known?.isLoading || known?.isRefreshing) return;
+    if (known && !known.error && !isRefresh) return;
+    this.proofs.set(key, isRefresh && known && !known.error ? { ...known, isRefreshing: true } : { isLoading: true });
     const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         const answer = await box(this.node, this.boxJs, ["proofs", folder, note.id], PROOFS_MS);
-        this.proofs.set(key, { change: answer.change, landed: answer.landed });
+        this.proofs.set(key, { change: answer.change, landed: answer.landed, at: Date.now() });
       } catch (error) {
-        this.proofs.set(key, { error: error.message });
+        this.proofs.set(key, isRefresh && known && !known.error ? { ...known, isRefreshing: false, at: Date.now() } : { error: error.message, at: Date.now() });
       }
       cx.notify();
     });

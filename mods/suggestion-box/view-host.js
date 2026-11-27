@@ -38,6 +38,9 @@ export const PROOFS_MS = 90000;
 
 // Confirmed fixes are looked at again this often until they land.
 export const WATCH_MS = 300000;
+// While the panel is open, a merge shows within a minute: the watch then runs on each of the
+// button's minute ticks (a little under a minute, so a late tick is never skipped).
+export const WATCH_SHOWN_MS = 50000;
 
 // A read on its way for a folder, for every copy: the space's last read shows until it lands.
 export const READING = "suggestion-box.reading";

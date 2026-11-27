@@ -2,6 +2,7 @@
 import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
+import { PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
 // What a button is called, for the line that says it failed.
@@ -60,6 +61,9 @@ export const panelCopy = {
         cx.notify();
       }
       this.wasShown = shown;
+    });
+    cx.timer.every(PROOFS_REFRESH_MS, (cx) => {
+      if (isShown(BLOCK) && (this.answer()?.notes ?? []).some((note) => note.state === "to verify")) cx.notify();
     });
   },
 

@@ -3,7 +3,7 @@
 import { checking, layout, nextCommand, notify, run, setShared, shared, watchFolder, window } from "herdr";
 import { button } from "./panel.js";
 import { isWatched } from "./rules.js";
-import { BLOCK, box, CHANGES_MS, DAY_MS, find, isShown, LIVE, OTHERS, PROOFS_MS, sleep, WATCH_MS } from "./view-host.js";
+import { BLOCK, box, CHANGES_MS, DAY_MS, find, isShown, LIVE, OTHERS, PROOFS_MS, sleep, WATCH_MS, WATCH_SHOWN_MS } from "./view-host.js";
 
 // A filed note whose issue may still close, or open again: the watch looks for that too.
 const hasOpenIssue = (note) => note.state === "filed" && Boolean(note.issue);
@@ -48,8 +48,11 @@ export const buttonCopy = {
   watchFixes(cx) {
     const answer = this.answer();
     const history = answer?.history ?? [];
-    if (!answer?.project || !history.some((note) => isWatched(note) || hasOpenIssue(note)) || Date.now() - (this.watchedAt ?? 0) < WATCH_MS) return;
+    // Every minute while you look at the panel, so a merged PR shows soon; else every five minutes.
+    const every = isShown(BLOCK) ? WATCH_SHOWN_MS : WATCH_MS;
+    if (this.isWatching || !answer?.project || !history.some((note) => isWatched(note) || hasOpenIssue(note)) || Date.now() - (this.watchedAt ?? 0) < every) return;
     this.watchedAt = Date.now();
+    this.isWatching = true;
     const folder = this.shownFolder();
     // One question per repo about its filed issues, a fetch, then per watched fix gh and git
     // ls-remote, each 20 s at most.
@@ -62,6 +65,7 @@ export const buttonCopy = {
       } catch (error) {
         console.log(`suggestion box: watching fixes failed: ${error.message}`);
       }
+      this.isWatching = false;
     });
   },
 
@@ -97,7 +101,12 @@ export const buttonCopy = {
     if (!opened.length) return;
     const hide = opened.includes(BLOCK) ? OTHERS.filter((id) => now[id]) : now[BLOCK] ? [BLOCK] : [];
     if (hide.length) cx.spawn(async () => hide.forEach((id) => run("layout.hide", { id })));
-    if (opened.includes(BLOCK)) this.read(cx, true);
+    if (opened.includes(BLOCK)) {
+      this.read(cx, true);
+      // Opening the panel looks at once whether a fix landed or an issue closed meanwhile.
+      this.watchedAt = 0;
+      this.watchFixes(cx);
+    }
   },
 
   renderButton(cx, t) {
