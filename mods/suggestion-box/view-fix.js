@@ -18,7 +18,9 @@ export const fixing = {
         this.error = "";
         this.say(cx, `Fixing note ${note.number} in ${answer.branch}: its tab is open in this space.`);
       } catch (error) {
-        this.error = `Fix in new tab did not start for note ${note.number}: ${error.message}`;
+        // Said once: on the note under Needs you when it keeps the failure, else here.
+        if (error.isOnNote) this.say(cx, `Fix in new tab did not start for note ${note.number}: its card under Needs you says why.`);
+        else this.error = `Fix in new tab did not start for note ${note.number}: ${error.message}`;
       }
       this.fixing.delete(note.id);
       this.read(cx, false);

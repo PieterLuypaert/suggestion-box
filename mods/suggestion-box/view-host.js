@@ -98,6 +98,6 @@ export async function box(node, path, args, timeout = 60000) {
   } catch {
     throw new Error((result.stderr || result.stdout).trim().split("\n").pop() || `box.js stopped with code ${result.code}`);
   }
-  if (answer.error) throw new Error(answer.error);
+  if (answer.error) throw Object.assign(new Error(answer.error), { isOnNote: Boolean(answer.isOnNote) });
   return answer;
 }
