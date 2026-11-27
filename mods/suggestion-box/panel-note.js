@@ -20,6 +20,8 @@ export function noteCard(s, note) {
       .when(Boolean(note.notVerified), (el) => el.child(chip(t, `claimed on ${note.notVerified?.branch}, not verified`, t.working)))
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
       .when(note.state === "filed", (el) => el.child(chip(t, `filed #${note.issue?.number}`, t.ansi2))))
+    // A claim you turned down says why, so the next look starts from it.
+    .when(Boolean(note.notVerified?.reason), (el) => el.child(div().text_size(12).text_color(t.muted).whitespace_normal().child(`Not solved: ${note.notVerified.reason}`)))
     .when(Boolean(checkedSummary(note.check)) && !isChecking(s, note), (el) => el.child(checkedLine(t, note)))
     .when(Boolean(note.check?.error) && !isChecking(s, note), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`Not checked: ${note.check.error}`)))
     .when(hasGoneBanner(s, note), (el) => el.child(goneBanner(s, note)))

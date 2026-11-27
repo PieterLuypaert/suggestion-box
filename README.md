@@ -87,6 +87,7 @@ click opens its details and its buttons: Fix in new tab, Restore, Reopen. Now ho
 - **Just filed**: the issues filed while the panel is open, each with its next step, until the
   panel closes; then they are under Filed.
 - **Collecting** in the header switches drops off and on for this project; the ⚙ for all projects.
+  While collecting is off everywhere, the header says so and its link opens Settings.
 - One colour language: a dot or line in amber needs you, blue is under way, green is ready or
   landed, grey is done. Links are plain text that underlines on hover.
 - Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `f` file, `k` check, `s` mark

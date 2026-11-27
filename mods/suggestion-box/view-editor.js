@@ -246,6 +246,7 @@ export const editing = {
       target: editor.target, line: targetLine(editor.target), similar: editor.similar,
       off: this.offFor(editor), error: editor.error, isFiling: editor.isFiling, notGone: editor.notGone,
       gone: isChecking ? null : note.check?.gone ?? null, checkError: isChecking ? null : note.check?.error ?? null,
+      checkMissing: !isChecking && !note.check,
       canCopy: Boolean(editor.target && editor.target.kind !== "github"), canStartOver: Boolean(draft),
     };
   },

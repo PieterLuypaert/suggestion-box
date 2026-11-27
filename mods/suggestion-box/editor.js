@@ -68,7 +68,7 @@ export const isPublicTarget = (target) => target?.kind === "github" && !["privat
 export function offReason({ note, texts, target, isChecking = false, isFiling = false, notGone = null, fine = [] }) {
   if (isFiling) return "Creating the issue…";
   if (isChecking) return "Waiting for the check";
-  if (!note.check) return "The check did not finish; check again";
+  if (!note.check) return "Waiting for a check: Check again above";
   if (!target) return "Looking up where it goes";
   if (target.kind === "github" && target.why) return target.why;
   if (note.check.gone && !notGone) return "The check says this is solved";

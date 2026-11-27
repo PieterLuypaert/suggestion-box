@@ -70,7 +70,7 @@ describe("why Create issue is off", () => {
   test("in the order the person meets them", () => {
     expect(offReason({ ...base, isFiling: true })).toBe("Creating the issue…");
     expect(offReason({ ...base, isChecking: true })).toBe("Waiting for the check");
-    expect(offReason({ ...base, note: { ...note, check: null } })).toBe("The check did not finish; check again");
+    expect(offReason({ ...base, note: { ...note, check: null } })).toBe("Waiting for a check: Check again above");
     expect(offReason({ ...base, target: null })).toBe("Looking up where it goes");
     expect(offReason({ ...base, target: { kind: "github", why: "This project has no GitHub repo to file in" } })).toBe("This project has no GitHub repo to file in");
     expect(offReason({ ...base, texts: { ...texts, title: "" } })).toBe("Fill in: Title");
