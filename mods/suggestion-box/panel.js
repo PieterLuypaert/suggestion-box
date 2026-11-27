@@ -9,6 +9,7 @@ import { filedGroups, inHistory } from "./filed-step.js";
 import { filedCard } from "./panel-filed.js";
 import { history } from "./panel-history.js";
 import { noteCard } from "./panel-note.js";
+import { canConfirm, claimKey } from "./proofs.js";
 import { groupTitle, ICON, ICON_OFF, iconButton, messageCard, stop, toggle } from "./panel-parts.js";
 import { settingsView } from "./panel-settings.js";
 export { ICON, ICON_OFF } from "./panel-parts.js";
@@ -119,7 +120,8 @@ function hintsFor(s) {
   // The keys reach the notes of the list: To verify and Open.
   const notes = (s.answer?.notes ?? []).filter((one) => one.state === "open" || one.state === "to verify");
   const note = notes.find((one) => one.id === s.selected);
-  const keys = [...(note?.actions ?? []).map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean);
+  const actions = (note?.actions ?? []).filter((a) => a !== "confirm" || canConfirm(s.proofs?.get(claimKey(note))));
+  const keys = [...actions.map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean);
   return {
     text: keys.length ? keys.join(" · ") : notes.length ? "↑↓ pick a note" : "",
     tip: notes.length ? "↑↓ picks a note · enter opens it · esc closes the panel" : null,

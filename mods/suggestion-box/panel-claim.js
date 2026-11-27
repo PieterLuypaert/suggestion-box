@@ -1,7 +1,7 @@
 // A claim waiting to be verified, with its three proofs: the change, the independent check, landed.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { claimKey, claimVerdict } from "./proofs.js";
+import { canConfirm, claimKey, claimVerdict } from "./proofs.js";
 import { filedLines, needsYou } from "./panel-filed.js";
 import { actionsRow, card, link, metaRow } from "./panel-parts.js";
 
@@ -29,7 +29,8 @@ export function verifyCard(s, note) {
       .when(Boolean(note.issue), (el) => el.child(div().flex_none().child(`issue #${note.issue.number}`))))
     .child(h_flex().child(link(t, `details:${note.id}`, isOpen ? "Details ▴" : "Details ▾", (_e, cx) => s.act("expand", note, cx))))
     .when(isOpen, (el) => el.child(details(s, note, found)))
-    .child(actionsRow(s, note, { primary: "confirm" }));
+    // A fix that never landed has nothing to confirm: Not solved is the way on.
+    .child(actionsRow(s, note, canConfirm(found) ? { primary: "confirm" } : { primary: "not-solved", leave: ["confirm"] }));
 }
 
 const TONE = (t) => ({ fixed: t.ansi2, partly: t.working, "not-fixed": t.blocked, looking: t.dim, unchecked: t.muted });

@@ -7,7 +7,8 @@ import { dirname, join, resolve } from "node:path";
 // answers the command handles, not errors, so git's own message is not shown.
 export function gitAnswer(cwd, args) {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    // Room for a long answer (a busy repo's commit list): a cut-off answer would read as none.
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).trim();
   } catch {
     return null;
   }
@@ -21,6 +22,17 @@ export function gitText(cwd, args) {
   } catch {
     return null;
   }
+}
+
+// The default branch as the repo last fetched it: origin/HEAD, else origin/main or origin/master,
+// else a local main or master. Null when there is none.
+export function defaultRef(top) {
+  const head = gitAnswer(top, ["symbolic-ref", "-q", "refs/remotes/origin/HEAD"]);
+  if (head) return head.replace(/^refs\/remotes\//, "");
+  for (const ref of ["origin/main", "origin/master", "main", "master"]) {
+    if (gitAnswer(top, ["rev-parse", "-q", "--verify", `${ref}^{commit}`])) return ref;
+  }
+  return null;
 }
 
 // The repo around a folder, or null outside one.

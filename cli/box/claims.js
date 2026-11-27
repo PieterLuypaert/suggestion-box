@@ -34,7 +34,7 @@ function proofsOf(project, view, env) {
   const top = project.repo.top;
   const mainRef = defaultRef(top);
   const change = changeProof(top, view, view.solved, mainRef);
-  const landed = landedProof(top, project.key, view.solved, change, env, { mainRef, since: view.created });
+  const landed = landedProof(top, project.key, view.solved, change, env, { mainRef, since: view.created, from: view.from?.sha ?? null });
   const commits = (change.commits ?? []).map(({ sha, subject }) => ({ sha, subject }));
   return { change, landed, verify: view.verify ?? null, commits };
 }
@@ -68,7 +68,7 @@ export function watch(project, env, now) {
   const results = [];
   for (const note of watched) {
     const change = changeProof(project.repo.top, note, note.solved, mainRef);
-    const landed = landedProof(project.repo.top, project.key, note.solved, change, env, { mainRef, since: note.created });
+    const landed = landedProof(project.repo.top, project.key, note.solved, change, env, { mainRef, since: note.created, from: note.from?.sha ?? null });
     update(project, note.id, ({ view }) => (isWatched(view) ? { note: recordLanded(view, now.toISOString(), landed) } : { skip: true }), { foldEvents: true });
     results.push({ number: note.number, state: landed.state, how: landed.how });
   }

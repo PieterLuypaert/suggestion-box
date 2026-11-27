@@ -67,10 +67,11 @@ export function touchingLines(diff, { first, last }) {
 // closed unmerged, or its branch is gone with none of those.
 // A gone branch says it never landed only when its PRs could be looked up: a squash merge whose PR
 // gh could not see would look the same.
-export function landedState({ pr = null, inMain = null, samePatch = null, hasBranch = true, isDefault = false, hasCommit = true, knowsPrs = true }) {
+export function landedState({ pr = null, inMain = null, samePatch = null, hasBranch = true, isDefault = false, hasCommit = true, knowsPrs = true, isYoursOnMain = false }) {
   if (pr?.state === "MERGED") return { state: "landed", how: `PR #${pr.number} merged`, sha: pr.mergeCommit ?? null, pr: pr.number };
   if (inMain) return { state: "landed", how: `in main (${inMain.slice(0, 7)})`, sha: inMain };
   if (samePatch) return { state: "landed", how: `the same change is in main (${samePatch.slice(0, 7)})`, sha: samePatch };
+  if (isYoursOnMain) return { state: "landed", how: "you marked it solved on main itself" };
   if (pr?.state === "CLOSED") return { state: "never", how: `PR #${pr.number} was closed without merging` };
   if (!hasBranch && !isDefault && knowsPrs) return { state: "never", how: "its branch is gone, with no merged PR and no same change in main" };
   if (!hasBranch && !isDefault) return { state: "waiting", how: "its branch is gone, and its PR could not be looked up" };
@@ -237,6 +238,9 @@ export function landedRow(found) {
 // What a claim's three proofs add up to: { tone, text, rows }. `tone` is fixed, partly, not-fixed,
 // looking or unchecked; a fix waiting to land still looks fixed, as most claims come before their PR
 // is merged.
+// A claim whose fix never landed has nothing to confirm: the card, its key and box.js all say so.
+export const canConfirm = (found) => found?.landed?.state !== "never";
+
 export function claimVerdict({ found, verify, isVerifying = false, isQueued = false }) {
   const change = changeRow(found);
   const check = checkRow(verify, { isVerifying, isQueued });
@@ -246,6 +250,9 @@ export function claimVerdict({ found, verify, isVerifying = false, isQueued = fa
   const verdict = (tone, text) => ({ tone, text, rows });
   if (check.state === "fails") return verdict("not-fixed", "Your Claude says it is not fixed");
   if (rows.some((row) => row.state === "looking")) return verdict("looking", "Looking at the proofs…");
+  // A PR closed unmerged, or a branch gone with nothing in main: that says the most, unless your
+  // Claude found the fix on the branch.
+  if (landed.state === "fails" && check.state !== "holds") return verdict("not-fixed", "Its fix never landed");
   if (check.state === "partial") return verdict("partly", "Partly fixed, says your Claude");
   if (check.state === "holds") {
     if (landed.state === "fails") return verdict("partly", "Looks fixed, but it never landed");
