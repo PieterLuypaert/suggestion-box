@@ -12,27 +12,32 @@ export const proving = {
     if (!this.boxJs) return;
     const key = claimKey(note);
     const found = this.proofs.get(key);
-    // Looked at again every half minute until the fix landed, so a merge shows soon.
-    if (proofsDue(found)) this.loadProofs(cx, note, { isRefresh: Boolean(found) });
+    // Looked at again every half minute until the fix landed, so a merge shows soon. One look at a
+    // time: each fetches, and fetches on top of each other trip the agents' own in the same repo.
+    const isLooking = [...this.proofs.values()].some((one) => one.isLoading || one.isRefreshing);
+    if (proofsDue(found) && !isLooking) this.loadProofs(cx, note, { isRefresh: Boolean(found) });
     if (this.verifyAsked.has(key) || this.verifying.size > 0) return;
     this.verifyAsked.add(key);
     this.verifyClaim(cx, note, { isAuto: true });
   },
 
-  // A refresh keeps showing what was found until the new look is in, so the card never flickers.
+  // A refresh keeps showing what was found (or that it could not look) until the new look is in, so
+  // the card never flickers; a look that fails after one that worked keeps the one that worked.
   loadProofs(cx, note, { isRefresh = false } = {}) {
     const key = claimKey(note);
     const known = this.proofs.get(key);
     if (!this.boxJs || known?.isLoading || known?.isRefreshing) return;
-    if (known && !known.error && !isRefresh) return;
-    this.proofs.set(key, isRefresh && known && !known.error ? { ...known, isRefreshing: true } : { isLoading: true });
+    if (known && !isRefresh) return;
+    const at = Date.now();
+    this.proofs.set(key, known ? { ...known, isRefreshing: true } : { isLoading: true });
     const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         const answer = await box(this.node, this.boxJs, ["proofs", folder, note.id], PROOFS_MS);
-        this.proofs.set(key, { change: answer.change, landed: answer.landed, at: Date.now() });
+        this.proofs.set(key, { change: answer.change, landed: answer.landed, at });
       } catch (error) {
-        this.proofs.set(key, isRefresh && known && !known.error ? { ...known, isRefreshing: false, at: Date.now() } : { error: error.message, at: Date.now() });
+        console.log(`suggestion box: the proofs of note ${note.number} could not be looked at: ${error.message}`);
+        this.proofs.set(key, known && !known.error ? { ...known, isRefreshing: false, at } : { error: error.message, at });
       }
       cx.notify();
     });
@@ -40,19 +45,23 @@ export const proving = {
 
   // Proof 2 beside the queued writes, like the check: a Confirm meanwhile wins, and it is dropped. A
   // check the panel started by itself that fails is marked on its card (not checked, Check again),
-  // never as an error you did not ask for.
+  // never as an error you did not ask for. Kept per claim, so a new claim never shows an old check.
   verifyClaim(cx, note, { again = false, isAuto = false } = {}) {
-    if (!this.boxJs || this.verifying.has(note.id)) return;
-    this.verifying.add(note.id);
+    const key = claimKey(note);
+    if (!this.boxJs || this.verifying.has(key)) return;
+    this.verifying.add(key);
+    this.verifyAsked.add(key);
+    this.verifyFailed.delete(key);
     const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         await box(this.node, this.boxJs, ["verify", folder, note.id, ...(again ? ["--again"] : [])], CHECK_MS);
       } catch (error) {
+        this.verifyFailed.add(key);
         if (isAuto) console.log(`suggestion box: the independent check of note ${note.number} did not finish: ${error.message}`);
         else this.error = `The independent check did not finish: ${error.message}`;
       }
-      this.verifying.delete(note.id);
+      this.verifying.delete(key);
       this.read(cx, false);
       cx.notify();
     });

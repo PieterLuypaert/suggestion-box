@@ -518,7 +518,9 @@ describe("the verdict a claim's card leads with", () => {
     const at = 1_000_000;
     const waiting = { change: {}, landed: { state: "waiting", how: "PR #3 is open" }, at };
     expect(proofsDue(undefined, at)).toBe(true);
-    expect(proofsDue(waiting, at + PROOFS_REFRESH_MS - 1)).toBe(false);
+    expect(proofsDue(waiting, at + 10000)).toBe(false);
+    // Due a little before the next half-minute beat, so a late beat never skips a round.
+    expect(proofsDue(waiting, at + PROOFS_REFRESH_MS - 5000)).toBe(true);
     expect(proofsDue(waiting, at + PROOFS_REFRESH_MS + 1)).toBe(true);
     expect(proofsDue({ ...waiting, isRefreshing: true }, at + PROOFS_REFRESH_MS + 1)).toBe(false);
     expect(proofsDue({ isLoading: true }, at + PROOFS_REFRESH_MS + 1)).toBe(false);

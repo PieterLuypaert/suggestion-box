@@ -37,6 +37,8 @@ export const panelCopy = {
     this.verifyAsked = new Set();
     // The claims Claude is checking right now; the others wait their turn.
     this.verifying = new Set();
+    // The claims whose check did not finish (no answer kept): their card offers Check again.
+    this.verifyFailed = new Set();
     // Notes whose fix is starting in a new tab.
     this.fixing = new Set();
     // Notes filed while the panel is open stay in sight until it closes (see just-filed.js).
@@ -58,6 +60,7 @@ export const panelCopy = {
         this.justFiled.clear();
         this.proofs.clear();
         this.verifyAsked.clear();
+        this.verifyFailed.clear();
         cx.notify();
       }
       this.wasShown = shown;
@@ -125,11 +128,6 @@ export const panelCopy = {
     this.selected = note.id;
     if (this.expanded.has(note.id)) return this.expanded.delete(note.id);
     this.expanded.add(note.id);
-    // A claim opened: its proofs, and Claude's independent check of it (kept while it holds).
-    if (note.state === "to verify") {
-      this.loadProofs(cx, note);
-      this.verifyClaim(cx, note);
-    }
   },
 
   change(cx, action, note, branch = note.changed?.on) {
@@ -310,6 +308,7 @@ export const panelCopy = {
       this.selected = null;
       this.proofs.clear();
       this.verifyAsked.clear();
+      this.verifyFailed.clear();
       if (this.view === "settings") {
         this.projects = null;
         cx.spawn(async (cx) => this.loadProjects(cx));
@@ -340,6 +339,7 @@ export const panelCopy = {
       proofs: this.proofs,
       verifying: this.verifying,
       verifyAsked: this.verifyAsked,
+      verifyFailed: this.verifyFailed,
       fixing: this.fixing,
       mono: settings()?.font || "Menlo",
       justFiled: this.justFiled.for(this.answer()?.project?.key),

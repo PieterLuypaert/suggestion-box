@@ -13,7 +13,7 @@ export function verifyCard(s, note) {
   const isOpen = s.expanded.has(note.id);
   const key = claimKey(note);
   const found = s.proofs?.get(key) ?? null;
-  const isVerifying = Boolean(s.verifying?.has(note.id));
+  const isVerifying = isChecking(s, note);
   const verdict = claimVerdict({ found, verify: note.verify, isVerifying, isQueued: !isVerifying && !s.verifyAsked?.has(key) });
   return card(t, `note:${note.id}`, { isSelected: s.selected === note.id, edge: t.ansi2 })
     .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
@@ -58,6 +58,14 @@ function details(s, note, found) {
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note, { withNeeds: false })));
 }
 
+// Whether Claude is checking this claim: while its check runs, and after it until the read brings
+// its answer, so the card never offers Check again in between.
+function isChecking(s, note) {
+  const key = claimKey(note);
+  if (s.verifying?.has(key)) return true;
+  return Boolean(s.verifyAsked?.has(key)) && !note.verify && !s.verifyFailed?.has(key);
+}
+
 // The three proofs of a claim (docs/plan.md section 6b), each with a dot that says how it stands.
 function proofList(s, note) {
   const { t } = s;
@@ -66,7 +74,7 @@ function proofList(s, note) {
     .child(proofRow(t, "The change", ...changeState(t, found))
       .when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change)))
       .when(!found?.change?.commits?.length && Boolean(found?.change?.elsewhere?.length), (el) => el.child(elsewhereList(s, found.change))))
-    .child(proofRow(t, "Independent check", ...verifyState(t, note, s.verifying?.has(note.id))))
+    .child(proofRow(t, "Independent check", ...verifyState(t, note, isChecking(s, note))))
     .child(proofRow(t, "Landed", ...landedState(t, found)));
 }
 
