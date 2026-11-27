@@ -36,6 +36,9 @@ export function shownFor(view) {
   return actionsFor(view).filter((action) => action !== "mark-solved" || Boolean(view.changed));
 }
 
+// A Restore this soon after its Bin is an Undo.
+const UNDO_KEEPS_CHECK_MS = 60000;
+
 // The note after one of the box's actions, or an error when its state does not allow it. `view` is
 // the note with its events folded in; `now` an ISO time; `details` what the action needs.
 export function applyAction(view, action, now, details = {}) {
@@ -44,8 +47,10 @@ export function applyAction(view, action, now, details = {}) {
   const note = JSON.parse(JSON.stringify(view));
   delete note.changed;
   delete note.tombstone;
-  // Moved back to open, the code is read anew: an old check, and its banner, do not come back.
-  if (["not-solved", "restore", "reopen"].includes(action)) note.check = null;
+  // Moved back to open, the code is read anew: an old check, and its banner, do not come back. An
+  // Undo right after Bin keeps it: nothing changed in that moment.
+  const isUndo = action === "restore" && Date.parse(now) - Date.parse(view.binned?.at ?? "") < UNDO_KEEPS_CHECK_MS;
+  if (["not-solved", "restore", "reopen"].includes(action) && !isUndo) note.check = null;
   // A claim's independent check belongs to that claim only.
   if (["mark-solved", "not-solved", "reopen"].includes(action)) note.verify = null;
   change[action](note, now, details);

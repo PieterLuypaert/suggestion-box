@@ -56,6 +56,13 @@ describe("what each action does", () => {
     expect(applyAction(binned, "restore", NOW).note).toMatchObject({ status: "open", binned: null });
   });
 
+  test("an Undo right after Bin keeps the check; a Restore later reads the code anew", () => {
+    const check = { at: NOW, sections: {} };
+    const binned = applyAction({ ...rows.open, check }, "bin", NOW).note;
+    expect(applyAction(binned, "restore", "2026-11-26T12:00:05Z").note.check).toEqual(check);
+    expect(applyAction(binned, "restore", "2026-11-26T12:05:00Z").note.check).toBeNull();
+  });
+
   test("mark solved sends an open note to To verify, by you", () => {
     const note = applyAction(rows.open, "mark-solved", NOW, { branch: "feat/y" }).note;
     expect(note.solved).toMatchObject({ branch: "feat/y", by: "you", confirmed: null });
