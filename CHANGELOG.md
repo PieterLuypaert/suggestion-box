@@ -65,13 +65,14 @@ All notable changes to the suggestion box. The format follows
   looked for where main and the note's commit met, and a note you marked solved on main itself has
   landed.
 - An agent that claimed before committing had its starting commit taken for the fix: Landed said
-  `in main`. The claimed commit now counts only when it came after the drop and is its branch's own
-  work.
+  `in main`. The claimed commit now counts only when it came after the drop and, on a branch, was
+  the branch's own work when claimed (suggest records it). A fix branch started from a newer main
+  no longer shows a teammate's commit on main as the change.
 - A note from a ticket with its own commits showed `changed on main` for the ticket's own edits,
   and `file removed` for a file only the ticket has or a mistyped path, right after the drop.
 - Confirm on a claim whose fix never landed was accepted, then sent back by the watch, again and
-  again. Such a claim now leads with `Its fix never landed`, offers Not solved instead, and box.js
-  refuses the Confirm with what to do.
+  again. Such a claim now says first that its fix never landed, offers Not solved instead (the `c`
+  key and its hint too), and box.js refuses the Confirm with what to do.
 - A filed issue with two things to do (a fix that did not start, and not on the board) showed the
   board's Add to board button without saying why.
 - A test run no longer leaves its throwaway repos and folders in the temporary folder (gigabytes

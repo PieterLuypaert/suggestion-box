@@ -154,16 +154,18 @@ confirm it, and opening it shows three proofs, each with a dot for how it stands
   diff of the note's file changes.
 - **Landed**: the branch's merged PR counts first, whatever the merge style; else the solving
   commit in the fetched main, else the same patch there (`git cherry`), for squash and rebase merges.
-  The commit an agent claimed on only counts when it came after the drop and is its branch's own
-  work, so a claim made before committing is never taken for the fix. A note you marked solved on
-  main itself (from the check's banner or a change there) has landed already.
+  The commit an agent claimed on only counts when it came after the drop and, on a branch, was that
+  branch's own work when the agent claimed (suggest records it), so a claim made before committing
+  is never taken for the fix. On a branch, main's own commits never count as the change either. A
+  note you marked solved on main itself (from the check's banner or a change there) has landed
+  already.
 
 **Confirm solved** keeps the proofs as they stood and moves the note to the history, where it says
 `waiting to land` until the fix is in main, then `landed: PR #44 merged`. The box looks again every
 few minutes. Only when the PR is closed without a merge, or the branch is gone (asked of origin
 itself) with nothing in main, does the note come back to To verify with `the fix never landed`.
-A claim whose fix never landed leads with `Its fix never landed` and offers **Not solved** instead
-of Confirm.
+A claim whose fix never landed says so first (`Its fix never landed`, or `Looks fixed, but it never
+landed` when your Claude found the fix on its branch) and offers **Not solved** instead of Confirm.
 **Not solved** drops the claim with the check's reason (or yours), and the note is back where it
 was: open, or filed.
 
