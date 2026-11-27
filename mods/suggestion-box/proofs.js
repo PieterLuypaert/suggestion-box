@@ -181,6 +181,10 @@ export function verifyHolds(verify, basis) {
 
 // ---- the verdict a claim's card leads with ----
 
+// A claim's own key: a new claim on the same note (after Not solved, or a reopen) gets proofs and a
+// check of its own, never the last claim's.
+export const claimKey = (note) => `${note.id}:${note.solved?.at ?? ""}`;
+
 const base = (path) => String(path ?? "").split("/").pop();
 
 // The change in a few words: the last commit that changed the note's lines, else the branch's last
@@ -197,11 +201,12 @@ export function changeRow(found) {
   return { name: "Change", text: "no commit changed it yet", state: "missing" };
 }
 
-// Your Claude's independent check in a word.
-export function checkRow(verify, isVerifying = false) {
+// Your Claude's independent check in a word. Only a check running or one waiting its turn is still
+// looking: a check that never ran or failed says so, and the card offers Check again.
+export function checkRow(verify, { isVerifying = false, isQueued = false } = {}) {
   if (isVerifying) return { name: "Claude", text: "checking…", state: "looking" };
-  if (!verify) return { name: "Claude", text: "not checked yet", state: "looking" };
-  if (verify.error) return { name: "Claude", text: "not checked", state: "unknown" };
+  if (verify?.error) return { name: "Claude", text: "not checked", state: "unknown" };
+  if (!verify) return isQueued ? { name: "Claude", text: "waiting its turn…", state: "looking" } : { name: "Claude", text: "not checked", state: "unknown" };
   const words = { verified: ["Verified", "holds"], partly: ["Partly", "partial"], not_fixed: ["Not fixed", "fails"] }[verify.verdict];
   return { name: "Claude", text: words?.[0] ?? "not checked", state: words?.[1] ?? "unknown" };
 }
@@ -218,9 +223,9 @@ export function landedRow(found) {
 // What a claim's three proofs add up to: { tone, text, rows }. `tone` is fixed, partly, not-fixed,
 // looking or unchecked; a fix waiting to land still looks fixed, as most claims come before their PR
 // is merged.
-export function claimVerdict({ found, verify, isVerifying = false }) {
+export function claimVerdict({ found, verify, isVerifying = false, isQueued = false }) {
   const change = changeRow(found);
-  const check = checkRow(verify, isVerifying);
+  const check = checkRow(verify, { isVerifying, isQueued });
   const landed = landedRow(found);
   const rows = [change, check, landed];
   const holds = rows.filter((row) => row.state === "holds").length;
@@ -232,7 +237,8 @@ export function claimVerdict({ found, verify, isVerifying = false }) {
     if (landed.state === "fails") return verdict("partly", "Looks fixed, but it never landed");
     if (change.state === "missing") return verdict("partly", "Verified, but no commit of the fix was found");
     if (holds === 3) return verdict("fixed", "Looks fixed · 3 of 3 proofs hold");
-    if (landed.state === "waiting") return verdict("fixed", "Looks fixed · waiting to land");
+    if (landed.state === "waiting" && change.state === "holds") return verdict("fixed", "Looks fixed · waiting to land");
+    return verdict("partly", "Verified by your Claude, but the change or its PR could not be looked up");
   }
   return verdict("unchecked", `${holds} of 3 proofs hold${check.state === "unknown" ? " · not checked by your Claude" : ""}`);
 }

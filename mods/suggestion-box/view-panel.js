@@ -34,6 +34,7 @@ export const panelCopy = {
     this.proofs = new Map();
     // The claims whose independent check this panel asked for: once each while it is open.
     this.verifyAsked = new Set();
+    // The claims Claude is checking right now; the others wait their turn.
     this.verifying = new Set();
     // Notes whose fix is starting in a new tab.
     this.fixing = new Set();
@@ -334,6 +335,7 @@ export const panelCopy = {
       editor: this.editorView(),
       proofs: this.proofs,
       verifying: this.verifying,
+      verifyAsked: this.verifyAsked,
       fixing: this.fixing,
       mono: settings()?.font || "Menlo",
       justFiled: this.justFiled.for(this.answer()?.project?.key),

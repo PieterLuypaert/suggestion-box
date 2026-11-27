@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeProof, landedProof } from "../cli/box/proofs.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
-import { changeRow, claimVerdict, landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
+import { changeRow, claimKey, claimVerdict, landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
 const BRANCH = "feat/8504-group-records";
@@ -480,10 +480,20 @@ describe("the verdict a claim's card leads with", () => {
     expect(claimVerdict({ found: { change: { commits: [], elsewhere: [] }, landed: { state: "waiting", how: "no PR yet" } }, verify: verified }).text).toBe("Verified, but no commit of the fix was found");
   });
 
-  test("still looking, and a check that failed", () => {
+  test("still looking: a check running or waiting its turn; one that never ran or failed is not checked", () => {
     expect(claimVerdict({ found: { isLoading: true }, verify: null }).tone).toBe("looking");
     expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null, isVerifying: true }).text).toBe("Looking at the proofs…");
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null, isQueued: true }).rows[1]).toEqual({ name: "Claude", text: "waiting its turn…", state: "looking" });
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null })).toMatchObject({ tone: "unchecked", text: "2 of 3 proofs hold · not checked by your Claude" });
     expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: { error: "timeout" } })).toMatchObject({ tone: "unchecked", text: "2 of 3 proofs hold · not checked by your Claude" });
+  });
+
+  test("verified, but the other proofs could not be looked up", () => {
+    expect(claimVerdict({ found: { error: "gh failed" }, verify: verified })).toMatchObject({ tone: "partly", text: "Verified by your Claude, but the change or its PR could not be looked up" });
+  });
+
+  test("a claim's own key: a new claim on the same note is another key", () => {
+    expect(claimKey({ id: "n1", solved: { at: "a" } })).not.toBe(claimKey({ id: "n1", solved: { at: "b" } }));
   });
 
   test("a fix in another file names that file, and how many more", () => {

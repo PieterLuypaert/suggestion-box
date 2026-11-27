@@ -1,36 +1,43 @@
 // A claim's proofs in the panel: the change and landed, the independent check, and Open at a commit.
 import { exec, notify } from "herdr";
+import { claimKey } from "./proofs.js";
 import { box, CHECK_MS, EDITORS, PROOFS_MS } from "./view-host.js";
 
 // The view's methods for this part, added to it in main.js.
 export const proving = {
-  // Proofs 1 and 3 as soon as a claim shows, and Claude's check of it once while the panel is open
-  // (the check itself is kept and reused while the code it read stays the same).
+  // Proofs 1 and 3 as soon as a claim shows, and Claude's check of it: one claim at a time, once while
+  // the panel is open (the check itself is kept and reused while the code it read stays the same).
+  // Nothing starts before the box's own side is found.
   ensureProofs(cx, note) {
-    if (!this.proofs.has(note.id)) this.loadProofs(cx, note);
-    if (this.verifyAsked.has(note.id)) return;
-    this.verifyAsked.add(note.id);
-    this.verifyClaim(cx, note);
+    if (!this.boxJs) return;
+    const key = claimKey(note);
+    if (!this.proofs.has(key)) this.loadProofs(cx, note);
+    if (this.verifyAsked.has(key) || this.verifying.size > 0) return;
+    this.verifyAsked.add(key);
+    this.verifyClaim(cx, note, { isAuto: true });
   },
 
   loadProofs(cx, note) {
-    if (!this.boxJs || this.proofs.get(note.id)?.isLoading) return;
-    if (this.proofs.has(note.id) && !this.proofs.get(note.id).error) return;
-    this.proofs.set(note.id, { isLoading: true });
+    const key = claimKey(note);
+    if (!this.boxJs || this.proofs.get(key)?.isLoading) return;
+    if (this.proofs.has(key) && !this.proofs.get(key).error) return;
+    this.proofs.set(key, { isLoading: true });
     const folder = this.shownFolder();
     cx.spawn(async (cx) => {
       try {
         const answer = await box(this.node, this.boxJs, ["proofs", folder, note.id], PROOFS_MS);
-        this.proofs.set(note.id, { change: answer.change, landed: answer.landed });
+        this.proofs.set(key, { change: answer.change, landed: answer.landed });
       } catch (error) {
-        this.proofs.set(note.id, { error: error.message });
+        this.proofs.set(key, { error: error.message });
       }
       cx.notify();
     });
   },
 
-  // Proof 2 beside the queued writes, like the check: a Confirm meanwhile wins, and it is dropped.
-  verifyClaim(cx, note, { again = false } = {}) {
+  // Proof 2 beside the queued writes, like the check: a Confirm meanwhile wins, and it is dropped. A
+  // check the panel started by itself that fails is marked on its card (not checked, Check again),
+  // never as an error you did not ask for.
+  verifyClaim(cx, note, { again = false, isAuto = false } = {}) {
     if (!this.boxJs || this.verifying.has(note.id)) return;
     this.verifying.add(note.id);
     const folder = this.shownFolder();
@@ -38,7 +45,8 @@ export const proving = {
       try {
         await box(this.node, this.boxJs, ["verify", folder, note.id, ...(again ? ["--again"] : [])], CHECK_MS);
       } catch (error) {
-        this.error = `The independent check did not finish: ${error.message}`;
+        if (isAuto) console.log(`suggestion box: the independent check of note ${note.number} did not finish: ${error.message}`);
+        else this.error = `The independent check did not finish: ${error.message}`;
       }
       this.verifying.delete(note.id);
       this.read(cx, false);

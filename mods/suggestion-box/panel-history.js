@@ -17,7 +17,7 @@ const ON_ROW = ["restore", "fix"];
 export function history(s) {
   const { t, answer } = s;
   const notes = (answer?.history ?? []).filter((note) => !s.justFiled?.has(note.id));
-  if (!notes.length) return messageCard(t, "empty-history", "Nothing here yet", "Filed, solved and binned notes stay here for 30 days, with Restore and Reopen.");
+  if (!notes.length) return messageCard(t, "empty-history", "Nothing here yet", "Filed, solved and binned notes stay here for 30 days: Restore sits on a binned note, and opening a row shows Reopen and the rest.");
   const groups = [
     ["Solved", notes.filter(isSolved)],
     ["Filed · still open", notes.filter((note) => note.state === "filed" && !isSolved(note) && !isClosed(note))],
@@ -50,6 +50,8 @@ function statusOf(t, note) {
     const issue = note.issue ? `issue #${note.issue.number}` : null;
     if (landed?.state === "landed") return { color: t.ansi2, line: parts(`landed · ${landed.how}`, issue, note.age) };
     if (landed?.state === "waiting") return { color: t.working, line: parts(`waiting to land · ${landed.how}`, issue, note.age) };
+    // Confirmed before anything was known about landing: the watch still waits for it.
+    if (note.solved?.confirmed) return { color: t.working, line: parts(`waiting to land · solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age) };
     return { color: t.ansi2, line: parts(`solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age) };
   }
   if (isClosed(note)) {
