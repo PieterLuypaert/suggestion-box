@@ -245,7 +245,10 @@ bun test
 
 The tests run the real command in throwaway repos, and `install.sh` against a throwaway home with a
 stand-in `herdr-app`, so your own setup is never touched. Where `herdr-app` is installed, they also
-render every part of the box through Herdr's own engine in a hidden window.
+render every part of the box through Herdr's own engine in a hidden window. Run them from the repo's
+root: Bun reads `bunfig.toml` there, which preloads `tests/run-folder.js`, so a run keeps all of it
+in one temporary folder of its own and removes that folder when it ends. Started anywhere else, the
+tests stop at once.
 
 ## License
 

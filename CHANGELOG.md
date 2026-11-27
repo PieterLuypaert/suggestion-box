@@ -47,6 +47,8 @@ All notable changes to the suggestion box. The format follows
 
 ### Fixed
 
+- A test run no longer leaves its throwaway repos and folders in the temporary folder (gigabytes
+  after a few hundred runs): it keeps them in one folder of its own and removes it at the end.
 - A new claim on a note never shows the proofs of the claim before it.
 - A check the panel started by itself that fails reads "not checked" with Check again on the card,
   never as an error you did not ask for.

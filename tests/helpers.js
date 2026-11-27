@@ -3,10 +3,17 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 export const ROOT = realpathSync(join(import.meta.dir, ".."));
 export const BIN = join(ROOT, "bin", "suggest");
+
+// The run's own temporary folder, made and removed by tests/run-folder.js. Without it the tests
+// would write to, and prune, the real temporary folder, so they stop at once instead.
+export const RUN = tmpdir();
+if (!basename(RUN).startsWith("sbox-run-")) {
+  throw new Error("Run the tests from the repo's root with `bun test`, so bunfig.toml preloads tests/run-folder.js.");
+}
 
 export function tempDir(prefix = "sbox-") {
   return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
