@@ -162,7 +162,7 @@ export const editing = {
     const note = this.noteById(editor.id);
     if (!note) return "The note is gone";
     const texts = this.textsOf(editor);
-    return offReason({ note, texts, target: editor.target, isChecking: this.checking.has(editor.id), isFiling: editor.isFiling, notGone: editor.notGone, fine: [...editor.fine] });
+    return offReason({ note, texts, target: editor.target, isChecking: this.isCheckingNote(note), isFiling: editor.isFiling, notGone: editor.notGone, fine: [...editor.fine] });
   },
 
   // Create issue: after the writes before it, so the draft it files is the one on disk too.
@@ -236,7 +236,7 @@ export const editing = {
     const editor = this.editor;
     const note = editor && this.noteById(editor.id);
     if (!note) return null;
-    const isChecking = this.checking.has(editor.id);
+    const isChecking = this.isCheckingNote(note);
     const texts = this.textsOf(editor);
     const labels = Object.fromEntries(SECTIONS.map((name) => [name, fieldLabel(note, name, texts.sections[name], { isChecking })]));
     const hits = scanTexts(texts).map((hit) => ({ ...hit, isFine: editor.fine.has(hit.text) }));
