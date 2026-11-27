@@ -153,6 +153,7 @@ const KEYS = { file: "f file", check: "k check", "mark-solved": "s solved", bin:
 
 function hintsFor(s, filter) {
   if (s.view === "settings") return { text: "esc back" };
+  if (!s.answer?.project) return { text: "" };
   if (filter !== "now") return { text: "esc back to Now", tip: "1 Now · 2 Filed · 3 Done · 4 Binned" };
   if (s.editor) return { text: "esc leaves a field · again closes, the draft is kept" };
   // The keys reach the notes of the list: To verify and Open.

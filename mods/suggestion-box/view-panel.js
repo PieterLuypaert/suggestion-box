@@ -16,6 +16,9 @@ function notSolvedReason(note) {
   return "You said it is not solved.";
 }
 
+const FILTER_KEYS = ["1", "2", "3", "4"];
+const AZERTY_KEYS = ["&", "é", "\"", "'"];
+
 // The view's methods for this part, added to it in main.js.
 export const panelCopy = {
   initPanel(cx) {
@@ -279,9 +282,9 @@ export const panelCopy = {
     }
     const m = e.modifiers ?? {};
     if (m.platform || m.control || m.alt) return;
-    // Keys 1 to 4 pick a filter, also from Settings.
-    const filter = FILTERS[Number(e.key) - 1];
-    if (filter && /^[1-4]$/.test(e.key)) {
+    // Keys 1 to 4 pick a filter, also from Settings; on an AZERTY keyboard the same keys say & é " '.
+    const filter = FILTERS[FILTER_KEYS.indexOf(e.key)] ?? FILTERS[AZERTY_KEYS.indexOf(e.key)];
+    if (filter && this.answer()?.project) {
       this.view = "list";
       this.filter = filter;
       cx.stop_propagation();
@@ -335,6 +338,7 @@ export const panelCopy = {
       this.panelKey = key;
       this.expanded.clear();
       this.selected = null;
+      this.filter = "now";
       this.proofs.clear();
       this.verifyAsked.clear();
       this.verifyFailed.clear();
