@@ -5,6 +5,7 @@ import { div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { verifyCard } from "./panel-claim.js";
 import { editorCard } from "./panel-editor.js";
+import { byNextStep, filedStep } from "./filed-step.js";
 import { filedCard } from "./panel-filed.js";
 import { history } from "./panel-history.js";
 import { noteCard } from "./panel-note.js";
@@ -72,6 +73,13 @@ function offLine(s) {
     .child(`Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
 }
 
+// Just filed, what needs you first, and the group says how many do.
+function justFiled(t, notes, draw) {
+  if (!notes.length) return [];
+  const needs = notes.filter((note) => filedStep(note).kind === "needs").length;
+  return [groupTitle(t, `JUST FILED · ${notes.length}${needs ? ` · ${needs} NEED${needs === 1 ? "S" : ""} YOU` : ""}`), ...byNextStep(notes).map(draw)];
+}
+
 function groups(s) {
   const { t, answer } = s;
   if (s.noProject) return messageCard(t, "no-box", "No box here", s.noProject);
@@ -90,7 +98,7 @@ function groups(s) {
     ...group("To verify", toVerify, (n) => verifyCard(s, n)),
     ...(s.undo ? [undoRow(s, s.undo)] : []),
     ...group("Open", open, (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : noteCard(s, n))),
-    ...group("Just filed", filed, (n) => filedCard(s, n)),
+    ...justFiled(t, filed, (n) => filedCard(s, n)),
   ]);
 }
 
