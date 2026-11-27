@@ -20,10 +20,11 @@ describe("what each filter holds", () => {
     expect(f.now.needs).toEqual([stuck]);
     expect(f.now.open).toEqual([open]);
     expect(f.now.justFiled).toEqual([ready]);
-    expect(f.filed.map((n) => n.id)).toEqual(["f3", "f2", "f1"]);
-    expect(f.done.map((n) => n.id)).toEqual(["c1", "s1", "s2"]);
+    // An issue still open on GitHub is under Filed, also when its fix is solved and waits to land.
+    expect(f.filed.map((n) => n.id)).toEqual(["f3", "f2", "s2", "f1"]);
+    expect(f.done.map((n) => n.id)).toEqual(["c1", "s1"]);
     expect(f.binned).toEqual([binned]);
-    expect(f.counts).toEqual({ now: 4, filed: 3, done: 3, binned: 1 });
+    expect(f.counts).toEqual({ now: 4, filed: 4, done: 2, binned: 1 });
   });
 
   test("nothing at all, and no answer yet", () => {
@@ -37,6 +38,9 @@ test("a row's word and dot, in the panel's one colour language", () => {
   expect(rowState({ ...fixing, fix: { starting: true } })).toEqual({ word: "starting", kind: "working" });
   expect(rowState(ready)).toEqual({ word: "ready", kind: "ready" });
   expect(rowState(closed)).toEqual({ word: "closed", kind: "done" });
+  expect(rowState({ ...closed, solved: { confirmed: { at: "t" }, landed: { state: "landed" } } })).toEqual({ word: "landed", kind: "ready" });
+  // Landed while its issue stayed open: that needs you, as in Now.
+  expect(rowState({ ...waiting, solved: { confirmed: { at: "t" }, landed: { state: "landed", how: "PR #9 merged" } } })).toEqual({ word: "needs you", kind: "needs" });
   expect(rowState(landed)).toEqual({ word: "landed", kind: "ready" });
   expect(rowState(waiting)).toEqual({ word: "waiting to land", kind: "working" });
   expect(rowState({ id: "s3", state: "solved", solved: {} })).toEqual({ word: "solved", kind: "ready" });

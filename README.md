@@ -60,13 +60,13 @@ The header says what waits for you, in the order the groups come: `shop · 1 to 
 · 3 open`. Under it, four filters, each with its count:
 
 - **Now**, where the panel opens: what waits for you, below.
-- **Filed**: the issues still open on GitHub, with Fix in new tab.
+- **Filed**: every issue still open on GitHub, also one whose fix is solved or landed.
 - **Done**: solved notes and issues closed on GitHub, the last 30 days.
-- **Binned**: binned notes, the last 30 days, with Restore.
+- **Binned**: binned notes, the last 30 days.
 
 Filed, Done and Binned show one quiet line per note: a dot, its title, and a word on how it stands
-(`needs you`, `fixing`, `ready`, `landed`, `waiting to land`, `closed`). A click opens its details
-and its buttons. Now holds:
+(`needs you`, `starting`, `fixing`, `ready`, `waiting to land`, `solved`, `landed`, `closed`). A
+click opens its details and its buttons: Fix in new tab, Restore, Reopen. Now holds:
 
 - **To verify**: notes claimed solved, with their three proofs, Confirm solved and Not solved (see
   below).

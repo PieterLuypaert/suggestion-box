@@ -95,9 +95,9 @@ function filterTabs(s, counts, filter) {
 
 const TAB_TIPS = {
   now: "What waits for you: claims to verify, issues that need you, open notes, what you just filed",
-  filed: "Issues still open on GitHub, with Fix in new tab",
+  filed: "Issues still open on GitHub; open one for Fix in new tab",
   done: "Solved notes and issues closed on GitHub, the last 30 days",
-  binned: "Binned notes, the last 30 days, with Restore",
+  binned: "Binned notes, the last 30 days; open one to restore it",
 };
 
 function offLine(s) {

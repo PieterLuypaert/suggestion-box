@@ -9,9 +9,9 @@ import { filedLines } from "./panel-filed.js";
 import { actionsRow, messageCard, quietRow, stepColor } from "./panel-parts.js";
 
 const EMPTY = {
-  filed: ["No open issues", "An issue filed from the box shows here until it closes on GitHub, with Fix in new tab."],
+  filed: ["No open issues", "An issue filed from the box shows here until it closes on GitHub. Open one for Fix in new tab."],
   done: ["Nothing done yet", "Solved notes and issues closed on GitHub show here for 30 days."],
-  binned: ["Nothing binned", "A binned note stays here for 30 days, with Restore."],
+  binned: ["Nothing binned", "A binned note stays here for 30 days. Open one to restore it."],
 };
 
 export function filterView(s, filter, notes) {
