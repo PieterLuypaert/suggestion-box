@@ -239,6 +239,17 @@ describe("changes since the drop", () => {
     expect(changeFor(other.repo, n, "main")).toEqual({ on: "main", kind: "changed" });
   });
 
+  test("a note whose commit is gone after a rebase: on main too, the snippet decides", async () => {
+    const { repo, box } = setup();
+    const n = dropped(repo, box);
+    n.from.sha = "0".repeat(40);
+    expect(changeFor(repo, n, "main")).toBeNull();
+    git(repo, "switch", "-q", "main");
+    commitLine(repo, 42, "fixed on main");
+    git(repo, "switch", "-q", "feat/8504-group-records");
+    expect(changeFor(repo, n, "main")).toEqual({ on: "main", kind: "changed" });
+  });
+
   test("a file only the ticket has, or a mistyped path, is never removed on main", async () => {
     const { repo, box } = setup();
     writeFileSync(join(repo, "src", "new.ts"), Array.from({ length: 10 }, (_, i) => `new ${i + 1}`).join("\n"));

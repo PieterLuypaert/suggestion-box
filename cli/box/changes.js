@@ -31,16 +31,17 @@ export function changeFor(top, note, mainRef = defaultRef(top)) {
   const isKnown = gitAnswer(top, ["cat-file", "-e", `${note.from.sha}^{commit}`]) !== null;
   if (isKnown && gitAnswer(top, ["cat-file", "-e", `${note.from.sha}:${note.at.path}`]) === null) return null;
   for (const { on, ref } of refs) {
-    const kind = changeOn(top, note, range, ref, on === branch);
+    const kind = changeOn(top, note, range, ref, on === branch || !isKnown);
     if (kind) return { on, kind };
   }
   return null;
 }
 
-function changeOn(top, note, range, ref, isNotesBranch) {
+// `bySnippetOnly`: the note's own branch after a rebase, or any branch once its commit is gone.
+function changeOn(top, note, range, ref, bySnippetOnly) {
   const { sha } = note.from;
   const path = note.at.path;
-  if (gitAnswer(top, ["merge-base", "--is-ancestor", sha, ref]) === null) return isNotesBranch ? bySnippet(top, note, ref, path) : sinceTheyMet(top, note, range, ref, path);
+  if (gitAnswer(top, ["merge-base", "--is-ancestor", sha, ref]) === null) return bySnippetOnly ? bySnippet(top, note, ref, path) : sinceTheyMet(top, note, range, ref, path);
   const now = whereNow(top, sha, ref, path);
   if (!now) return "removed";
   if (now !== path) return bySnippet(top, note, ref, now);
