@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { checkedSummary } from "./check.js";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
-import { actionsRow, card, chip, link, metaRow } from "./panel-parts.js";
+import { actionsRow, card, chip, link, metaRow, quietRow } from "./panel-parts.js";
 
 export function noteCard(s, note) {
   const { t } = s;
@@ -25,6 +25,15 @@ export function noteCard(s, note) {
     .when(hasGoneBanner(s, note), (el) => el.child(goneBanner(s, note)))
     .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
     .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "file", isBusy: (a) => a === "check" && isChecking(s, note), leave: hasGoneBanner(s, note) ? ["bin"] : [] })));
+}
+
+// An open note that is not the picked one: one quiet line, amber when it asks for a look (its code
+// changed, it came back, a claim on it was turned down, the check says it is gone). A click picks it,
+// and it opens as its card.
+export function openRow(s, note) {
+  const { t } = s;
+  const asks = Boolean(note.changed || note.reopened || note.notVerified || note.check?.gone);
+  return quietRow(t, `row:${note.id}`, { color: asks ? t.working : t.dim, title: note.title, right: note.age, onClick: (_e, cx) => s.act("pick", note, cx), tip: "Open this note" });
 }
 
 // The check says the problem is gone: its banner holds Mark solved and Bin.

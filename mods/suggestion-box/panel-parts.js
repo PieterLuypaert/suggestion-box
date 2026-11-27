@@ -113,6 +113,19 @@ export function plainButton(t, id, text, onClick, { isPrimary = false, isOff = f
     .child(text);
 }
 
+// A note as one quiet line: a dot, its title, and on the right a word or its age. A click does
+// `onClick`; `details`, when given, show under the line (the row is open).
+export function quietRow(t, id, { color, title, right, onClick, tip = null, details = null }) {
+  const line = h_flex().id(`${id}:line`).gap(10).items_center().cursor_pointer().on_click(onClick)
+    .when(Boolean(tip), (el) => el.tooltip(tip))
+    .child(div().flex_none().size(8).rounded(4).bg(color))
+    .child(div().flex_1().min_w(0).truncate().child(title))
+    .child(div().flex_none().text_size(11.5).text_color(t.dim).child(right));
+  return v_flex().id(id).px(10).py(7).gap(8).rounded(8).bg(details ? t.raised : t.chrome).hover((st) => st.bg(t.raised))
+    .child(line)
+    .when(Boolean(details), (el) => el.child(details));
+}
+
 // The dot of a next step, the same in every group: amber needs you, blue under way (ANSI blue, as
 // the theme's accent can be orange), green ready or landed, grey done.
 export function stepColor(t, kind) {

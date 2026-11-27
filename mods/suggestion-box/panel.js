@@ -5,10 +5,11 @@ import { div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { verifyCard } from "./panel-claim.js";
 import { editorCard } from "./panel-editor.js";
-import { filedGroups, inHistory } from "./filed-step.js";
+import { filedGroups } from "./filed-step.js";
+import { FILTER_NAMES, FILTERS, filtered } from "./filters.js";
 import { filedCard } from "./panel-filed.js";
-import { history } from "./panel-history.js";
-import { noteCard } from "./panel-note.js";
+import { filterView } from "./panel-filters.js";
+import { noteCard, openRow } from "./panel-note.js";
 import { canConfirm, claimKey } from "./proofs.js";
 import { groupTitle, ICON, ICON_OFF, iconButton, messageCard, stop, toggle } from "./panel-parts.js";
 import { settingsView } from "./panel-settings.js";
@@ -37,29 +38,34 @@ export function button({ t, counts, isOn, isOff, isDim, why, isWiggling, onToggl
   return h_flex().size_full().pl(2).items_center().justify_start().bg(t.chrome).border_b(1).border_color(t.border).child(face);
 }
 
-// The panel: a header with the switches, the notes by state, and a footer.
+// The panel: a header with the switches and the filters, the filter's notes, and a footer with the
+// keys of the picked note.
 export function panel(s) {
   const { t } = s;
+  const f = filtered(s.answer, s.justFiled);
+  const filter = s.filter ?? "now";
+  const body = s.view === "settings" ? settingsView(s) : filter === "now" || !s.answer?.project ? nowView(s, f.now) : filterView(s, filter, f[filter]);
+  const hints = hintsFor(s, filter);
   return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13).text_color(t.foreground)
-    .child(header(s))
+    .child(header(s, f.counts, filter))
     .when(Boolean(s.collecting && !s.collecting.project), (el) => el.child(offLine(s)))
     .when(Boolean(s.notice), (el) => el.child(div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).text_size(12).whitespace_normal().child(s.notice)))
     .when(Boolean(s.error), (el) => el.child(div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).border(1).border_color(t.blocked).text_size(12).text_color(t.blocked).whitespace_normal().child(s.error)))
-    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(8).child(s.view === "history" ? history(s) : s.view === "settings" ? settingsView(s) : groups(s)))
-    .child(footer(s));
+    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(8).child(body))
+    .when(Boolean(hints.text), (el) => el.child(footer(s, hints)));
 }
 
-// Two lines, so nothing is cut off: the box and its buttons, then the project, its counts and its
-// Collecting switch with On or Off in words.
-function header(s) {
+// Three lines, so nothing is cut off: the box and its buttons; the project, what waits and its
+// Collecting switch with On or Off in words; the filters with their counts.
+function header(s, counts, filter) {
   const { t, answer } = s;
   const name = answer?.project?.name ?? "";
-  const counts = answer?.counts;
+  const stored = answer?.counts;
   const filed = filedGroups(answer?.history, s.justFiled);
   const needs = filed.needs.length;
   // In the order the groups come: what asks for you first.
-  const sum = counts ? [counts.toVerify ? `${counts.toVerify} to verify` : "", needs ? `${needs} need${needs === 1 ? "s" : ""} you` : "", counts.open ? `${counts.open} open` : "", filed.justFiled.length ? `${filed.justFiled.length} just filed` : ""].filter(Boolean).join(" · ") || "empty" : "";
-  const title = s.view === "settings" ? "Suggestion box · Settings" : s.view === "history" ? "Suggestion box · History" : "Suggestion box";
+  const sum = stored ? [stored.toVerify ? `${stored.toVerify} to verify` : "", needs ? `${needs} need${needs === 1 ? "s" : ""} you` : "", stored.open ? `${stored.open} open` : "", filed.justFiled.length ? `${filed.justFiled.length} just filed` : ""].filter(Boolean).join(" · ") || "nothing waits" : "";
+  const title = s.view === "settings" ? "Suggestion box · Settings" : "Suggestion box";
   const isOn = Boolean(s.collecting?.project);
   return v_flex().flex_none().pl(14).pr(6).py(8).gap(4).border_b(1).border_color(t.border)
     .child(h_flex().gap(6).items_center()
@@ -68,8 +74,31 @@ function header(s) {
       .child(iconButton(t, "close", svg("mods/workspace-chrome/x.svg").size(14), "Close (⌥⌘S)", (_e, cx) => s.act("close", null, cx))))
     .when(Boolean(name), (el) => el.child(h_flex().gap(8).items_center().pr(8)
       .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child([name, sum].filter(Boolean).join(" · ")))
-      .when(Boolean(s.collecting), (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))));
+      .when(Boolean(s.collecting), (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))))
+    .when(Boolean(answer?.project) && s.view !== "settings", (el) => el.child(filterTabs(s, counts, filter)));
 }
+
+// The filters, as tabs: Now first, the picked one filled. Keys 1 to 4 pick them too.
+function filterTabs(s, counts, filter) {
+  const { t } = s;
+  return h_flex().gap(2).pt(2).children(FILTERS.map((name, i) => {
+    const isOn = name === filter;
+    return h_flex().id(`filter:${name}`).flex_none().h(24).px(8).gap(5).items_center().rounded(6).text_size(12).cursor_pointer()
+      .bg(isOn ? t.selected : t.chrome).text_color(isOn ? t.foreground : t.muted).when(isOn, (el) => el.font_medium())
+      .hover((st) => st.bg(isOn ? t.selected : t.hover).text_color(t.foreground))
+      .tooltip(`${TAB_TIPS[name]} (${i + 1})`)
+      .on_click((_e, cx) => s.act("filter", name, cx))
+      .child(FILTER_NAMES[name])
+      .child(div().text_color(t.dim).child(String(counts[name])));
+  }));
+}
+
+const TAB_TIPS = {
+  now: "What waits for you: claims to verify, issues that need you, open notes, what you just filed",
+  filed: "Issues still open on GitHub, with Fix in new tab",
+  done: "Solved notes and issues closed on GitHub, the last 30 days",
+  binned: "Binned notes, the last 30 days, with Restore",
+};
 
 function offLine(s) {
   const { t } = s;
@@ -77,29 +106,35 @@ function offLine(s) {
     .child(`Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
 }
 
-function groups(s) {
+// Now: what waits for you, in the order it asks for you. The open note you picked (the newest until
+// you pick another) is a card with its buttons; the others are one quiet line each.
+function nowView(s, now) {
   const { t, answer } = s;
   if (s.noProject) return messageCard(t, "no-box", "No box here", s.noProject);
   if (!answer) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Opening the box…");
   if (!answer.project) return messageCard(t, "no-box", "No box here", "No git repo in this space, so there is no box here.");
-  const toVerify = answer.notes.filter((n) => n.state === "to verify");
-  const open = answer.notes.filter((n) => n.state === "open");
-  const filed = filedGroups(answer.history, s.justFiled);
-  if (!toVerify.length && !open.length && !filed.needs.length && !filed.justFiled.length && !s.undo) {
+  const { toVerify, needs, open, justFiled } = now;
+  if (!toVerify.length && !open.length && !needs.length && !justFiled.length && !s.undo) {
     return (answer.history ?? []).length
-      ? messageCard(t, "empty", `Nothing open in ${answer.project.name}'s box`, "Filed, solved and binned notes are in the history, below. Agents drop a new note here when they spot a problem outside their ticket.", { withBox: true })
+      ? messageCard(t, "empty", `Nothing waits in ${answer.project.name}'s box`, "Filed, done and binned notes are under the filters above. Agents drop a new note here when they spot a problem outside their ticket.", { withBox: true })
       : messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.", { withBox: true });
   }
   const group = (name, notes, draw) => notes.length ? [groupTitle(t, `${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)] : [];
-  // What asks for you first: claims to verify, then filed issues that need you (also old ones), then
-  // the open notes, then the rest of the issues just filed.
+  const picked = pickedOpen(s, open);
+  const openNote = (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : n.id === picked ? noteCard(s, n) : openRow(s, n));
   return v_flex().gap(8).children([
     ...group("To verify", toVerify, (n) => verifyCard(s, n)),
-    ...group("Needs you", filed.needs, (n) => filedCard(s, n)),
+    ...group("Needs you", needs, (n) => filedCard(s, n)),
     ...(s.undo ? [undoRow(s, s.undo)] : []),
-    ...group("Open", open, (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : noteCard(s, n))),
-    ...group("Just filed", filed.justFiled, (n) => filedCard(s, n)),
+    ...(open.length ? [groupTitle(t, `OPEN · ${open.length}`), v_flex().gap(4).children(open.map(openNote))] : []),
+    ...group("Just filed", justFiled, (n) => filedCard(s, n)),
   ]);
+}
+
+// The open note shown as a card: the one you picked, else the newest, unless a note is being filed.
+function pickedOpen(s, open) {
+  if (open.some((note) => note.id === s.selected)) return s.selected;
+  return s.editor ? null : open[0]?.id ?? null;
 }
 
 function undoRow(s, note) {
@@ -114,8 +149,9 @@ function undoRow(s, note) {
 // are in its hover text, and with nothing to pick there is no hint at all.
 const KEYS = { file: "f file", check: "k check", "mark-solved": "s solved", bin: "x bin", confirm: "c confirm", "not-solved": "n not solved" };
 
-function hintsFor(s) {
-  if (s.view !== "list") return { text: "esc back" };
+function hintsFor(s, filter) {
+  if (s.view === "settings") return { text: "esc back" };
+  if (filter !== "now") return { text: "esc back to Now", tip: "1 Now · 2 Filed · 3 Done · 4 Binned" };
   if (s.editor) return { text: "esc leaves a field · again closes, the draft is kept" };
   // The keys reach the notes of the list: To verify and Open.
   const notes = (s.answer?.notes ?? []).filter((one) => one.state === "open" || one.state === "to verify");
@@ -124,23 +160,13 @@ function hintsFor(s) {
   const keys = [...actions.map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean);
   return {
     text: keys.length ? keys.join(" · ") : notes.length ? "↑↓ pick a note" : "",
-    tip: notes.length ? "↑↓ picks a note · enter opens it · esc closes the panel" : null,
+    tip: notes.length ? "↑↓ picks a note · enter opens it · 1–4 pick a filter · esc closes the panel" : null,
   };
 }
 
-function footer(s) {
-  const { t, answer } = s;
-  // What the history shows: the list keeps what needs you and what was just filed.
-  const past = inHistory(answer?.history, s.justFiled);
-  const count = (state) => past.filter((n) => n.state === state).length;
-  return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
-    .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
-      .tooltip(s.view !== "list" ? "Back to the notes" : `${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned in the last 30 days`)
-      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.length} ▸`))
-    .child(keyHints(s));
-}
-
-function keyHints(s) {
-  const { text, tip } = hintsFor(s);
-  return div().id("keys").flex_1().min_w(0).truncate().text_right().when(Boolean(tip), (el) => el.tooltip(tip)).child(text);
+// The keys of the picked note, or of the filter shown; no footer when there are none.
+function footer(s, { text, tip }) {
+  const { t } = s;
+  return h_flex().flex_none().h(30).px(12).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
+    .child(div().id("keys").flex_1().min_w(0).truncate().text_right().when(Boolean(tip), (el) => el.tooltip(tip)).child(text));
 }

@@ -1,6 +1,6 @@
 // What a note just filed still needs, and the order Just filed shows them in.
 import { describe, expect, test } from "bun:test";
-import { byNextStep, filedGroups, filedStep, inHistory, isOffBoard } from "../mods/suggestion-box/filed-step.js";
+import { byNextStep, filedGroups, filedStep, isOffBoard } from "../mods/suggestion-box/filed-step.js";
 
 const filed = { id: "a", issue: { number: 812, boards: [{ title: "Shop", column: "Backlog" }] }, actions: ["fix"] };
 const offBoard = { id: "b", issue: { number: 813 }, board: { error: "run gh auth refresh -s project" }, actions: ["fix"] };
@@ -67,10 +67,5 @@ describe("the list's filed groups", () => {
     expect(groups.justFiled.map((n) => n.id)).toEqual(["working", "ready"]);
     expect(filedGroups(history, null)).toEqual({ needs: [stale, landedOpen], justFiled: [] });
     expect(filedGroups(undefined, new Set())).toEqual({ needs: [], justFiled: [] });
-  });
-
-  test("the history leaves out what the list shows", () => {
-    expect(inHistory(history, new Set(["ready"])).map((n) => n.id)).toEqual(["working", "binned"]);
-    expect(inHistory(history, new Set()).map((n) => n.id)).toEqual(["ready", "working", "binned"]);
   });
 });

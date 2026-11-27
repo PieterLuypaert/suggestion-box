@@ -2,6 +2,7 @@
 import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
+import { FILTERS } from "./filters.js";
 import { canConfirm, claimKey, PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
@@ -19,6 +20,8 @@ function notSolvedReason(note) {
 export const panelCopy = {
   initPanel(cx) {
     this.view = "list";
+    // The filter shown: now, filed, done or binned. Now each time the panel opens.
+    this.filter = "now";
     this.expanded = new Set();
     // Notes the person just acted on, until when: their own move is no news.
     this.mine = new Map();
@@ -57,6 +60,7 @@ export const panelCopy = {
       const shown = isShown(BLOCK);
       if (this.wasShown && !shown) {
         this.closeEditor(cx);
+        this.filter = "now";
         this.justFiled.clear();
         this.proofs.clear();
         this.verifyAsked.clear();
@@ -95,7 +99,12 @@ export const panelCopy = {
       this.projects = null;
       if (this.view === "settings") this.loadProjects(cx);
     }
-    if (name === "history") this.view = this.view === "list" ? "history" : "list";
+    if (name === "filter") {
+      this.view = "list";
+      this.filter = note;
+    }
+    // A row in Open: it becomes the card, with its buttons.
+    if (name === "pick") this.selected = note.id;
     if (name === "expand") this.toggleExpanded(note, cx);
     if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
     if (name === "open-at") return this.openAt(note);
@@ -108,7 +117,10 @@ export const panelCopy = {
     if (name === "collect-project") return this.write(cx, ["collecting", where, note.isOn ? "off" : "on", "--key", note.key], (cx) => this.loadProjects(cx));
     if (name === "undo") return this.unbin(cx);
     if (name === "check") return this.check(cx, note);
-    if (name === "file") return this.openEditor(cx, note);
+    if (name === "file") {
+      this.selected = note.id;
+      return this.openEditor(cx, note);
+    }
     if (name === "open-url") return this.openUrl(note);
     if (name === "copy") return this.copyCloses(cx, note);
     if (name === "board") return this.write(cx, ["board", where, note.id]);
@@ -263,10 +275,20 @@ export const panelCopy = {
     }
     const m = e.modifiers ?? {};
     if (m.platform || m.control || m.alt) return;
-    // Settings and the history show no notes: their keys do nothing there, but esc goes back.
-    if (this.view !== "list") {
+    // Keys 1 to 4 pick a filter, also from Settings.
+    const filter = FILTERS[Number(e.key) - 1];
+    if (filter && /^[1-4]$/.test(e.key)) {
+      this.view = "list";
+      this.filter = filter;
+      cx.stop_propagation();
+      return cx.notify();
+    }
+    // Settings and the filters after Now show no notes to pick: their keys do nothing there, but
+    // esc goes back to Now.
+    if (this.view !== "list" || this.filter !== "now") {
       if (e.key !== "escape") return;
       this.view = "list";
+      this.filter = "now";
       cx.stop_propagation();
       return cx.notify();
     }
@@ -331,6 +353,7 @@ export const panelCopy = {
       t,
       answer: this.answer(),
       view: this.view,
+      filter: this.filter,
       expanded: this.expanded,
       selected: this.selected,
       undo: this.undo,

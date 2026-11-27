@@ -39,10 +39,3 @@ export function filedGroups(history, justFiled) {
   const needs = filed.filter((note) => filedStep(note).kind === "needs");
   return { needs, justFiled: byNextStep(filed.filter((note) => justFiled?.has(note.id) && !needs.includes(note))) };
 }
-
-// The history leaves out what the list shows.
-export function inHistory(history, justFiled) {
-  const { needs, justFiled: rest } = filedGroups(history, justFiled);
-  const listed = new Set([...needs, ...rest].map((note) => note.id));
-  return (history ?? []).filter((note) => !listed.has(note.id));
-}
