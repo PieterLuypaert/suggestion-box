@@ -17,7 +17,7 @@ const EMPTY = {
 export function filterView(s, filter, notes) {
   const { t } = s;
   if (!notes.length) return messageCard(t, `empty-${filter}`, ...EMPTY[filter]);
-  return v_flex().gap(2).children(notes.map((note) => pastRow(s, note)));
+  return v_flex().gap(6).children(notes.map((note) => pastRow(s, note)));
 }
 
 function pastRow(s, note) {
@@ -38,7 +38,7 @@ function pastRow(s, note) {
 // was solved, and its buttons.
 function pastDetails(s, note) {
   const { t } = s;
-  return v_flex().gap(8).pl(18)
+  return v_flex().gap(10).pl(20)
     .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(statusLine(note)))
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
     .when(Boolean(note.solved?.how), (el) => el.child(div().pl(8).border_l(2).border_color(t.border).text_size(12).text_color(t.muted).whitespace_normal().child(note.solved.how)))

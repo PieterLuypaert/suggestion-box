@@ -29,19 +29,19 @@ export function iconButton(t, id, icon, tip, onClick, isOn = false) {
 // around its words. A selected card gets an outline; a claim keeps its green one, and shows it is
 // selected by a lighter fill.
 export function card(t, id, { isSelected = false, edge = null } = {}) {
-  return v_flex().id(id).px(12).py(10).gap(6).rounded(8).bg(isSelected && edge ? t.hover : t.raised).border(1).border_color(edge ?? (isSelected ? t.input : t.raised));
+  return v_flex().id(id).px(16).py(14).gap(10).rounded(8).bg(isSelected && edge ? t.hover : t.raised).border(1).border_color(edge ?? (isSelected ? t.input : t.raised));
 }
 
 // The line under a card's title: where, which ticket, how long ago, how it stands.
 // A wrapped part sits close under the first, as the next line of the same sentence.
-export const metaRow = (t) => h_flex().flex_wrap().gap_x(8).gap_y(2).items_center().text_size(11.5).text_color(t.muted);
+export const metaRow = (t) => h_flex().flex_wrap().gap_x(10).gap_y(4).items_center().text_size(11.5).text_color(t.muted);
 
-export const groupTitle = (t, text) => div().px(4).pt(8).pb(2).text_size(10.5).font_medium().text_color(t.dim).child(text);
+export const groupTitle = (t, text) => div().px(4).pt(10).text_size(10.5).font_medium().text_color(t.dim).child(text);
 
 // A card that only says something: a title, and calm words under it; the empty box shows the box.
 export function messageCard(t, id, title, words, { withBox = false } = {}) {
-  const text = v_flex().flex_1().min_w(0).gap(6).child(div().font_medium().whitespace_normal().child(title)).child(div().text_size(12).text_color(t.muted).whitespace_normal().child(words));
-  return card(t, id).child(withBox ? h_flex().gap(12).items_start().child(image(ICON_LARGE).w(32).h(32).flex_none().mt(2)).child(text) : text);
+  const text = v_flex().flex_1().min_w(0).gap(8).child(div().font_medium().whitespace_normal().child(title)).child(div().text_size(12).text_color(t.muted).whitespace_normal().child(words));
+  return card(t, id).child(withBox ? h_flex().gap(14).items_start().child(image(ICON_LARGE).w(32).h(32).flex_none().mt(2)).child(text) : text);
 }
 
 // A card's buttons: Bin quiet on the far left, away from the others; the main action filled, last.
@@ -53,14 +53,14 @@ export function actionsRow(s, note, { primary = null, isBusy = () => false, leav
   if (!actions.length) return div();
   const rest = actions.filter((a) => !QUIET.includes(a));
   const ordered = [...rest.filter((a) => a !== primary), ...rest.filter((a) => a === primary)];
-  return h_flex().gap(6).items_center().pt(2)
+  return h_flex().gap(8).items_center().pt(6)
     .children(actions.filter((a) => QUIET.includes(a)).map((a) => quietButton(t, note, a, s.act)))
     .child(div().flex_1())
     .children(ordered.map((a) => actionButton(t, note, a, s.act, a === primary, isBusy(a))));
 }
 
 function quietButton(t, note, action, act) {
-  return div().id(`${action}:${note.id}`).flex_none().h(24).px(8).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
+  return div().id(`${action}:${note.id}`).flex_none().h(28).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
     .hover((st) => st.bg(t.hover).text_color(t.foreground))
     .tooltip(action === "bin" ? "Bin: take the note away (Undo for a few seconds, Restore in the history)" : LABELS[action])
     .on_click((_e, cx) => act(action, note, cx))
@@ -86,12 +86,12 @@ const TIPS = {
 
 export function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
   if (isBusy) {
-    return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
+    return div().id(`${action}:${note.id}`).flex_none().h(28).px(12).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
       .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child(BUSY[action] ?? "Working…"));
   }
   const isAgain = action === "check" && note.check && !note.check.error;
   const label = isAgain ? "Check again" : LABELS[action];
-  return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
+  return div().id(`${action}:${note.id}`).flex_none().h(28).px(12).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
     .tooltip(TIPS[isAgain ? "check-again" : action] ?? label)
     .bg(isPrimary ? t.solid : t.background).text_color(isPrimary ? t.solid_foreground : t.foreground).border(1).border_color(isPrimary ? t.solid : t.border)
     .hover((st) => st.bg(isPrimary ? t.solid : t.hover))
@@ -106,7 +106,7 @@ export function link(t, id, text, onClick, color = t.foreground) {
 }
 
 export function plainButton(t, id, text, onClick, { isPrimary = false, isOff = false } = {}) {
-  return div().id(id).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium()
+  return div().id(id).flex_none().h(28).px(12).flex().items_center().rounded(6).text_size(12).font_medium()
     .bg(isPrimary ? t.solid : t.background).text_color(isPrimary ? t.solid_foreground : t.foreground).border(1).border_color(isPrimary ? t.solid : t.border)
     .when(isOff, (el) => el.opacity(0.45))
     .when(!isOff, (el) => el.cursor_pointer().hover((st) => st.bg(isPrimary ? t.solid : t.hover)).on_click(onClick))
@@ -116,12 +116,12 @@ export function plainButton(t, id, text, onClick, { isPrimary = false, isOff = f
 // A note as one quiet line: a dot, its title, and on the right a word or its age. A click does
 // `onClick`; `details`, when given, show under the line (the row is open).
 export function quietRow(t, id, { color, title, right, onClick, tip = null, details = null }) {
-  const line = h_flex().id(`${id}:line`).gap(10).items_center().cursor_pointer().on_click(onClick)
+  const line = h_flex().id(`${id}:line`).gap(12).items_center().cursor_pointer().on_click(onClick)
     .when(Boolean(tip), (el) => el.tooltip(tip))
     .child(div().flex_none().size(8).rounded(4).bg(color))
     .child(div().flex_1().min_w(0).truncate().child(title))
     .child(div().flex_none().text_size(11.5).text_color(t.dim).child(right));
-  return v_flex().id(id).px(10).py(7).gap(8).rounded(8).bg(details ? t.raised : t.chrome).hover((st) => st.bg(t.raised))
+  return v_flex().id(id).px(12).py(10).gap(10).rounded(8).bg(details ? t.raised : t.chrome).hover((st) => st.bg(t.raised))
     .child(line)
     .when(Boolean(details), (el) => el.child(details));
 }
@@ -133,5 +133,5 @@ export function stepColor(t, kind) {
 }
 
 export function chip(t, text, color) {
-  return div().flex_none().px(6).rounded(8).text_size(11).border(1).border_color(color).text_color(color).child(text);
+  return div().flex_none().px(8).rounded(8).text_size(11).border(1).border_color(color).text_color(color).child(text);
 }

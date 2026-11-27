@@ -32,6 +32,8 @@ All notable changes to the suggestion box. The format follows
 - Quiet rows: Filed, Done and Binned show one line per note (a dot, its title, a word on how it
   stands), and a click opens its details and buttons. In Now, the open note you picked is a card
   with its buttons and the others are one line each, so a full box stays readable.
+- More room everywhere in the panel: around the header, the filters, the rows and the cards, and
+  between their lines and buttons; buttons are a little taller.
 - What needs you comes first: a Needs you group under To verify holds every filed issue you have to
   act on, also one filed long ago (a fix that did not start or never reported back, not on the
   board, a fix that landed while the issue stayed open), and the header counts it: `shop · 1 to

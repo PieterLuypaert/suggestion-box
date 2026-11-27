@@ -49,9 +49,9 @@ export function panel(s) {
   return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13).text_color(t.foreground)
     .child(header(s, f.counts, filter))
     .when(Boolean(s.collecting && !s.collecting.project), (el) => el.child(offLine(s)))
-    .when(Boolean(s.notice), (el) => el.child(div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).text_size(12).whitespace_normal().child(s.notice)))
-    .when(Boolean(s.error), (el) => el.child(div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).border(1).border_color(t.blocked).text_size(12).text_color(t.blocked).whitespace_normal().child(s.error)))
-    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(8).py(8).child(body))
+    .when(Boolean(s.notice), (el) => el.child(div().flex_none().mx(12).mt(10).px(14).py(10).rounded(8).bg(t.raised).text_size(12).whitespace_normal().child(s.notice)))
+    .when(Boolean(s.error), (el) => el.child(div().flex_none().mx(12).mt(10).px(14).py(10).rounded(8).bg(t.raised).border(1).border_color(t.blocked).text_size(12).text_color(t.blocked).whitespace_normal().child(s.error)))
+    .child(div().id("sbox-list").flex_1().min_h(0).overflow_y_scrollbar().px(12).py(12).child(body))
     .when(Boolean(hints.text), (el) => el.child(footer(s, hints)));
 }
 
@@ -67,12 +67,12 @@ function header(s, counts, filter) {
   const sum = stored ? [stored.toVerify ? `${stored.toVerify} to verify` : "", needs ? `${needs} need${needs === 1 ? "s" : ""} you` : "", stored.open ? `${stored.open} open` : "", filed.justFiled.length ? `${filed.justFiled.length} just filed` : ""].filter(Boolean).join(" · ") || "nothing waits" : "";
   const title = s.view === "settings" ? "Suggestion box · Settings" : "Suggestion box";
   const isOn = Boolean(s.collecting?.project);
-  return v_flex().flex_none().pl(14).pr(6).py(8).gap(4).border_b(1).border_color(t.border)
+  return v_flex().flex_none().pl(16).pr(10).pt(12).pb(10).gap(8).border_b(1).border_color(t.border)
     .child(h_flex().gap(6).items_center()
       .child(div().flex_1().min_w(0).truncate().font_semibold().child(title))
       .child(iconButton(t, "settings", svg("mods/workspace-chrome/settings.svg").size(14), s.view === "settings" ? "Back to the notes" : "Settings: which projects use the box", (_e, cx) => s.act("settings", null, cx), s.view === "settings"))
       .child(iconButton(t, "close", svg("mods/workspace-chrome/x.svg").size(14), "Close (⌥⌘S)", (_e, cx) => s.act("close", null, cx))))
-    .when(Boolean(name), (el) => el.child(h_flex().gap(8).items_center().pr(8)
+    .when(Boolean(name), (el) => el.child(h_flex().gap(10).items_center().pr(6)
       .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child([name, sum].filter(Boolean).join(" · ")))
       .when(Boolean(s.collecting), (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))))
     .when(Boolean(answer?.project) && s.view !== "settings", (el) => el.child(filterTabs(s, counts, filter)));
@@ -81,9 +81,9 @@ function header(s, counts, filter) {
 // The filters, as tabs: Now first, the picked one filled. Keys 1 to 4 pick them too.
 function filterTabs(s, counts, filter) {
   const { t } = s;
-  return h_flex().gap(2).pt(2).children(FILTERS.map((name, i) => {
+  return h_flex().gap(6).pt(2).children(FILTERS.map((name, i) => {
     const isOn = name === filter;
-    return h_flex().id(`filter:${name}`).flex_none().h(24).px(8).gap(5).items_center().rounded(6).text_size(12).cursor_pointer()
+    return h_flex().id(`filter:${name}`).flex_none().h(28).px(10).gap(6).items_center().rounded(6).text_size(12).cursor_pointer()
       .bg(isOn ? t.selected : t.chrome).text_color(isOn ? t.foreground : t.muted).when(isOn, (el) => el.font_medium())
       .hover((st) => st.bg(isOn ? t.selected : t.hover).text_color(t.foreground))
       .tooltip(`${TAB_TIPS[name]} (${i + 1})`)
@@ -102,7 +102,7 @@ const TAB_TIPS = {
 
 function offLine(s) {
   const { t } = s;
-  return div().flex_none().mx(8).mt(8).px(12).py(8).rounded(8).bg(t.raised).text_size(12).text_color(t.muted).whitespace_normal()
+  return div().flex_none().mx(12).mt(10).px(14).py(10).rounded(8).bg(t.raised).text_size(12).text_color(t.muted).whitespace_normal()
     .child(`Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
 }
 
@@ -122,11 +122,11 @@ function nowView(s, now) {
   const group = (name, notes, draw) => notes.length ? [groupTitle(t, `${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)] : [];
   const picked = pickedOpen(s, open);
   const openNote = (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : n.id === picked ? noteCard(s, n) : openRow(s, n));
-  return v_flex().gap(8).children([
+  return v_flex().gap(12).children([
     ...group("To verify", toVerify, (n) => verifyCard(s, n)),
     ...group("Needs you", needs, (n) => filedCard(s, n)),
     ...(s.undo ? [undoRow(s, s.undo)] : []),
-    ...(open.length ? [groupTitle(t, `OPEN · ${open.length}`), v_flex().gap(4).children(open.map(openNote))] : []),
+    ...(open.length ? [groupTitle(t, `OPEN · ${open.length}`), v_flex().gap(6).children(open.map(openNote))] : []),
     ...group("Just filed", justFiled, (n) => filedCard(s, n)),
   ]);
 }
@@ -139,9 +139,9 @@ function pickedOpen(s, open) {
 
 function undoRow(s, note) {
   const { t } = s;
-  return h_flex().id(`undo:${note.id}`).px(12).py(8).gap(8).rounded(8).bg(t.raised).items_center().text_size(12.5).text_color(t.muted)
+  return h_flex().id(`undo:${note.id}`).px(14).py(10).gap(10).rounded(8).bg(t.raised).items_center().text_size(12.5).text_color(t.muted)
     .child(div().flex_1().min_w(0).truncate().child(`Binned: ${note.title}`))
-    .child(div().id(`undo-button:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).border(1).border_color(t.border).bg(t.background).cursor_pointer()
+    .child(div().id(`undo-button:${note.id}`).flex_none().h(28).px(12).flex().items_center().rounded(6).border(1).border_color(t.border).bg(t.background).cursor_pointer()
       .hover((st) => st.bg(t.hover)).on_click((_e, cx) => s.act("undo", note, cx)).child("Undo"));
 }
 
@@ -167,6 +167,6 @@ function hintsFor(s, filter) {
 // The keys of the picked note, or of the filter shown; no footer when there are none.
 function footer(s, { text, tip }) {
   const { t } = s;
-  return h_flex().flex_none().h(30).px(12).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
+  return h_flex().flex_none().h(36).px(16).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("keys").flex_1().min_w(0).truncate().text_right().when(Boolean(tip), (el) => el.tooltip(tip)).child(text));
 }

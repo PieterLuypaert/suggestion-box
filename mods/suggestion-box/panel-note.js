@@ -72,7 +72,7 @@ function sections(t, note, isBusy = false) {
 function goneBanner(s, note) {
   const { t } = s;
   const gone = note.check.gone;
-  return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.working).bg(t.chrome)
+  return v_flex().gap(8).px(12).py(10).rounded(6).border(1).border_color(t.working).bg(t.chrome)
     .child(div().text_size(12.5).whitespace_normal().child(`Looks solved on ${gone.on}: ${gone.why}`))
     .child(h_flex().gap(6).items_center()
       .child(div().id(`gone-bin:${note.id}`).flex_none().h(24).px(8).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
