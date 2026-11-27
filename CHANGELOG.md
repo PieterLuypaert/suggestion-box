@@ -26,6 +26,10 @@ All notable changes to the suggestion box. The format follows
 
 ### Changed
 
+- Fix in new tab names the branch the way the repo's tickets are named: your own Claude proposes a
+  type and three to five words (`fix/invoice-editor-duplicate-patch-save` rather than
+  `fix/save-invoice-editor-can-send`), with the repo's earlier parallel tickets as examples.
+  The title's words still name it when Claude cannot.
 - A claim to verify leads with its verdict: one coloured line with what its three proofs add up to
   ("Looks fixed · 3 of 3 proofs hold", "Your Claude says it is not fixed", "Looks fixed, but it never
   landed"), each proof in a few words under it, and the claim, its commits and its issue under
