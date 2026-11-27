@@ -6,6 +6,7 @@ import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeProof, landedProof } from "../cli/box/proofs.js";
+import { fetch, FETCH_FRESH_MS } from "../cli/box/claude.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
 import { changeRow, claimKey, claimVerdict, landedState, mapRange, pickPr, PROOFS_REFRESH_MS, proofsDue, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
@@ -121,6 +122,23 @@ function setup({ verify = { verdict: "verified", why: "formatDate returns a dash
   const file = join(folder, readdirSync(folder).find((n) => n.endsWith(".json")));
   return { repo, bare, box, dir, file, id: JSON.parse(readFileSync(file, "utf8")).id, env: { SUGGESTION_BOX_HOME: box, SUGGESTION_BOX_CLAUDE: claude } };
 }
+
+describe("one fetch for the looks close together", () => {
+  test("a fetch younger than 20 seconds is used again, an older one is fetched anew", () => {
+    const s = setup();
+    const before = git(s.repo, "rev-parse", "origin/main").trim();
+    const other = join(tempDir("other-"), "shop");
+    git(s.repo, "clone", "-q", s.bare, other);
+    writeFileSync(join(other, "later.txt"), "later\n");
+    git(other, "add", ".");
+    git(other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "later");
+    git(other, "push", "-q", "origin", "HEAD:main");
+    expect(fetch(s.repo)).toBe(true);
+    expect(git(s.repo, "rev-parse", "origin/main").trim()).toBe(before);
+    expect(fetch(s.repo, { now: Date.now() + FETCH_FRESH_MS + 1000 })).toBe(true);
+    expect(git(s.repo, "rev-parse", "origin/main").trim()).not.toBe(before);
+  });
+});
 
 // Rewrites lines of src/invoices.ts (1-based) and commits.
 function edit(repo, message, change) {
