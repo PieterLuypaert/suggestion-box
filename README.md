@@ -178,7 +178,8 @@ worktree and stack, the ticket's prompt (`/ship-issue <n>`) and the record behin
   launcher's `issues branch` checks it; a name that is taken gets `-2`.
 - The launcher runs through your login shell from the project's main checkout, with
   `--space <id>`, so the tab opens in the space you are in, and the box stays where it is.
-- The note then shows `Fixing in fix/… ↗`, which jumps to that tab, and the fix never starts twice.
+- The note then says it is being fixed in its own tab, with its branch and **Go to its tab ↗**, and
+  the fix never starts twice.
   A launcher that fails (uncommitted work in the main checkout, no network) leaves its last line
   on the note, and the button stays to try again.
 - The button shows only for an issue on GitHub in the project's own repo, when the launcher and

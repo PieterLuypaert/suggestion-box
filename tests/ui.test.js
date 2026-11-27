@@ -60,6 +60,7 @@ const scenes = {
   "panel with a claim that looks fixed, details open": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [answer.notes[0]] }, proofs: new Map([["n1:", { ...proofsFound, landed: { state: "landed", how: "PR #44 merged" } }]]) })`,
   "panel with claims: waiting to land, not fixed, still looking, a check that failed": `panel({ ...base, answer: { ...answer, notes: [answer.notes[0], { ...answer.notes[1], verify: { verdict: "not_fixed", why: "still throws" } }, { ...answer.notes[0], id: "n7", number: 7, verify: null }, { ...answer.notes[0], id: "n8", number: 8, verify: null }] }, proofs: new Map([["n1:", proofsFound], ["n6:", proofsFound], ["n7:", { isLoading: true }], ["n8:", proofsFound]]), verifying: new Set(["n7:"]), verifyAsked: new Set(["n7:", "n8:"]), verifyFailed: new Set(["n8:"]) })`,
   "panel history by state, one row open": `panel({ ...base, view: "history", expanded: new Set(["h3"]) })`,
+  "panel history with a fix's branch, its row open": `panel({ ...base, view: "history", expanded: new Set(["h6"]) })`,
   "panel with the proofs failing": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], verify: { error: "Claude took longer than 90 seconds" } }] }, proofs: new Map([["n1:", { change: { why: "feat/8511-groups is not here, not even fetched" }, landed: { state: "never", how: "its branch is gone, with no merged PR and no same change in main" } }]]) })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
   "panel with only what needs you: an old issue whose fix landed": `panel({ ...base, answer: { ...answer, notes: [], counts: { open: 0, toVerify: 0 }, history: [answer.history[0], { id: "h11", number: 15, title: "Totals skip the discount", state: "filed", issue: { number: 816, url: "u" }, solved: { branch: "fix/totals-discount", confirmed: { at: "t" }, landed: { state: "landed", how: "PR #41 merged" } }, age: "3d", actions: [] }] } })`,
@@ -84,6 +85,7 @@ const words = {
     hasNot: ["Nothing open", "↑↓", "OPEN ·"],
   },
   "panel empty": { has: ["shop · empty", "Nothing in shop's box yet", "History · 0 ▸"], hasNot: ["↑↓", "NEEDS YOU"] },
+  "panel history with a fix's branch, its row open": { has: ["Being fixed in its own tab", "Go to its tab ↗", "fix/fee-rounding-trials"], hasNot: ["Fixing in"] },
 };
 
 function sceneMod(name, draw) {

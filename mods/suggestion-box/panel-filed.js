@@ -23,7 +23,10 @@ export function filedLines(s, note, { withNeeds = true } = {}) {
       .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
     .when(Boolean(note.issue?.closed), (el) => el.child(div().text_color(t.muted).child(`Issue #${issue.number} closed`)))
     .when(Boolean(issue.boards?.length), (el) => el.child(div().text_color(t.muted).whitespace_normal().child(`On board ${issue.boards.map((b) => (b.column ? `${b.title} › ${b.column}` : b.title)).join(", ")}`)))
-    .when(Boolean(note.fix?.branch) && !note.issue?.closed, (el) => el.child(link(t, `fixing:${note.id}`, `Fixing in ${note.fix.branch} ↗`, (_e, cx) => s.act("jump-fix", note, cx))))
+    // The branch keeps to one line, whole or cut at its end, never broken at its slash.
+    .when(Boolean(note.fix?.branch) && !note.issue?.closed, (el) => el.child(v_flex().gap(2)
+      .child(h_flex().gap(6).items_center().child(div().text_color(t.muted).child("Being fixed in its own tab")).child(link(t, `fixing:${note.id}`, "Go to its tab ↗", (_e, cx) => s.act("jump-fix", note, cx))))
+      .child(div().truncate().text_color(t.muted).child(note.fix.branch))))
     .when(Boolean(note.fix?.starting) && !note.fix?.isStale, (el) => el.child(div().text_color(t.muted).child("A fix is starting in a new tab…")))
     .when(Boolean(note.fix?.isStale), (el) => el.child(div().text_color(t.working).whitespace_normal().child("A fix was starting but never reported back. Look for its tab before you start it again.")))
     .when(Boolean(note.fixError) && !note.fix, (el) => el.child(div().text_color(t.blocked).whitespace_normal().child(`Fix in new tab did not start: ${note.fixError.why}`)))
