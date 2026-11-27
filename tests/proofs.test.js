@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeProof, landedProof } from "../cli/box/proofs.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
-import { landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
+import { changeRow, claimVerdict, landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
 const BRANCH = "feat/8504-group-records";
@@ -458,5 +458,36 @@ describe("box.js proofs, verify, confirm and watch", () => {
     const shown = await run(["show", s.repo, fix, "src/invoices.ts", "42"], s.env);
     expect(readFileSync(shown.file, "utf8")).toContain("line 42 fixed");
     expect(shown.line).toBe(42);
+  });
+});
+
+describe("the verdict a claim's card leads with", () => {
+  const change = { change: { path: "src/store.ts", commits: [{ sha: "415d818b35aa", path: "src/add-event/index.tsx" }], elsewhere: [] } };
+  const landedAs = (state, how) => ({ ...change, landed: { state, how } });
+  const verified = { verdict: "verified", why: "w", test: { found: true, assertsFix: true } };
+
+  test("all three hold, or the fix still waits to land", () => {
+    expect(claimVerdict({ found: landedAs("landed", "PR #10178 merged"), verify: verified })).toMatchObject({ tone: "fixed", text: "Looks fixed · 3 of 3 proofs hold" });
+    const waiting = claimVerdict({ found: landedAs("waiting", "PR #44 is open"), verify: verified });
+    expect(waiting).toMatchObject({ tone: "fixed", text: "Looks fixed · waiting to land" });
+    expect(waiting.rows.map((r) => [r.name, r.text, r.state])).toEqual([["Change", "415d818 · index.tsx", "holds"], ["Claude", "Verified", "holds"], ["Landed", "PR #44 is open", "waiting"]]);
+  });
+
+  test("not fixed, partly, never landed, no commit found", () => {
+    expect(claimVerdict({ found: landedAs("waiting", "no PR yet"), verify: { verdict: "not_fixed", why: "w" } }).tone).toBe("not-fixed");
+    expect(claimVerdict({ found: landedAs("waiting", "no PR yet"), verify: { verdict: "partly", why: "w" } }).text).toBe("Partly fixed, says your Claude");
+    expect(claimVerdict({ found: landedAs("never", "PR #44 was closed without merging"), verify: verified }).text).toBe("Looks fixed, but it never landed");
+    expect(claimVerdict({ found: { change: { commits: [], elsewhere: [] }, landed: { state: "waiting", how: "no PR yet" } }, verify: verified }).text).toBe("Verified, but no commit of the fix was found");
+  });
+
+  test("still looking, and a check that failed", () => {
+    expect(claimVerdict({ found: { isLoading: true }, verify: null }).tone).toBe("looking");
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null, isVerifying: true }).text).toBe("Looking at the proofs…");
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: { error: "timeout" } })).toMatchObject({ tone: "unchecked", text: "2 of 3 proofs hold · not checked by your Claude" });
+  });
+
+  test("a fix in another file names that file, and how many more", () => {
+    const elsewhere = { change: { commits: [], elsewhere: [{ sha: "8f329a2aaaa", files: ["a/index.tsx", "a/index.test.tsx"] }] }, landed: { state: "waiting", how: "no PR yet" } };
+    expect(changeRow(elsewhere)).toEqual({ name: "Change", text: "8f329a2 · index.tsx +1", state: "holds" });
   });
 });

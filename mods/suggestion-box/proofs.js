@@ -178,3 +178,61 @@ const first = (text) => String(text ?? "").trim().split("\n")[0] ?? "";
 export function verifyHolds(verify, basis) {
   return Boolean(verify && !verify.error && verify.basis && verify.basis === basis);
 }
+
+// ---- the verdict a claim's card leads with ----
+
+const base = (path) => String(path ?? "").split("/").pop();
+
+// The change in a few words: the last commit that changed the note's lines, else the branch's last
+// other change; `state` says whether it holds.
+export function changeRow(found) {
+  if (!found || found.isLoading) return { name: "Change", text: "looking…", state: "looking" };
+  if (found.error || !found.change) return { name: "Change", text: "could not look", state: "unknown" };
+  const { change } = found;
+  if (change.why) return { name: "Change", text: change.why, state: "unknown" };
+  const last = change.commits?.at(-1);
+  if (last) return { name: "Change", text: `${last.sha.slice(0, 7)} · ${base(last.path ?? change.path)}`, state: "holds" };
+  const other = change.elsewhere?.at(-1);
+  if (other) return { name: "Change", text: `${other.sha.slice(0, 7)} · ${base(other.files[0])}${other.files.length > 1 ? ` +${other.files.length - 1}` : ""}`, state: "holds" };
+  return { name: "Change", text: "no commit changed it yet", state: "missing" };
+}
+
+// Your Claude's independent check in a word.
+export function checkRow(verify, isVerifying = false) {
+  if (isVerifying) return { name: "Claude", text: "checking…", state: "looking" };
+  if (!verify) return { name: "Claude", text: "not checked yet", state: "looking" };
+  if (verify.error) return { name: "Claude", text: "not checked", state: "unknown" };
+  const words = { verified: ["Verified", "holds"], partly: ["Partly", "partial"], not_fixed: ["Not fixed", "fails"] }[verify.verdict];
+  return { name: "Claude", text: words?.[0] ?? "not checked", state: words?.[1] ?? "unknown" };
+}
+
+// Whether the fix is in main, in a few words.
+export function landedRow(found) {
+  if (!found || found.isLoading) return { name: "Landed", text: "looking…", state: "looking" };
+  if (found.error || !found.landed) return { name: "Landed", text: "could not look", state: "unknown" };
+  const { landed } = found;
+  const state = { landed: "holds", waiting: "waiting", never: "fails" }[landed.state] ?? "unknown";
+  return { name: "Landed", text: landed.how, state };
+}
+
+// What a claim's three proofs add up to: { tone, text, rows }. `tone` is fixed, partly, not-fixed,
+// looking or unchecked; a fix waiting to land still looks fixed, as most claims come before their PR
+// is merged.
+export function claimVerdict({ found, verify, isVerifying = false }) {
+  const change = changeRow(found);
+  const check = checkRow(verify, isVerifying);
+  const landed = landedRow(found);
+  const rows = [change, check, landed];
+  const holds = rows.filter((row) => row.state === "holds").length;
+  const verdict = (tone, text) => ({ tone, text, rows });
+  if (check.state === "fails") return verdict("not-fixed", "Your Claude says it is not fixed");
+  if (rows.some((row) => row.state === "looking")) return verdict("looking", "Looking at the proofs…");
+  if (check.state === "partial") return verdict("partly", "Partly fixed, says your Claude");
+  if (check.state === "holds") {
+    if (landed.state === "fails") return verdict("partly", "Looks fixed, but it never landed");
+    if (change.state === "missing") return verdict("partly", "Verified, but no commit of the fix was found");
+    if (holds === 3) return verdict("fixed", "Looks fixed · 3 of 3 proofs hold");
+    if (landed.state === "waiting") return verdict("fixed", "Looks fixed · waiting to land");
+  }
+  return verdict("unchecked", `${holds} of 3 proofs hold${check.state === "unknown" ? " · not checked by your Claude" : ""}`);
+}
