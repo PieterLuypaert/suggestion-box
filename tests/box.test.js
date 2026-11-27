@@ -137,6 +137,21 @@ describe("prune", () => {
     expect((await run(["read", repo], env)).notes.map((n) => n.title)).toEqual(["Old open"]);
     expect(suggest(repo, box, [], note("Old binned")).out).toBe("Already binned by the user (note 1). Carry on with your task.");
   });
+
+  test("a folder of the editor's copies that cannot be read never stops the notes' prune", async () => {
+    const { repo, box, env } = setup();
+    suggest(repo, box, [], note("Old binned"));
+    await run(["act", repo, idOf(box, 1), "bin"], env);
+    const tmp = tempDir("tmp-");
+    writeFileSync(join(tmp, "suggestion-box-files"), "not a folder");
+    const kept = process.env.TMPDIR;
+    process.env.TMPDIR = tmp;
+    try {
+      expect(await run(["prune", repo], env, new Date(Date.now() + 31 * 86400000))).toEqual({ ok: true, pruned: 1 });
+    } finally {
+      process.env.TMPDIR = kept;
+    }
+  });
 });
 
 test("prune keeps a filed note that waits in To verify, and a note with events not folded in yet", async () => {

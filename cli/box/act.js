@@ -6,6 +6,7 @@ import { stillHolds } from "../../mods/suggestion-box/check.js";
 import { ACTS, allows, applyAction, isWatched } from "../../mods/suggestion-box/rules.js";
 import { runCheck } from "./check.js";
 import { keptProofs } from "./claims.js";
+import { pruneCopies } from "./proofs.js";
 import { DAY, KEEP_DAYS, loadNote, notesOf, update } from "./note-files.js";
 
 // One of the user's actions: the note with its events folded in, the action applied, written over
@@ -46,8 +47,9 @@ function flags(options) {
 
 // Filed, solved and binned notes untouched for 30 days become tombstones: what the same-note check
 // and the numbers still need, nothing more. A note waiting in To verify stays, and so does any
-// event that arrived after the notes were read.
+// event that arrived after the notes were read. The files copied for the editor go after a day.
 export function prune(project, now) {
+  pruneCopies(now);
   let pruned = 0;
   if (!existsSync(project.dir)) return { ok: true, pruned };
   for (const note of notesOf(project.dir)) {
