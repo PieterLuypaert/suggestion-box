@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { checkedSummary } from "./check.js";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
-import { actionsRow, card, chip, metaRow } from "./panel-parts.js";
+import { actionsRow, card, chip, link, metaRow } from "./panel-parts.js";
 
 export function noteCard(s, note) {
   const { t } = s;
@@ -12,10 +12,10 @@ export function noteCard(s, note) {
   return card(t, `note:${note.id}`, { isSelected: s.selected === note.id })
     .child(div().id(`title:${note.id}`).font_medium().cursor_pointer().whitespace_normal().tooltip(isOpen ? "Close its sections" : "Open its four sections").on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
     .child(metaRow(t)
-      .when(Boolean(where), (el) => el.child(div().id(`at:${note.id}`).text_color(t.accent).cursor_pointer().tooltip(`Open ${note.at.path} in Cursor`).on_click((_e, cx) => s.act("open-file", note, cx)).child(where)))
-      .when(Boolean(note.from?.ticket), (el) => el.child(div().id(`ticket:${note.id}`).cursor_pointer().tooltip("Its tab, or the ticket on GitHub").on_click((_e, cx) => s.act("jump", note, cx)).child(`#${note.from.ticket}`)))
+      .when(Boolean(where), (el) => el.child(link(t, `at:${note.id}`, where, (_e, cx) => s.act("open-file", note, cx)).tooltip(`Open ${note.at.path} in Cursor`)))
+      .when(Boolean(note.from?.ticket), (el) => el.child(link(t, `ticket:${note.id}`, `#${note.from.ticket}`, (_e, cx) => s.act("jump", note, cx), t.muted).tooltip("Its tab, or the ticket on GitHub")))
       .child(div().child(note.age))
-      .when(note.spotted > 1, (el) => el.child(div().text_color(t.working).child(`seen ${note.spotted}×`)))
+      .when(note.spotted > 1, (el) => el.child(div().child(`seen ${note.spotted}×`)))
       .when(Boolean(note.changed), (el) => el.child(chip(t, note.changed?.kind === "removed" ? "file removed" : `changed on ${note.changed?.on}`, t.working)))
       .when(Boolean(note.notVerified), (el) => el.child(chip(t, `claimed on ${note.notVerified?.branch}, not verified`, t.working)))
       .when(Boolean(note.reopened), (el) => el.child(chip(t, note.reopened?.by === "you" ? "reopened" : "spotted again after it was solved", t.blocked)))
@@ -45,7 +45,7 @@ const VERDICT_LABELS = { checked: "Checked", corrected: "Corrected", unsure: "Un
 // the agent's under it) or Unsure (the agent's text, Claude's question under it).
 function sections(t, note, isBusy = false) {
   const verdicts = !isBusy && note.check?.sections ? note.check.sections : null;
-  const colors = { checked: t.ansi2, corrected: t.accent, unsure: t.working };
+  const colors = { checked: t.ansi2, corrected: t.ansi4, unsure: t.working };
   return v_flex().gap(6).pl(8).border_l(2).border_color(t.border).text_size(12.5)
     .children(SECTIONS.map((name) => {
       const verdict = verdicts?.[name];

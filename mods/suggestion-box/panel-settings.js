@@ -28,14 +28,14 @@ export function settingsView(s) {
 function projectRow(s, project, isAll) {
   const { t } = s;
   const counts = project.counts ?? {};
-  const words = [counts.open ? `${counts.open} open` : "", counts.toVerify ? `${counts.toVerify} to verify` : "", counts.filed ? `${counts.filed} filed` : ""].filter(Boolean).join(" · ") || "no notes";
+  const words = [counts.toVerify ? `${counts.toVerify} to verify` : "", counts.open ? `${counts.open} open` : "", counts.filed ? `${counts.filed} filed` : ""].filter(Boolean).join(" · ") || "no notes";
   const isOn = isAll && project.isOn;
   return h_flex().id(`project:${project.key}`).px(12).py(10).gap(10).items_center().rounded(8).bg(t.raised).border(1).border_color(project.isHere ? t.input : t.raised)
     .when(!isAll, (el) => el.opacity(0.5))
     .child(v_flex().flex_1().min_w(0).gap(2)
       .child(h_flex().gap(6).items_center()
         .child(div().min_w(0).truncate().font_medium().child(project.name))
-        .when(project.isHere, (el) => el.child(chip(t, "this space", t.accent))))
+        .when(project.isHere, (el) => el.child(chip(t, "this space", t.muted))))
       .child(div().text_size(11.5).text_color(t.muted).truncate().child(`${words} · ${project.key}`)))
     .child(isAll
       ? toggle(t, `collect:${project.key}`, isOn ? "On" : "Off", isOn, isOn ? `Agents in ${project.name} hear of the box` : `Agents in ${project.name} never hear of the box`, (_e, cx) => s.act("collect-project", project, cx))

@@ -99,8 +99,9 @@ export function actionButton(t, note, action, act, isPrimary = false, isBusy = f
     .child(label);
 }
 
-// A small text button: Start over, Use the agent's text, Fine to publish, Copy.
-export function link(t, id, text, onClick, color = t.accent) {
+// A small text button: Start over, Use the agent's text, Fine to publish, Copy. Plain text that
+// underlines on hover: colour stays for what needs you (amber) and how things stand.
+export function link(t, id, text, onClick, color = t.foreground) {
   return div().id(id).flex_none().text_size(11.5).text_color(color).cursor_pointer().hover((st) => st.underline()).on_click(onClick).child(text);
 }
 
