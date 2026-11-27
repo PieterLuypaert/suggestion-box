@@ -20,6 +20,9 @@ export function act(project, rest, now, env) {
     const loaded = loadNote(project.dir, id);
     const view = loaded && fold(loaded.note, loaded.events.map((e) => e.event));
     if (view?.solved) details.proofs = keptProofs(project, view, env);
+    // A fix that never landed is no solve to confirm: confirming it would only send the note back.
+    const landed = details.proofs?.landed;
+    if (landed?.state === "never") return { error: `Its fix never landed (${landed.how}): Not solved puts the note back, and a new claim can follow.` };
   }
   const result = update(project, id, ({ view }) => applyAction(view, action, now.toISOString(), details), { foldEvents: true });
   return result.error ? result : { ok: true, state: stateOf(result.note) };

@@ -44,7 +44,7 @@ export function claimRef(top, branch, mainRef = defaultRef(top), sha = null) {
 export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
   const ref = claimRef(top, claim?.branch, mainRef, claim?.sha);
   if (!ref) return { why: claim?.branch ? `${claim.branch} is not here, not even fetched` : "the claim names no branch" };
-  const start = startOf(top, note, ref, mainRef);
+  const start = startOf(top, note, ref, mainRef, claim?.branch === note.from?.branch);
   if (!start) return { ref, why: "the note's lines cannot be found where its branch started" };
   let { range, path } = start;
   const commits = [];
@@ -81,15 +81,17 @@ function commitsOn(top, range) {
   });
 }
 
-// Where the note's lines start: at its own commit when the branch still has it, else (a rebase) at
-// the branch's base on the default branch, found by the snippet.
-function startOf(top, note, ref, mainRef) {
+// Where the note's lines start: at its own commit when the branch still has it. Else, found by the
+// snippet: on the note's own branch after a rebase, at the branch's base on the default branch; on
+// another branch (main, when the fix went there), where that branch and the note's commit meet.
+function startOf(top, note, ref, mainRef, isNotesBranch) {
   const range = noteRange(note);
   const path = note.at?.path;
   if (!range || !path) return null;
   const sha = note.from?.sha;
   if (sha && gitAnswer(top, ["merge-base", "--is-ancestor", sha, ref]) !== null) return { base: sha, range, path };
-  const base = mainRef ? gitAnswer(top, ["merge-base", ref, mainRef]) : null;
+  const isKnown = Boolean(sha) && gitAnswer(top, ["cat-file", "-e", `${sha}^{commit}`]) !== null;
+  const base = isKnown && !isNotesBranch ? gitAnswer(top, ["merge-base", sha, ref]) : mainRef ? gitAnswer(top, ["merge-base", ref, mainRef]) : null;
   const text = base ? gitText(top, ["show", `${base}:${path}`]) : null;
   const at = text && note.snippet ? findSnippet(text, note.snippet, note.at.line) : null;
   return at ? { base, range: { first: at, last: at + range.last - range.first }, path } : null;
@@ -112,8 +114,9 @@ function stepThrough(top, commit, path, range) {
 }
 
 // Proof 3: { state, how, sha? } after asking gh for the branch's PR and git for the solving commit
-// in the fetched default branch. `since` is when the note was dropped.
-export function landedProof(top, key, claim, change, env, { mainRef = defaultRef(top), since = null } = {}) {
+// in the fetched default branch. `since` is when the note was dropped, `from` the commit it was
+// dropped on.
+export function landedProof(top, key, claim, change, env, { mainRef = defaultRef(top), since = null, from = null } = {}) {
   const branch = claim?.branch ?? null;
   const isDefault = isDefaultBranch(branch, mainRef);
   const repo = githubRepo(key);
@@ -121,13 +124,29 @@ export function landedProof(top, key, claim, change, env, { mainRef = defaultRef
   const listed = prs?.code === 0 ? parsed(prs.stdout) : null;
   const knowsPrs = Boolean(listed);
   const pr = pickPr(listed ?? [], since);
-  const solving = change?.commits?.at(-1)?.sha ?? change?.elsewhere?.at(-1)?.sha ?? claim?.sha ?? null;
+  const claimed = isOwnWork(top, claim?.sha, from, mainRef, isDefault) ? claim.sha : null;
+  const solving = change?.commits?.at(-1)?.sha ?? change?.elsewhere?.at(-1)?.sha ?? claimed;
   const inMain = solving && mainRef && gitAnswer(top, ["merge-base", "--is-ancestor", solving, mainRef]) !== null ? solving : null;
   const cherry = solving && mainRef && !inMain ? gitAnswer(top, ["cherry", mainRef, solving, `${solving}^`]) : null;
   const samePatch = cherry?.startsWith("- ") ? solving : null;
   const hasBranch = isDefault || Boolean(commitOf(top, `refs/heads/${branch}`)) || remoteHas(top, branch) !== false;
-  const found = landedState({ pr: pr && { ...pr, mergeCommit: pr.mergeCommit?.oid ?? null }, inMain, samePatch, hasBranch, isDefault, hasCommit: Boolean(solving), knowsPrs });
+  // You marked it solved on main itself (from the check's banner or a change on main): main is
+  // where it lands, so it has, also without a commit that touched its lines.
+  const isYoursOnMain = isDefault && claim?.by === "you";
+  const found = landedState({ pr: pr && { ...pr, mergeCommit: pr.mergeCommit?.oid ?? null }, inMain, samePatch, hasBranch, isDefault, hasCommit: Boolean(solving), knowsPrs, isYoursOnMain });
   return prs && !knowsPrs && found.state === "waiting" && hasBranch ? { ...found, how: `${found.how}; gh could not look for its PR` } : found;
+}
+
+// Whether the commit an agent claimed on can be its fix: made after the drop (an agent that claims
+// before committing claims on the commit it started from), and on its own branch not one of the
+// default branch's own commits (a fresh branch starts on one).
+function isOwnWork(top, sha, from, mainRef, isDefault) {
+  if (!sha) return false;
+  if (from && (sha === from || gitAnswer(top, ["merge-base", "--is-ancestor", sha, from]) !== null)) return false;
+  if (isDefault || !mainRef) return true;
+  const since = from ? gitAnswer(top, ["merge-base", from, mainRef]) : null;
+  const mainLine = gitAnswer(top, ["rev-list", "--first-parent", mainRef, ...(since ? [`^${since}`] : [])]) ?? "";
+  return !mainLine.split("\n").includes(sha);
 }
 
 // gh's JSON answer, or null when it gave something else.

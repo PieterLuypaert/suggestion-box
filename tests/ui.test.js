@@ -85,6 +85,7 @@ const words = {
     hasNot: ["Nothing open", "↑↓", "OPEN ·"],
   },
   "panel empty": { has: ["shop · empty", "Nothing in shop's box yet", "History · 0 ▸"], hasNot: ["↑↓", "NEEDS YOU"] },
+  "panel with the proofs failing": { has: ["Not solved", "✕ Its fix never landed"], hasNot: ["Confirm solved", "0 of 3 proofs hold"] },
   "panel history with a fix's branch, its row open": { has: ["Being fixed in its own tab", "Go to its tab ↗", "fix/fee-rounding-trials"], hasNot: ["Fixing in"] },
 };
 

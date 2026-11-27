@@ -29,7 +29,8 @@ export function verifyCard(s, note) {
       .when(Boolean(note.issue), (el) => el.child(div().flex_none().child(`issue #${note.issue.number}`))))
     .child(h_flex().child(link(t, `details:${note.id}`, isOpen ? "Details ▴" : "Details ▾", (_e, cx) => s.act("expand", note, cx))))
     .when(isOpen, (el) => el.child(details(s, note, found)))
-    .child(actionsRow(s, note, { primary: "confirm" }));
+    // A fix that never landed has nothing to confirm: Not solved is the way on.
+    .child(actionsRow(s, note, found?.landed?.state === "never" ? { primary: "not-solved", leave: ["confirm"] } : { primary: "confirm" }));
 }
 
 const TONE = (t) => ({ fixed: t.ansi2, partly: t.working, "not-fixed": t.blocked, looking: t.dim, unchecked: t.muted });

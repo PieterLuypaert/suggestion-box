@@ -102,8 +102,9 @@ describe("the independent check", () => {
   });
 });
 
-// A repo whose origin is a local bare repo, a note dropped on the ticket branch at line 42.
-function setup({ verify = { verdict: "verified", why: "formatDate returns a dash now.", test: { found: true, asserts_fix: true } } } = {}) {
+// A repo whose origin is a local bare repo, a note dropped on the ticket branch at line 42, after
+// what `beforeDrop` does on that branch.
+function setup({ verify = { verdict: "verified", why: "formatDate returns a dash now.", test: { found: true, asserts_fix: true } }, beforeDrop = null } = {}) {
   const bare = join(tempDir("bare-"), "shop.git");
   const repo = makeRepo({ origin: null });
   git(repo, "clone", "-q", "--bare", repo, bare);
@@ -112,6 +113,7 @@ function setup({ verify = { verdict: "verified", why: "formatDate returns a dash
   git(repo, "fetch", "-q", "origin");
   git(repo, "remote", "set-head", "origin", "main");
   const box = join(tempDir(), "box");
+  beforeDrop?.(repo);
   suggest(repo, box, [], NOTE);
   const dir = tempDir("stand-");
   const claude = join(dir, "claude");
@@ -312,6 +314,105 @@ describe("proof 1: the change", () => {
     const s = setup();
     expect(changeProof(s.repo, noteOf(s), { branch: BRANCH }).commits).toEqual([]);
     expect(changeProof(s.repo, noteOf(s), { branch: "feat/elsewhere" }).why).toBe("feat/elsewhere is not here, not even fetched");
+  });
+});
+
+// The ticket's own work before the drop: a commit only the ticket branch has.
+const ticketWork = (repo) => {
+  writeFileSync(join(repo, "other.txt"), "ticket work\n");
+  git(repo, "add", "other.txt");
+  git(repo, "commit", "-qm", "feat: ticket work");
+};
+
+// A fix on main, pushed and fetched; the ticket branch checked out again.
+function fixOnMain(s, change = (lines) => (lines[41] = "line 42 fixed")) {
+  git(s.repo, "switch", "-q", "main");
+  const fix = edit(s.repo, "fix: formatDate returns a dash", change);
+  git(s.repo, "push", "-q", "origin", "main");
+  git(s.repo, "fetch", "-q", "origin");
+  git(s.repo, "switch", "-q", BRANCH);
+  return fix;
+}
+
+describe("claims on main, and claimed commits that cannot be the fix", () => {
+  const noPrs = (s) => {
+    const file = join(s.dir, "gh");
+    writeFileSync(file, "#!/bin/sh\necho '[]'\n");
+    chmodSync(file, 0o755);
+    return { ...s.env, SUGGESTION_BOX_GH: file };
+  };
+  const proofs = (s, claim) => {
+    const note = noteOf(s);
+    const change = changeProof(s.repo, note, claim);
+    return { change, landed: landedProof(s.repo, "github.com/acme/shop", claim, change, noPrs(s), { since: note.created, from: note.from.sha }) };
+  };
+
+  test("marked solved on main for a note from a ticket with its own commits: main's fix is found where the two met", () => {
+    const s = setup({ beforeDrop: ticketWork });
+    const fix = fixOnMain(s);
+    const { change, landed } = proofs(s, { branch: "main", by: "you" });
+    expect(change.why).toBeUndefined();
+    expect(change.commits.map((c) => c.sha)).toEqual([fix]);
+    expect(landed).toMatchObject({ state: "landed", how: `in main (${fix.slice(0, 7)})` });
+  });
+
+  test("marked solved on main by you with no commit on its lines: main is where it lands, so it has", () => {
+    const s = setup();
+    const { change, landed } = proofs(s, { branch: "main", by: "you" });
+    expect(change.commits).toEqual([]);
+    expect(landed).toEqual({ state: "landed", how: "you marked it solved on main itself" });
+  });
+
+  test("an agent on main without a commit on its lines has not landed anything yet", () => {
+    const s = setup();
+    expect(proofs(s, { branch: "main", by: "agent", sha: noteOf(s).from.sha }).landed).toMatchObject({ state: "waiting", how: "no commit with the fix yet" });
+  });
+
+  test("an agent that claims before committing, on the commit it was dropped on, has no fix in main", () => {
+    const s = setup();
+    const drop = noteOf(s).from.sha;
+    expect(proofs(s, { branch: BRANCH, by: "agent", sha: drop }).landed).toMatchObject({ state: "waiting", how: "no commit with the fix yet" });
+  });
+
+  test("a fresh branch from a newer main: the commit it claims on is main's own, not the fix", () => {
+    const s = setup();
+    const newer = fixOnMain(s, (lines) => (lines[2] = "line 3, a teammate's change"));
+    git(s.repo, "switch", "-q", "-c", "fix/fresh", "origin/main");
+    expect(proofs(s, { branch: "fix/fresh", by: "agent", sha: newer }).landed).toMatchObject({ state: "waiting", how: "no commit with the fix yet" });
+  });
+
+  test("the branch's own commit after the drop still counts, also once the branch is gone after its merge", () => {
+    const s = setup();
+    writeFileSync(join(s.repo, "src", "fix.ts"), "fixed\n");
+    git(s.repo, "add", "src/fix.ts");
+    git(s.repo, "commit", "-qm", "fix: in another file");
+    const fix = git(s.repo, "rev-parse", "HEAD");
+    git(s.repo, "switch", "-q", "main");
+    git(s.repo, "merge", "-q", "--no-ff", "--no-edit", BRANCH);
+    git(s.repo, "push", "-q", "origin", "main");
+    git(s.repo, "fetch", "-q", "origin");
+    git(s.repo, "branch", "-q", "-D", BRANCH);
+    git(s.repo, "push", "-q", "origin", "--delete", BRANCH);
+    git(s.repo, "update-ref", "-d", `refs/remotes/origin/${BRANCH}`);
+    const { change, landed } = proofs(s, { branch: BRANCH, by: "agent", sha: fix });
+    expect(change.why).toBe(`${BRANCH} is not here, not even fetched`);
+    expect(landed).toMatchObject({ state: "landed", how: `in main (${fix.slice(0, 7)})` });
+  });
+
+  test("Confirm is refused once the fix never landed, and says what to do", async () => {
+    // A GitHub origin, so its PR is looked up (from the stand-in); a dead proxy keeps git off the network.
+    const s = setup({ beforeDrop: (repo) => {
+      git(repo, "remote", "set-url", "origin", "https://github.com/Acme/shop.git");
+      git(repo, "config", "http.proxy", "http://127.0.0.1:9");
+    } });
+    edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    claimOn(s);
+    const file = join(s.dir, "gh");
+    writeFileSync(file, `#!/bin/sh\necho '${JSON.stringify([{ number: 44, state: "CLOSED", url: "u", mergeCommit: null, mergedAt: null, closedAt: new Date(Date.now() + 60000).toISOString() }])}'\n`);
+    chmodSync(file, 0o755);
+    const answer = await run(["act", s.repo, s.id, "confirm"], { ...s.env, SUGGESTION_BOX_GH: file });
+    expect(answer.error).toBe("Its fix never landed (PR #44 was closed without merging): Not solved puts the note back, and a new claim can follow.");
+    expect((await run(["read", s.repo], s.env)).notes.map((n) => n.state)).toEqual(["to verify"]);
   });
 });
 
@@ -516,6 +617,8 @@ describe("the verdict a claim's card leads with", () => {
     expect(claimVerdict({ found: landedAs("waiting", "no PR yet"), verify: { verdict: "not_fixed", why: "w" } }).tone).toBe("not-fixed");
     expect(claimVerdict({ found: landedAs("waiting", "no PR yet"), verify: { verdict: "partly", why: "w" } }).text).toBe("Partly fixed, says your Claude");
     expect(claimVerdict({ found: landedAs("never", "PR #44 was closed without merging"), verify: verified }).text).toBe("Looks fixed, but it never landed");
+    expect(claimVerdict({ found: landedAs("never", "PR #44 was closed without merging"), verify: null })).toMatchObject({ tone: "not-fixed", text: "Its fix never landed" });
+    expect(claimVerdict({ found: landedAs("never", "PR #44 was closed without merging"), verify: { verdict: "partly", why: "w" } }).text).toBe("Its fix never landed");
     expect(claimVerdict({ found: { change: { commits: [], elsewhere: [] }, landed: { state: "waiting", how: "no PR yet" } }, verify: verified }).text).toBe("Verified, but no commit of the fix was found");
   });
 
