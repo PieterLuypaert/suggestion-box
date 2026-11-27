@@ -4,7 +4,7 @@ import { div } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { age } from "./notes.js";
 import { filedStep } from "./filed-step.js";
-import { isClosed, isSolved, rowState } from "./filters.js";
+import { isClosed, rowState } from "./filters.js";
 import { filedLines } from "./panel-filed.js";
 import { actionsRow, messageCard, quietRow, stepColor } from "./panel-parts.js";
 
@@ -39,27 +39,25 @@ function pastRow(s, note) {
 function pastDetails(s, note) {
   const { t } = s;
   return v_flex().gap(10).pl(20)
-    .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(statusLine(note)))
-    .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
+    .child(div().text_size(12).text_color(rowState(note).kind === "needs" ? t.working : t.muted).whitespace_normal().child(statusLine(note)))
+    .when(Boolean(note.issue), (el) => el.child(filedLines(s, note, { withSolve: false })))
     .when(Boolean(note.solved?.how), (el) => el.child(div().pl(8).border_l(2).border_color(t.border).text_size(12).text_color(t.muted).whitespace_normal().child(note.solved.how)))
     .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "fix", isBusy: (a) => a === "fix" && Boolean(s.fixing?.has(note.id)) })));
 }
 
-// How a finished note stands, in one line.
+// How a note stands, in one line: for an issue still open, its next step as Now says it (also
+// "close it on GitHub" once its fix landed); for a closed one, when it closed and how it landed.
 function statusLine(note) {
   const parts = (...items) => items.filter(Boolean).join(" · ");
-  if (isSolved(note)) {
-    const landed = note.solved?.landed;
-    const issue = note.issue ? `issue #${note.issue.number}` : null;
-    if (landed?.state === "landed") return parts(`Landed: ${landed.how}`, issue, note.age);
-    if (landed?.state === "waiting") return parts(`Waiting to land: ${landed.how}`, issue, note.age);
-    if (note.solved?.confirmed) return parts(`Waiting to land · solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age);
-    return parts(`Solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age);
-  }
+  const landed = note.solved?.landed;
+  if (note.state === "binned") return parts("Binned", note.age);
   if (isClosed(note)) {
     const at = note.issue.closed.at && !Number.isNaN(Date.parse(note.issue.closed.at)) ? age(note.issue.closed.at, Date.now()) : null;
-    return parts(`#${note.issue.number} closed on GitHub${at ? (at === "now" ? " just now" : ` ${at} ago`) : ""}`, note.fix?.branch ? `fixed in ${note.fix.branch}` : null);
+    return parts(`#${note.issue.number} closed on GitHub${at ? (at === "now" ? " just now" : ` ${at} ago`) : ""}`, landed?.state === "landed" ? `landed: ${landed.how}` : null, note.fix?.branch ? `fixed in ${note.fix.branch}` : null);
   }
   if (note.state === "filed") return parts(filedStep(note).text, note.age);
-  return parts("Binned", note.age);
+  if (landed?.state === "landed") return parts(`Landed: ${landed.how}`, note.age);
+  if (landed?.state === "waiting") return parts(`Waiting to land: ${landed.how}`, note.age);
+  if (note.solved?.confirmed) return parts(`Waiting to land · solved on ${note.solved?.branch ?? "a branch"}`, note.age);
+  return parts(`Solved on ${note.solved?.branch ?? "a branch"}`, note.age);
 }

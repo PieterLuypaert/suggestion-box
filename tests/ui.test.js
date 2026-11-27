@@ -63,6 +63,7 @@ const scenes = {
   "panel filter: done, one row open": `panel({ ...base, filter: "done", expanded: new Set(["h2"]) })`,
   "panel filter: filed, a fix starting from its row": `panel({ ...base, filter: "filed", expanded: new Set(["h4"]), fixing: new Set(["h4"]) })`,
   "panel with the editor and another note picked": `panel({ ...base, selected: "n3", editor: editor({}) })`,
+  "panel filter: filed, a landed issue still open, its row open": `panel({ ...base, filter: "filed", expanded: new Set(["h12"]), answer: { ...answer, history: [...answer.history, { id: "h12", number: 16, title: "Totals skip the discount", state: "filed", issue: { number: 816, url: "u" }, solved: { branch: "fix/totals-discount", confirmed: { at: "t" }, landed: { state: "landed", how: "PR #41 merged" } }, age: "3d", actions: [] }] } })`,
   "panel filter: filed, a fix's branch, its row open": `panel({ ...base, filter: "filed", expanded: new Set(["h6"]) })`,
   "panel with the proofs failing": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], verify: { error: "Claude took longer than 90 seconds" } }] }, proofs: new Map([["n1:", { change: { why: "feat/8511-groups is not here, not even fetched" }, landed: { state: "never", how: "its branch is gone, with no merged PR and no same change in main" } }]]) })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
@@ -91,6 +92,7 @@ const words = {
   "panel filter: binned": { has: ["Unused export in utils/money.ts", "1d"], hasNot: ["Restore", "Stale cache key"] },
   "panel filter: filed, a fix starting from its row": { has: ["Starting the tab…"] },
   "panel with the editor and another note picked": { has: ["Filing note 4"], hasNot: ["Mark solved", "File issue"] },
+  "panel filter: filed, a landed issue still open, its row open": { has: ["needs you · 3d", "The fix landed (PR #41 merged), but the issue is still open: close it on GitHub · 3d"], hasNot: ["solved · landed: PR #41 merged"] },
   "panel filter: done, empty": { has: ["Nothing done yet"], hasNot: ["Stale cache key"] },
   "panel with only what needs you: an old issue whose fix landed": {
     has: ["shop · 1 needs you", "NEEDS YOU · 1", "The fix landed (PR #41 merged), but the issue is still open: close it on GitHub"],
