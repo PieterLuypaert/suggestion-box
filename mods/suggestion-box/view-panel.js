@@ -2,7 +2,7 @@
 import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
-import { PROOFS_REFRESH_MS } from "./proofs.js";
+import { canConfirm, claimKey, PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
 // What a button is called, for the line that says it failed.
@@ -274,7 +274,7 @@ export const panelCopy = {
     const at = notes.findIndex((n) => n.id === this.selected);
     const note = notes[at] ?? null;
     const k = e.key;
-    const can = (action) => note?.actions.includes(action);
+    const can = (action) => Boolean(note?.actions.includes(action)) && (action !== "confirm" || canConfirm(this.proofs.get(claimKey(note))));
     if (k === "down" || k === "up") this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
     else if (k === "enter" && note) this.toggleExpanded(note, cx);
     else if (k === "s" && can("mark-solved")) this.act("mark-solved", note, cx);

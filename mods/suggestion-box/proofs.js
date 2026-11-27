@@ -238,6 +238,9 @@ export function landedRow(found) {
 // What a claim's three proofs add up to: { tone, text, rows }. `tone` is fixed, partly, not-fixed,
 // looking or unchecked; a fix waiting to land still looks fixed, as most claims come before their PR
 // is merged.
+// A claim whose fix never landed has nothing to confirm: the card, its key and box.js all say so.
+export const canConfirm = (found) => found?.landed?.state !== "never";
+
 export function claimVerdict({ found, verify, isVerifying = false, isQueued = false }) {
   const change = changeRow(found);
   const check = checkRow(verify, { isVerifying, isQueued });

@@ -63,6 +63,7 @@ const scenes = {
   "panel history with a fix's branch, its row open": `panel({ ...base, view: "history", expanded: new Set(["h6"]) })`,
   "panel with the proofs failing": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], verify: { error: "Claude took longer than 90 seconds" } }] }, proofs: new Map([["n1:", { change: { why: "feat/8511-groups is not here, not even fetched" }, landed: { state: "never", how: "its branch is gone, with no merged PR and no same change in main" } }]]) })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
+  "panel with a picked claim that never landed": `panel({ ...base, selected: "n1", answer: { ...answer, notes: [answer.notes[0]] }, proofs: new Map([["n1:", { change: { commits: [] }, landed: { state: "never", how: "PR #44 was closed without merging" } }]]) })`,
   "panel with only what needs you: an old issue whose fix landed": `panel({ ...base, answer: { ...answer, notes: [], counts: { open: 0, toVerify: 0 }, history: [answer.history[0], { id: "h11", number: 15, title: "Totals skip the discount", state: "filed", issue: { number: 816, url: "u" }, solved: { branch: "fix/totals-discount", confirmed: { at: "t" }, landed: { state: "landed", how: "PR #41 merged" } }, age: "3d", actions: [] }] } })`,
 };
 
@@ -85,6 +86,7 @@ const words = {
     hasNot: ["Nothing open", "↑↓", "OPEN ·"],
   },
   "panel empty": { has: ["shop · empty", "Nothing in shop's box yet", "History · 0 ▸"], hasNot: ["↑↓", "NEEDS YOU"] },
+  "panel with a picked claim that never landed": { has: ["n not solved", "Not solved"], hasNot: ["c confirm", "Confirm solved"] },
   "panel with the proofs failing": { has: ["Not solved", "✕ Its fix never landed"], hasNot: ["Confirm solved", "0 of 3 proofs hold"] },
   "panel history with a fix's branch, its row open": { has: ["Being fixed in its own tab", "Go to its tab ↗", "fix/fee-rounding-trials"], hasNot: ["Fixing in"] },
 };
