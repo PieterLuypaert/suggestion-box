@@ -36,6 +36,9 @@ export function shownFor(view) {
   return actionsFor(view).filter((action) => action !== "mark-solved" || Boolean(view.changed));
 }
 
+// The reason a claim keeps when you turned it down yourself, without the check's own why.
+export const SAID_NOT_SOLVED = "You said it is not solved.";
+
 // A Restore this soon after its Bin is an Undo.
 const UNDO_KEEPS_CHECK_MS = 60000;
 

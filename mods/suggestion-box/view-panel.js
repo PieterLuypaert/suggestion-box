@@ -3,6 +3,7 @@ import { checking, exec, focused, nextCommand, notify, run, settings, spaces, te
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
 import { FILTERS } from "./filters.js";
+import { SAID_NOT_SOLVED } from "./rules.js";
 import { canConfirm, claimKey, PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
@@ -13,7 +14,7 @@ const LABEL_OF = { file: "File issue", check: "Check", bin: "Bin", "mark-solved"
 function notSolvedReason(note) {
   const verify = note.verify;
   if (verify && !verify.error && verify.verdict !== "verified") return verify.why;
-  return "You said it is not solved.";
+  return SAID_NOT_SOLVED;
 }
 
 const FILTER_KEYS = ["1", "2", "3", "4"];
