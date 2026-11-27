@@ -76,9 +76,9 @@ function goneBanner(s, note) {
   return v_flex().gap(8).px(12).py(10).rounded(6).border(1).border_color(t.working).bg(t.chrome)
     .child(div().text_size(12.5).whitespace_normal().child(`Looks solved on ${gone.on}: ${gone.why}`))
     .child(h_flex().gap(6).items_center()
-      .child(div().id(`gone-bin:${note.id}`).flex_none().h(24).px(8).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
+      .child(div().id(`gone-bin:${note.id}`).flex_none().h(28).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
         .hover((st) => st.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => s.act("bin", note, cx)).child("Bin"))
       .child(div().flex_1())
-      .child(div().id(`gone-solved:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
+      .child(div().id(`gone-solved:${note.id}`).flex_none().h(28).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
         .bg(t.solid).text_color(t.solid_foreground).on_click((_e, cx) => s.act("mark-solved-gone", note, cx)).child("Mark solved")));
 }

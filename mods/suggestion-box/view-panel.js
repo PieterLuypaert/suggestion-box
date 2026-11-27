@@ -58,7 +58,7 @@ export const panelCopy = {
       }
     });
     // Hiding the panel does not close this copy: when it goes, the draft is kept in the note and
-    // what was just filed moves to the history.
+    // what was just filed moves to Filed.
     cx.timer.every(SHOWN_MS, (cx) => {
       const shown = isShown(BLOCK);
       if (this.wasShown && !shown) {
@@ -327,7 +327,7 @@ export const panelCopy = {
     const here = this.here();
     this.watchMoves(cx);
     const key = this.answer()?.project?.key ?? here.none ?? null;
-    // Another project sends what was just filed to the history, also through a moment without a
+    // Another project sends what was just filed to Filed, also through a moment without a
     // project in between (another space being read); the first draw after a reload is no switch.
     const project = this.answer()?.project?.key ?? null;
     if (project) {

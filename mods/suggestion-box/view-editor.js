@@ -181,7 +181,7 @@ export const editing = {
       editor.isFiling = false;
       if (error) this.filingFailed(cx, editor, value, error);
       else {
-        // Closed meanwhile, the panel has moved what it filed to the history already.
+        // Closed meanwhile, the panel has moved what it filed to Filed already.
         if (isShown(BLOCK)) this.justFiled.add(editor.project, editor.id);
         if (this.editor === editor) this.closeEditor(cx, { save: false });
         const board = answer.board?.error ? `; not on the board: ${answer.board.error}` : "";

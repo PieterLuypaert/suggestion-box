@@ -4,7 +4,7 @@ import { h_flex, v_flex } from "gpui-base";
 import { filedStep, isOffBoard } from "./filed-step.js";
 import { actionsRow, card, link, plainButton, stepColor } from "./panel-parts.js";
 
-// A solved note in the history: where it was solved, and whether its fix landed yet.
+// A solved filed note: where it was solved, and whether its fix landed yet.
 export function solvedLine(note) {
   const landed = note.solved?.landed;
   if (landed?.state === "landed") return `Solved · landed: ${landed.how}`;

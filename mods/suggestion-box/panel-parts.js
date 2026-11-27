@@ -62,7 +62,7 @@ export function actionsRow(s, note, { primary = null, isBusy = () => false, leav
 function quietButton(t, note, action, act) {
   return div().id(`${action}:${note.id}`).flex_none().h(28).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
     .hover((st) => st.bg(t.hover).text_color(t.foreground))
-    .tooltip(action === "bin" ? "Bin: take the note away (Undo for a few seconds, Restore in the history)" : LABELS[action])
+    .tooltip(action === "bin" ? "Bin: take the note away (Undo for a few seconds, then Restore under Binned)" : LABELS[action])
     .on_click((_e, cx) => act(action, note, cx))
     .child(LABELS[action]);
 }

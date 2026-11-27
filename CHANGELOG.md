@@ -8,10 +8,10 @@ All notable changes to the suggestion box. The format follows
 
 ### Added
 
-- One card design across the panel, as Settings' Collecting everywhere card: every note, claim, filed
-  note, history entry and project is a raised card with its title, a calm line under it and its
-  buttons; the main action is filled and last, Bin sits quiet on the far left; the header takes two
-  lines so the project's name is never cut off; the footer shows only the keys of the picked note.
+- One card design across the panel, as Settings' Collecting everywhere card: a claim, a filed note,
+  the picked open note and a project are raised cards with their title, a calm line under it and
+  their buttons; the main action is filled and last, Bin sits quiet on the far left; the header
+  gives the project's name a line of its own, so it is never cut off.
 - A pixel icon for the box, as Parrot has: a wooden box with a note going into its slot, in colour,
   grey while collecting is off, and larger in an empty box.
 - A checked note says who checked it, when and what it found ("Checked by your Claude · 2m ago · 3
