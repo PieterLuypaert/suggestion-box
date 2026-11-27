@@ -103,8 +103,12 @@ export const panelCopy = {
       this.view = "list";
       this.filter = note;
     }
-    // A row in Open: it becomes the card, with its buttons.
-    if (name === "pick") this.selected = note.id;
+    // A row in Open: it becomes the card, with its buttons. A note being filed closes, its draft
+    // kept, so one card shows at a time.
+    if (name === "pick") {
+      this.selected = note.id;
+      if (this.editor && this.editor.id !== note.id) this.closeEditor(cx);
+    }
     if (name === "expand") this.toggleExpanded(note, cx);
     if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
     if (name === "open-at") return this.openAt(note);
@@ -297,7 +301,10 @@ export const panelCopy = {
     const note = notes[at] ?? null;
     const k = e.key;
     const can = (action) => Boolean(note?.actions.includes(action)) && (action !== "confirm" || canConfirm(this.proofs.get(claimKey(note))));
-    if (k === "down" || k === "up") this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
+    if (k === "down" || k === "up") {
+      this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
+      if (this.editor && this.editor.id !== this.selected) this.closeEditor(cx);
+    }
     else if (k === "enter" && note) this.toggleExpanded(note, cx);
     else if (k === "s" && can("mark-solved")) this.act("mark-solved", note, cx);
     else if (k === "x" && can("bin")) this.act("bin", note, cx);
@@ -347,6 +354,8 @@ export const panelCopy = {
         cx.notify();
       });
     }
+    // The open note that shows as picked is the one the keys act on: the newest, until you pick.
+    if (!this.ordered().some((note) => note.id === this.selected)) this.selected = (this.answer()?.notes ?? []).find((note) => note.state === "open")?.id ?? null;
     // A claim leads with its verdict, so its proofs load as soon as it shows; Claude's check once.
     for (const note of (this.answer()?.notes ?? []).filter((one) => one.state === "to verify")) this.ensureProofs(cx, note);
     const state = {

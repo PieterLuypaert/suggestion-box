@@ -131,10 +131,12 @@ function nowView(s, now) {
   ]);
 }
 
-// The open note shown as a card: the one you picked, else the newest, unless a note is being filed.
+// The open note shown as a card: the one you picked, else the newest. While a note is being filed
+// its editor is the one card.
 function pickedOpen(s, open) {
+  if (s.editor) return null;
   if (open.some((note) => note.id === s.selected)) return s.selected;
-  return s.editor ? null : open[0]?.id ?? null;
+  return open[0]?.id ?? null;
 }
 
 function undoRow(s, note) {
