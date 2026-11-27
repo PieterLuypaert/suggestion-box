@@ -17,8 +17,17 @@ test("needs you: a fix that did not start, one that never reported back, not on 
 
 test("under way, and done", () => {
   expect(filedStep({ ...filed, fix: { starting: true } }).kind).toBe("working");
-  expect(filedStep({ ...filed, fix: { branch: "fix/a" } })).toEqual({ kind: "working", text: "Being fixed in fix/a" });
-  expect(filedStep({ ...filed, issue: { number: 812, closed: { at: "t" } } })).toEqual({ kind: "done", text: "#812 is closed on GitHub" });
+  expect(filedStep({ ...filed, fix: { branch: "fix/a" } })).toEqual({ kind: "working", text: "Being fixed in its own tab", branch: "fix/a" });
+  expect(filedStep({ ...filed, issue: { number: 812, closed: { at: "t" } } })).toEqual({ kind: "done", text: "Closed on GitHub" });
+});
+
+test("a solved fix: waiting to land, landed but the issue still open, closed with its PR", () => {
+  const solved = { branch: "fix/a", confirmed: { at: "t" } };
+  expect(filedStep({ ...filed, fix: { branch: "fix/a" }, solved })).toEqual({ kind: "working", text: "Solved · waiting to land" });
+  expect(filedStep({ ...filed, solved: { ...solved, landed: { state: "waiting", how: "PR #9 is open" } } })).toEqual({ kind: "working", text: "Solved · waiting to land · PR #9 is open" });
+  const landed = { ...solved, landed: { state: "landed", how: "PR #9 merged" } };
+  expect(filedStep({ ...filed, solved: landed })).toEqual({ kind: "needs", text: "The fix landed (PR #9 merged), but the issue is still open: close it on GitHub" });
+  expect(filedStep({ ...filed, issue: { number: 812, closed: { at: "t" } }, solved: landed })).toEqual({ kind: "done", text: "Closed · PR #9 merged" });
 });
 
 test("what needs you comes first", () => {
