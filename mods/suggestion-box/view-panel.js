@@ -110,7 +110,7 @@ export const panelCopy = {
     // kept, so one card shows at a time.
     if (name === "pick") {
       this.selected = note.id;
-      if (this.editor && this.editor.id !== note.id) this.closeEditor(cx);
+      if (this.editor && this.editor.id !== note.id && !this.editor.isFiling) this.closeEditor(cx);
     }
     if (name === "expand") this.toggleExpanded(note, cx);
     if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
@@ -306,7 +306,7 @@ export const panelCopy = {
     const can = (action) => Boolean(note?.actions.includes(action)) && (action !== "confirm" || canConfirm(this.proofs.get(claimKey(note))));
     if (k === "down" || k === "up") {
       this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
-      if (this.editor && this.editor.id !== this.selected) this.closeEditor(cx);
+      if (this.editor && this.editor.id !== this.selected && !this.editor.isFiling) this.closeEditor(cx);
     }
     else if (k === "enter" && note) this.toggleExpanded(note, cx);
     else if (k === "s" && can("mark-solved")) this.act("mark-solved", note, cx);
