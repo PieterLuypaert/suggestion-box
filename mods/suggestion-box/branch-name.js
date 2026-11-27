@@ -9,6 +9,8 @@ import { branchName } from "./issue.js";
 // repo's CI treats specially.
 const TYPES = ["fix", "feat", "refactor", "perf", "docs", "chore", "ci"];
 const EXAMPLES = 15;
+// A ticket's title and problem in the question are cut to this many characters: enough to name it.
+const TEXT_MAX = 1500;
 export const NAME_TIMEOUT_MS = 30000;
 
 export const NAME_SYSTEM = [
@@ -28,7 +30,7 @@ export const NAME_SCHEMA = {
 // and without the names the box itself made from a title's first words.
 export function nameExamples(records) {
   return (records ?? [])
-    .filter((record) => record?.title && /^[a-z]+\/[a-z0-9-]+$/.test(String(record.branch ?? "")) && !record.branch.startsWith("major/"))
+    .filter((record) => record?.title && typeof record.branch === "string" && /^[a-z]+\/[a-z0-9-]+$/.test(record.branch) && !record.branch.startsWith("major/"))
     .filter((record) => !isBoxMade(record))
     .sort((a, b) => String(b.launched_at ?? "").localeCompare(String(a.launched_at ?? "")))
     .slice(0, EXAMPLES)
@@ -58,10 +60,12 @@ export function namePrompt({ title, problem }, examples, types) {
     lines.push("", "This repo's earlier tickets, title → branch:");
     for (const example of examples) lines.push(`- ${example.title} → ${example.branch}`);
   }
-  lines.push("", "The ticket:", `Title: ${String(title ?? "").trim()}`);
-  if (String(problem ?? "").trim()) lines.push(`Problem: ${String(problem).trim()}`);
+  lines.push("", "The ticket:", `Title: ${clean(title)}`);
+  if (clean(problem)) lines.push(`Problem: ${clean(problem)}`);
   return lines.join("\n");
 }
+
+const clean = (text) => String(text ?? "").replace(/\0/g, "").trim().slice(0, TEXT_MAX);
 
 // The arguments for `claude -p`: no tools at all, no MCP servers, none of the person's settings,
 // hooks or memory, no session kept, and an answer in the shape of NAME_SCHEMA.

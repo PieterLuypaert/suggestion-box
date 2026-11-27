@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { loginShell } from "../cli/box/fix.js";
+import { claudeBranch, loginShell } from "../cli/box/fix.js";
 import { branchCandidates, fixGate, fixType, lastLine, pickBranch, readLaunch } from "../mods/suggestion-box/fix.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
@@ -134,6 +134,10 @@ describe("box.js fix", () => {
     expect(asked).toContain("Problem: Invoices without a due date crash the PDF export.");
     expect(asked).toContain("--tools\n--\n\n--\n");
     expect(asked).not.toContain(`cwd=${s.repo}`);
+  });
+
+  test("naming never throws, also when claude cannot even start", async () => {
+    expect(await claudeBranch({ title: "formatDate throws on a null date" }, [], { SUGGESTION_BOX_CLAUDE: "/no\0such/claude" })).toBeNull();
   });
 
   test("a name that breaks the rules, or a Claude that fails: the title's words", async () => {

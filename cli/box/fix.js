@@ -3,8 +3,8 @@
 // way every parallel ticket starts. The launcher runs through the person's login shell, so it finds
 // gh, git, hagent and herdr-app as in a terminal of theirs. The box builds nothing by hand.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { nameArgs, nameExamples, namePrompt, nameTypes, NAME_TIMEOUT_MS, readName } from "../../mods/suggestion-box/branch-name.js";
 import { filingTarget } from "../../mods/suggestion-box/config.js";
@@ -12,7 +12,7 @@ import { branchCandidates, fixGate, lastLine, pickBranch, readLaunch } from "../
 import { githubRepo } from "../../mods/suggestion-box/issue.js";
 import { configText } from "./file.js";
 import { defaultRef } from "./changes.js";
-import { findClaude, runClaude } from "./claude.js";
+import { findClaude, inSnapshots, runClaude } from "./claude.js";
 
 // A launch fetches, makes a worktree and opens a tab: minutes at most.
 const LAUNCH_MS = 240000;
@@ -65,24 +65,20 @@ function launch(top, args, env, timeout) {
 
 // The person's Claude's name for the fix's branch, with the repo's tickets as examples, or null: the
 // box then names it from the title's words. It runs in an empty folder of its own, so no CLAUDE.md,
-// memory or project of theirs comes in.
+// memory or project of theirs comes in; the folder goes also when the panel stops the run. Never
+// throws: the fix has started by now, and a name is never a reason for it to stop.
 export async function claudeBranch(ticket, records, env) {
-  let claude;
   try {
-    claude = findClaude(env);
+    const claude = findClaude(env);
+    const examples = nameExamples(records);
+    const types = nameTypes(examples);
+    const question = namePrompt(ticket, examples, types);
+    const answer = readName(await inSnapshots((folder) => runClaude(claude, nameArgs(question), folder, NAME_TIMEOUT_MS)), types);
+    if (answer.error) process.stderr.write(`box.js: Claude did not name the branch, so the title does: ${answer.error}\n`);
+    return answer.branch ?? null;
   } catch (error) {
     process.stderr.write(`box.js: the branch is named from the title: ${error.message}\n`);
     return null;
-  }
-  const examples = nameExamples(records);
-  const types = nameTypes(examples);
-  const folder = mkdtempSync(join(tmpdir(), "suggestion-box-name-"));
-  try {
-    const answer = readName(await runClaude(claude, nameArgs(namePrompt(ticket, examples, types)), folder, NAME_TIMEOUT_MS), types);
-    if (answer.error) process.stderr.write(`box.js: Claude did not name the branch, so the title does: ${answer.error}\n`);
-    return answer.branch ?? null;
-  } finally {
-    rmSync(folder, { recursive: true, force: true });
   }
 }
 

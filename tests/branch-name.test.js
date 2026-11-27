@@ -32,6 +32,10 @@ test("the question: the rules, the examples and the ticket", () => {
   expect(question).toContain("- Invoices: a custom note per line → feat/invoice-line-custom-note");
   expect(question).toEndWith("Title: formatDate throws on a null date\nProblem: The PDF export crashes.");
   expect(namePrompt({ title: "A" }, [], nameTypes([]))).not.toContain("earlier tickets");
+  // A note's text is cut and loses NUL bytes, so claude's arguments always fit.
+  const huge = namePrompt({ title: "A\0B", problem: "x".repeat(2_000_000) }, [], nameTypes([]));
+  expect(huge).toContain("Title: AB");
+  expect(huge.length).toBeLessThan(3000);
 });
 
 test("claude runs without tools, settings, MCP servers or a session", () => {
