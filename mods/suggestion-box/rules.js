@@ -181,3 +181,13 @@ const change = {
     note.filing = null;
   },
 };
+
+// The one line the panel says when a note moved to To verify by itself since the last read: an
+// agent claimed it (open or filed), or the watch sent a confirmed fix back that never landed. Null
+// for any other move. `was` is the note's state at the last read.
+export function moveNotice(note, was) {
+  if (!was || was === "to verify" || note.state !== "to verify") return null;
+  if (note.solved?.neverLanded) return `Note ${note.number} is back in To verify: its fix never landed (${note.solved.neverLanded.how}).`;
+  const who = note.solved?.by === "you" ? "you" : "an agent";
+  return `Note ${note.number} moved to To verify: ${who} claimed it solved on ${note.solved?.branch ?? "a branch"}.`;
+}
