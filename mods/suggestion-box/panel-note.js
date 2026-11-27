@@ -32,8 +32,9 @@ export function noteCard(s, note) {
 // and it opens as its card.
 export function openRow(s, note) {
   const { t } = s;
-  const asks = Boolean(note.changed || note.reopened || note.notVerified || note.check?.gone);
-  return quietRow(t, `row:${note.id}`, { color: asks ? t.working : t.dim, title: note.title, right: note.age, onClick: (_e, cx) => s.act("pick", note, cx), tip: "Open this note" });
+  const checking = isChecking(s, note);
+  const asks = Boolean(note.changed || note.reopened || note.notVerified || note.check?.gone || note.check?.error);
+  return quietRow(t, `row:${note.id}`, { color: checking ? t.ansi4 : asks ? t.working : t.dim, title: note.title, right: checking ? "checking…" : note.age, onClick: (_e, cx) => s.act("pick", note, cx), tip: "Open this note" });
 }
 
 // The check says the problem is gone: its banner holds Mark solved and Bin.

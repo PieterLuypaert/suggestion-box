@@ -42,7 +42,7 @@ function pastDetails(s, note) {
     .child(div().text_size(12).text_color(t.muted).whitespace_normal().child(statusLine(note)))
     .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
     .when(Boolean(note.solved?.how), (el) => el.child(div().pl(8).border_l(2).border_color(t.border).text_size(12).text_color(t.muted).whitespace_normal().child(note.solved.how)))
-    .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note)));
+    .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "fix", isBusy: (a) => a === "fix" && Boolean(s.fixing?.has(note.id)) })));
 }
 
 // How a finished note stands, in one line.
