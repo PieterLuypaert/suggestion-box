@@ -2,18 +2,9 @@
 // branch: plain git, no Claude. The note's lines are mapped forward through `git diff -U0 -M`, or,
 // when its commit is gone after a rebase, its snippet is looked for instead.
 import { findSnippet, noteRange, parseHunks, touches } from "../../mods/suggestion-box/lines.js";
-import { gitAnswer, gitText } from "../shared/git.js";
+import { defaultRef, gitAnswer, gitText } from "../shared/git.js";
 
-// The default branch as the repo last fetched it: origin/HEAD, else origin/main or origin/master,
-// else a local main or master. Null when there is none.
-export function defaultRef(top) {
-  const head = gitAnswer(top, ["symbolic-ref", "-q", "refs/remotes/origin/HEAD"]);
-  if (head) return head.replace(/^refs\/remotes\//, "");
-  for (const ref of ["origin/main", "origin/master", "main", "master"]) {
-    if (gitAnswer(top, ["rev-parse", "-q", "--verify", `${ref}^{commit}`])) return ref;
-  }
-  return null;
-}
+export { defaultRef };
 
 // { on, kind } when the note's lines changed ("changed") or its file is gone ("removed") on its own
 // branch or on the default branch, else null. A note without a file, line or commit has no lines.

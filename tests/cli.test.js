@@ -214,6 +214,25 @@ describe("many agents at once", () => {
 });
 
 describe("list and solved", () => {
+  test("a claim records whether its commit is the branch's own work: not before a commit, yes after one", () => {
+    const claimOf = (box) => {
+      const dir = join(box, "notes", FOLDER, "events");
+      const files = readdirSync(dir, { recursive: true }).filter((name) => String(name).endsWith(".json"));
+      return files.map((name) => JSON.parse(readFileSync(join(dir, String(name)), "utf8"))).find((event) => event.type === "claim");
+    };
+    const before = setup();
+    suggest(before.repo, before.box, [], NOTE);
+    suggest(before.repo, before.box, ["solved", "1"], "how: h\nproof: p\n");
+    expect(claimOf(before.box).own).toBe(false);
+    const after = setup();
+    suggest(after.repo, after.box, [], NOTE);
+    writeFileSync(join(after.repo, "src", "fix.ts"), "fixed\n");
+    git(after.repo, "add", "src/fix.ts");
+    git(after.repo, "commit", "-qm", "fix: a dash");
+    suggest(after.repo, after.box, ["solved", "1"], "how: h\nproof: p\n");
+    expect(claimOf(after.box).own).toBe(true);
+  });
+
   test("list shows open, to verify and filed notes, newest first, with their numbers", () => {
     const { repo, box } = setup();
     expect(suggest(repo, box, ["list"]).out).toBe("shop's box has no open, to verify or filed notes.");

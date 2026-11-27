@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { canClaim, stateOf, waitsToVerify } from "../../mods/suggestion-box/events.js";
 import { age, dropProblem, noteId, parseAt, parseFields, SECTIONS, sameNoteKey, snippetAround } from "../../mods/suggestion-box/notes.js";
 import { projectFolder, projectKey, projectName, ticketFor } from "../../mods/suggestion-box/project.js";
-import { repoAt, ticketRecords } from "../shared/git.js";
+import { defaultRef, gitAnswer, repoAt, ticketRecords } from "../shared/git.js";
 import * as store from "../shared/store.js";
 
 // The checkout: this file sits in cli/suggest/.
@@ -203,9 +203,18 @@ async function solved(io, project, args) {
   if (!note) throw new Refusal(`${project.name}'s box has no open or filed note ${args[0] ?? "(no number given)"}; suggest list shows them`);
   if (!canClaim(note)) throw new Refusal(`note ${number} is ${refusedState(note)}; nothing changes`);
   const repo = project.repo;
-  store.addEvent(project.dir, note.id, { type: "claim", at: new Date().toISOString(), branch: repo.branch, sha: repo.sha, how: fields.how, proof: fields.proof, by: "agent" });
+  store.addEvent(project.dir, note.id, { type: "claim", at: new Date().toISOString(), branch: repo.branch, sha: repo.sha, own: isOwnWork(repo), how: fields.how, proof: fields.proof, by: "agent" });
   const short = repo.sha ? ` (${repo.sha.slice(0, 7)})` : "";
   return say(io, `Note ${number} claimed solved on ${repo.branch ?? "a detached HEAD"}${short}; it waits in the box for the user to verify.`);
+}
+
+// Whether the commit an agent claims on is its branch's own work, decided when it claims: an agent
+// that claims before committing sits on a commit the default branch already has, which is no fix.
+// Null on the default branch itself, or when git cannot tell.
+function isOwnWork(repo) {
+  const main = repo.sha ? defaultRef(repo.top) : null;
+  if (!main || !repo.branch || main === repo.branch || main === `origin/${repo.branch}`) return null;
+  return gitAnswer(repo.top, ["merge-base", "--is-ancestor", repo.sha, main]) === null;
 }
 
 function refusedState(note) {

@@ -50,12 +50,16 @@ export function changeProof(top, note, claim, mainRef = defaultRef(top)) {
   const commits = [];
   const elsewhere = [];
   const isOwnBranch = !isDefaultBranch(claim?.branch, mainRef);
+  // A fix branch other than the note's own may start from a newer main: main's commits in between
+  // only move the lines, and a teammate's change there is never this fix. (On the note's own branch
+  // the walk starts at the note's commit, so a fast-forward merge keeps its fix.)
+  const isOtherBranch = isOwnBranch && claim?.branch !== note.from?.branch;
   const mainLine = isOwnBranch && mainRef ? new Set((gitAnswer(top, ["rev-list", "--first-parent", mainRef, `^${start.base}`]) ?? "").split("\n").filter(Boolean)) : new Set();
   for (const commit of commitsOn(top, `${start.base}..${ref}`)) {
     const step = stepThrough(top, commit, path, range);
     if (!step || !step.isTouched) {
       if (isOwnBranch && !mainLine.has(commit.sha) && !commit.isMerge && commit.files.length) elsewhere.push({ sha: commit.sha, subject: commit.subject, files: commit.files.map((file) => file.to ?? file.from) });
-    } else if (!commit.isMerge) {
+    } else if (!commit.isMerge && !(isOtherBranch && mainLine.has(commit.sha))) {
       commits.push({ sha: commit.sha, subject: commit.subject, lines: step.lines, path: step.shownPath, at: step.shownAt });
     }
     if (!step) continue;
@@ -124,7 +128,7 @@ export function landedProof(top, key, claim, change, env, { mainRef = defaultRef
   const listed = prs?.code === 0 ? parsed(prs.stdout) : null;
   const knowsPrs = Boolean(listed);
   const pr = pickPr(listed ?? [], since);
-  const claimed = isOwnWork(top, claim?.sha, from, mainRef, isDefault) ? claim.sha : null;
+  const claimed = isFixCommit(top, claim, from, isDefault) ? claim.sha : null;
   const solving = change?.commits?.at(-1)?.sha ?? change?.elsewhere?.at(-1)?.sha ?? claimed;
   const inMain = solving && mainRef && gitAnswer(top, ["merge-base", "--is-ancestor", solving, mainRef]) !== null ? solving : null;
   const cherry = solving && mainRef && !inMain ? gitAnswer(top, ["cherry", mainRef, solving, `${solving}^`]) : null;
@@ -138,15 +142,13 @@ export function landedProof(top, key, claim, change, env, { mainRef = defaultRef
 }
 
 // Whether the commit an agent claimed on can be its fix: made after the drop (an agent that claims
-// before committing claims on the commit it started from), and on its own branch not one of the
-// default branch's own commits (a fresh branch starts on one).
-function isOwnWork(top, sha, from, mainRef, isDefault) {
+// before committing claims on the commit it started from), and on a branch its own work when it
+// claimed (`own`, which suggest records; a fresh branch starts on one of main's commits).
+function isFixCommit(top, claim, from, isDefault) {
+  const sha = claim?.sha;
   if (!sha) return false;
   if (from && (sha === from || gitAnswer(top, ["merge-base", "--is-ancestor", sha, from]) !== null)) return false;
-  if (isDefault || !mainRef) return true;
-  const since = from ? gitAnswer(top, ["merge-base", from, mainRef]) : null;
-  const mainLine = gitAnswer(top, ["rev-list", "--first-parent", mainRef, ...(since ? [`^${since}`] : [])]) ?? "";
-  return !mainLine.split("\n").includes(sha);
+  return isDefault || claim.own !== false;
 }
 
 // gh's JSON answer, or null when it gave something else.

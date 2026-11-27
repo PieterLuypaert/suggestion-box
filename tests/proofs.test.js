@@ -378,7 +378,38 @@ describe("claims on main, and claimed commits that cannot be the fix", () => {
     const s = setup();
     const newer = fixOnMain(s, (lines) => (lines[2] = "line 3, a teammate's change"));
     git(s.repo, "switch", "-q", "-c", "fix/fresh", "origin/main");
-    expect(proofs(s, { branch: "fix/fresh", by: "agent", sha: newer }).landed).toMatchObject({ state: "waiting", how: "no commit with the fix yet" });
+    // suggest recorded own: false, as the branch had no commit of its own when the agent claimed.
+    expect(proofs(s, { branch: "fix/fresh", by: "agent", sha: newer, own: false }).landed).toMatchObject({ state: "waiting", how: "no commit with the fix yet" });
+  });
+
+  test("a fix branch from a newer main: a teammate's commit on main that touched the lines is never the change", () => {
+    const s = setup({ beforeDrop: ticketWork });
+    const teammate = fixOnMain(s, (lines) => (lines[41] = "line 42, a teammate's rename"));
+    git(s.repo, "switch", "-q", "-c", "fix/note-1", "origin/main");
+    writeFileSync(join(s.repo, "src", "fix.ts"), "fixed\n");
+    git(s.repo, "add", "src/fix.ts");
+    git(s.repo, "commit", "-qm", "fix: in another file");
+    const fix = git(s.repo, "rev-parse", "HEAD");
+    const { change, landed } = proofs(s, { branch: "fix/note-1", by: "agent", sha: fix, own: true });
+    expect(change.commits.map((c) => c.sha)).not.toContain(teammate);
+    expect(change.elsewhere.map((c) => c.sha)).toEqual([fix]);
+    expect(landed.state).toBe("waiting");
+  });
+
+  test("a fast-forward merge of the branch's own fix lands, also once the branch is gone", () => {
+    const s = setup();
+    writeFileSync(join(s.repo, "src", "fix.ts"), "fixed\n");
+    git(s.repo, "add", "src/fix.ts");
+    git(s.repo, "commit", "-qm", "fix: in another file");
+    const fix = git(s.repo, "rev-parse", "HEAD");
+    git(s.repo, "switch", "-q", "main");
+    git(s.repo, "merge", "-q", "--ff-only", BRANCH);
+    git(s.repo, "push", "-q", "origin", "main");
+    git(s.repo, "fetch", "-q", "origin");
+    git(s.repo, "branch", "-q", "-D", BRANCH);
+    git(s.repo, "push", "-q", "origin", "--delete", BRANCH);
+    git(s.repo, "update-ref", "-d", `refs/remotes/origin/${BRANCH}`);
+    expect(proofs(s, { branch: BRANCH, by: "agent", sha: fix, own: true }).landed).toMatchObject({ state: "landed", how: `in main (${fix.slice(0, 7)})` });
   });
 
   test("the branch's own commit after the drop still counts, also once the branch is gone after its merge", () => {
