@@ -2,14 +2,14 @@
 // independent check's question and answer, and box.js proofs, verify, confirm and watch, in
 // throwaway repos with stand-ins for gh and claude.
 import { describe, expect, test } from "bun:test";
-import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, existsSync, readdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeProof, landedProof } from "../cli/box/proofs.js";
 import { fetch, FETCH_FRESH_MS } from "../cli/box/claude.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
 import { changeRow, claimKey, claimVerdict, landedState, mapRange, pickPr, PROOFS_REFRESH_MS, proofsDue, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
-import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
+import { git, makeRepo, NOTE, RUN, suggest, tempDir } from "./helpers.js";
 
 const BRANCH = "feat/8504-group-records";
 
@@ -476,6 +476,27 @@ describe("box.js proofs, verify, confirm and watch", () => {
     const shown = await run(["show", s.repo, fix, "src/invoices.ts", "42"], s.env);
     expect(readFileSync(shown.file, "utf8")).toContain("line 42 fixed");
     expect(shown.line).toBe(42);
+  });
+
+  test("prune removes the editor's copies a day after they were written, and keeps one shown since", async () => {
+    const s = setup();
+    const fix = edit(s.repo, "fix: a dash", (lines) => (lines[41] = "line 42 fixed"));
+    const show = () => run(["show", s.repo, fix, "src/invoices.ts", "42"], s.env);
+    const { file } = await show();
+    expect(basename(RUN)).toStartWith("sbox-run-");
+    expect(file.startsWith(join(RUN, "suggestion-box-files"))).toBe(true);
+    const age = () => {
+      const dayAgo = new Date(Date.now() - 86400000);
+      utimesSync(file, dayAgo, dayAgo);
+      utimesSync(dirname(file), dayAgo, dayAgo);
+    };
+    age();
+    await show();
+    expect(await run(["prune", s.repo], s.env)).toEqual({ ok: true, pruned: 0 });
+    expect(existsSync(file)).toBe(true);
+    age();
+    expect(await run(["prune", s.repo], s.env)).toEqual({ ok: true, pruned: 0 });
+    expect(existsSync(dirname(file))).toBe(false);
   });
 });
 

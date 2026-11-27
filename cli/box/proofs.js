@@ -3,7 +3,7 @@
 // fix landed in main, and the independent check of the fix in a snapshot of the claim's branch.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { githubRepo } from "../../mods/suggestion-box/issue.js";
@@ -13,6 +13,7 @@ import { defaultRef } from "./changes.js";
 import { findClaude, inSnapshots, runClaude, snapshot } from "./claude.js";
 import { gh } from "./file.js";
 import { gitAnswer, gitText } from "../shared/git.js";
+import { DAY } from "./note-files.js";
 
 const SHOWN_COMMITS = 3;
 // The branch's other changes kept for the panel and the independent check.
@@ -175,9 +176,43 @@ export async function runVerify({ top, note, change, env = process.env, now = ne
 export function fileAt(top, sha, path, line) {
   const text = gitText(top, ["show", `${sha}:${path}`]);
   if (text === null) return { error: `${path} is not in ${sha.slice(0, 7)}` };
-  const dir = join(tmpdir(), "suggestion-box-files", sha.slice(0, 12));
+  const dir = join(copiesDir(), sha.slice(0, 12));
   mkdirSync(dir, { recursive: true });
   const file = join(dir, basename(path));
   writeFileSync(file, text);
   return { file, line: line ?? null };
+}
+
+const copiesDir = () => join(tmpdir(), "suggestion-box-files");
+
+// The copies fileAt made, once a day has passed since anything in their folder was written: the
+// editor read them long before. What cannot be read or removed stays and is told on stderr, so the
+// notes' prune always goes on.
+export function pruneCopies(now) {
+  const dir = copiesDir();
+  let names = [];
+  try {
+    names = existsSync(dir) ? readdirSync(dir) : [];
+  } catch (error) {
+    process.stderr.write(`box.js: the copies in ${dir} stay: ${error.message}\n`);
+  }
+  for (const name of names) {
+    const folder = join(dir, name);
+    try {
+      if (now - newest(folder) >= COPIES_KEPT_MS) rmSync(folder, { recursive: true, force: true });
+    } catch (error) {
+      process.stderr.write(`box.js: ${folder} stays: ${error.message}\n`);
+    }
+  }
+}
+
+const COPIES_KEPT_MS = DAY;
+
+// When anything in the folder was last written; a folder a second prune removed meanwhile counts
+// as long ago.
+function newest(path) {
+  const stat = statSync(path, { throwIfNoEntry: false });
+  if (!stat?.isDirectory()) return stat?.mtimeMs ?? 0;
+  const written = readdirSync(path).map((name) => statSync(join(path, name), { throwIfNoEntry: false })?.mtimeMs ?? 0);
+  return Math.max(stat.mtimeMs, ...written);
 }
