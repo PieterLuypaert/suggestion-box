@@ -70,7 +70,7 @@ describe("why Create issue is off", () => {
   test("in the order the person meets them", () => {
     expect(offReason({ ...base, isFiling: true })).toBe("Creating the issue…");
     expect(offReason({ ...base, isChecking: true })).toBe("Waiting for the check");
-    expect(offReason({ ...base, note: { ...note, check: null } })).toBe("The check did not finish; check again");
+    expect(offReason({ ...base, note: { ...note, check: null } })).toBe("Waiting for a check: Check again above");
     expect(offReason({ ...base, target: null })).toBe("Looking up where it goes");
     expect(offReason({ ...base, target: { kind: "github", why: "This project has no GitHub repo to file in" } })).toBe("This project has no GitHub repo to file in");
     expect(offReason({ ...base, texts: { ...texts, title: "" } })).toBe("Fill in: Title");
@@ -100,6 +100,14 @@ describe("why Create issue is off", () => {
     expect(offReason({ ...base, target: monday })).toBeNull();
     expect(isPublicTarget(monday)).toBe(false);
     expect(offReason({ ...base, target: monday, texts: { ...texts, title: "" } })).toBe("Fill in: Title");
+  });
+
+  test("a GitHub repo copied because gh is missing keeps the public scan; no repo at all has none to keep", () => {
+    const withMail = { ...texts, sections: { ...texts.sections, evidence: "Seen by jan@acme.be" } };
+    const noGh = { kind: "copy", repo: "acme/shop", visibility: null, why: "GitHub's gh is not installed here" };
+    expect(isPublicTarget(noGh)).toBe(true);
+    expect(offReason({ ...base, texts: withMail, target: noGh })).toBe("Remove or mark fine an email address: this repo is public");
+    expect(isPublicTarget({ kind: "copy", repo: null, why: "This project has no GitHub repo to file in" })).toBe(false);
   });
 });
 

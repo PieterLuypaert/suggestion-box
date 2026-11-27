@@ -11,7 +11,7 @@ import { filedCard } from "./panel-filed.js";
 import { filterView } from "./panel-filters.js";
 import { noteCard, openRow } from "./panel-note.js";
 import { canConfirm, claimKey } from "./proofs.js";
-import { groupTitle, ICON, ICON_OFF, iconButton, messageCard, stop, toggle } from "./panel-parts.js";
+import { groupTitle, ICON, ICON_OFF, iconButton, link, messageCard, stop, toggle } from "./panel-parts.js";
 import { settingsView } from "./panel-settings.js";
 export { ICON, ICON_OFF } from "./panel-parts.js";
 
@@ -74,7 +74,10 @@ function header(s, counts, filter) {
       .child(iconButton(t, "close", svg("mods/workspace-chrome/x.svg").size(14), "Close (⌥⌘S)", (_e, cx) => s.act("close", null, cx))))
     .when(Boolean(name), (el) => el.child(h_flex().gap(10).items_center().pr(6)
       .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child([name, sum].filter(Boolean).join(" · ")))
-      .when(Boolean(s.collecting), (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))))
+      // Off everywhere, this project's own switch would change nothing: the header says so and
+      // points to Settings, where it is turned back on.
+      .when(Boolean(s.collecting) && s.collecting?.all === false, (row) => row.child(link(t, "collect-everywhere", "Off everywhere", (_e, cx) => s.act("open-settings", null, cx), t.muted).tooltip("Collecting is off for every project: Settings (⚙) turns it back on")))
+      .when(Boolean(s.collecting) && s.collecting?.all !== false, (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))))
     .when(Boolean(answer?.project) && s.view !== "settings", (el) => el.child(filterTabs(s, counts, filter)));
 }
 
@@ -103,7 +106,9 @@ const TAB_TIPS = {
 function offLine(s) {
   const { t } = s;
   return div().flex_none().mx(12).mt(10).px(14).py(10).rounded(8).bg(t.raised).text_size(12).text_color(t.muted).whitespace_normal()
-    .child(`Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
+    .child(s.collecting?.all === false
+      ? "Collecting is off everywhere: no project's new sessions hear of the box, and an agent that is already running is told to carry on. Settings (⚙) turns it back on."
+      : `Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
 }
 
 // Now: what waits for you, in the order it asks for you. The open note you picked (the newest until

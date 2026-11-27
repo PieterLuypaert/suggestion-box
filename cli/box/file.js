@@ -12,10 +12,11 @@ import { gitAnswer, gitText } from "../shared/git.js";
 // One gh call's limit; the panel waits for a lookup's and a filing's calls together.
 export const GH_MS = 20000;
 
-// gh, or the tests' stand-in. { code, stdout, stderr }; stdin when given.
+// gh, or the tests' stand-in. { code, stdout, stderr, isMissing }; stdin when given. isMissing:
+// gh is not installed.
 export function gh(args, { env = process.env, input } = {}) {
   const result = spawnSync(env.SUGGESTION_BOX_GH || "gh", args, { encoding: "utf8", input, timeout: GH_MS, env: { ...process.env, ...env, GH_PROMPT_DISABLED: "1" } });
-  return { code: result.status, stdout: result.stdout ?? "", stderr: (result.stderr ?? "").trim() || (result.error ? result.error.message : "") };
+  return { code: result.status, stdout: result.stdout ?? "", stderr: (result.stderr ?? "").trim() || (result.error ? result.error.message : ""), isMissing: result.error?.code === "ENOENT" };
 }
 
 function json(result) {
@@ -45,9 +46,14 @@ export function targetFor(top, key, env) {
   const board = config?.board ? { ...config.board } : null;
   const target = { kind: config?.kind ?? "github", repo, label: config?.label ?? null, labelMissing: false, board, linkKeyword: config?.linkKeyword ?? "Closes", visibility: null, hasConfig: Boolean(config), codeRepo: null };
   if (target.kind !== "github") return { ...target, codeRepo: spelled(githubRepo(key), env), why: `This project's tracker is ${target.kind}: Copy issue puts it on your clipboard` };
-  if (!repo) return { ...target, why: "This project has no GitHub repo to file in" };
+  // Where the box cannot create the issue itself, Copy issue still puts it on the clipboard.
+  if (!repo) return { ...target, kind: "copy", why: "This project has no GitHub repo to file in: Copy issue puts it on your clipboard" };
   // GitHub's own spelling of the repo: a code link only shows as code when it matches.
-  const view = json(gh(["repo", "view", repo, "--json", "visibility,nameWithOwner"], { env }));
+  const asked = gh(["repo", "view", repo, "--json", "visibility,nameWithOwner"], { env });
+  // The repo is still known: its code link, and the scan that treats a repo of unknown visibility
+  // as public, still apply to what is copied.
+  if (asked.isMissing) return { ...target, kind: "copy", codeRepo: githubRepo(key), why: "GitHub's gh is not installed here, so the box cannot create the issue: Copy issue puts it on your clipboard" };
+  const view = json(asked);
   target.visibility = view?.visibility ? String(view.visibility).toLowerCase() : null;
   if (view?.nameWithOwner) target.repo = view.nameWithOwner;
   // The code lives in the origin repo, which the tracker's repo may not be.

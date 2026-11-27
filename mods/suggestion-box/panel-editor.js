@@ -22,6 +22,11 @@ export function editorCard(s, note, ed) {
     .when(!ed.isChecking && Boolean(checkedSummary(note.check)), (el) => el.child(checkedLine(t, note)))
     .when(ed.isChecking, (el) => el.child(h_flex().gap(6).items_center().text_size(12).text_color(t.muted)
       .child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child("Checking the note against the code…")))
+    // A check that ended without an answer (claude not found, too slow, no snapshot): one click to
+    // run it again, right here.
+    .when(Boolean(ed.checkMissing), (el) => el.child(h_flex().gap(8).items_start().text_size(12)
+      .child(div().flex_1().whitespace_normal().text_color(t.working).child("The check did not finish, so Create waits for it."))
+      .child(link(t, `check-missing:${note.id}`, "Check again", (_e, cx) => s.act("check", note, cx)))))
     .when(Boolean(ed.checkError), (el) => el.child(h_flex().gap(8).items_start().text_size(12)
       .child(div().flex_1().whitespace_normal().text_color(t.blocked).child(`Not checked: ${ed.checkError}`))
       .child(link(t, `check-again:${note.id}`, "Check again", (_e, cx) => s.act("check", note, cx)))))

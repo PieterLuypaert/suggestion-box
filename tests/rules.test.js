@@ -1,6 +1,6 @@
 // The states table of docs/plan.md section 6c, row by row.
 import { describe, expect, test } from "bun:test";
-import { actionsFor, applyAction, buttonsFor, isWatched, recordIssue, recordLanded, shownFor } from "../mods/suggestion-box/rules.js";
+import { actionsFor, applyAction, buttonsFor, isWatched, moveNotice, recordIssue, recordLanded, shownFor } from "../mods/suggestion-box/rules.js";
 
 const NOW = "2026-11-26T12:00:00Z";
 const claim = { branch: "feat/x", sha: "abc", how: "h", proof: "p", by: "agent", at: "t", confirmed: null };
@@ -54,6 +54,13 @@ describe("what each action does", () => {
     const binned = applyAction(rows.open, "bin", NOW).note;
     expect(binned).toMatchObject({ status: "binned", binned: { at: NOW }, updated: NOW });
     expect(applyAction(binned, "restore", NOW).note).toMatchObject({ status: "open", binned: null });
+  });
+
+  test("an Undo right after Bin keeps the check; a Restore later reads the code anew", () => {
+    const check = { at: NOW, sections: {} };
+    const binned = applyAction({ ...rows.open, check }, "bin", NOW).note;
+    expect(applyAction(binned, "restore", "2026-11-26T12:00:05Z").note.check).toEqual(check);
+    expect(applyAction(binned, "restore", "2026-11-26T12:05:00Z").note.check).toBeNull();
   });
 
   test("mark solved sends an open note to To verify, by you", () => {
@@ -127,4 +134,15 @@ describe("what each action does", () => {
     expect(applyAction(rows.binned, "mark-solved", NOW).error).toContain("not one of its actions");
     expect(applyAction(rows.open, "check", NOW).error).toBe("check does not change a note's state");
   });
+});
+
+test("the notice when a note moves to To verify by itself", () => {
+  const claimed = { number: 7, state: "to verify", solved: { by: "agent", branch: "fix/a" } };
+  expect(moveNotice(claimed, "open")).toBe("Note 7 moved to To verify: an agent claimed it solved on fix/a.");
+  expect(moveNotice(claimed, "filed")).toBe("Note 7 moved to To verify: an agent claimed it solved on fix/a.");
+  expect(moveNotice({ ...claimed, solved: { ...claimed.solved, neverLanded: { how: "PR #44 was closed without merging" } } }, "solved"))
+    .toBe("Note 7 is back in To verify: its fix never landed (PR #44 was closed without merging).");
+  expect(moveNotice(claimed, "to verify")).toBeNull();
+  expect(moveNotice(claimed, undefined)).toBeNull();
+  expect(moveNotice({ ...claimed, state: "open" }, "to verify")).toBeNull();
 });

@@ -114,6 +114,17 @@ describe("box.js fix", () => {
     expect(read.history[0].actions).toEqual([]);
   });
 
+  test("from a ticket's worktree the launcher still runs from the main checkout", async () => {
+    const s = setup();
+    const worktree = join(tempDir("wt-"), "shop-812");
+    git(s.repo, "worktree", "add", "-q", "-b", "feat/812-other", worktree);
+    const answer = await run(["fix", worktree, s.id, "sp1"], s.env);
+    expect(answer).toMatchObject({ ok: true });
+    const [branch, launch] = calls(s);
+    expect(branch).toStartWith(`${s.repo}|branch `);
+    expect(launch).toStartWith(`${s.repo}|launch --space sp1`);
+  });
+
   test("Claude names the branch like the repo's own tickets; a taken name gets -2", async () => {
     const s = setup({ name: "fix/null-due-date-breaks-export", taken: ["fix/null-due-date-breaks-export"] });
     const records = join(s.repo, ".git", "herdr-parallel-issues");
@@ -170,7 +181,8 @@ describe("box.js fix", () => {
 
   test("a failing launcher: its last line on the note, and the button stays", async () => {
     const s = setup({ fail: "the primary checkout has uncommitted work" });
-    expect((await run(["fix", s.repo, s.id, "sp1"], s.env)).error).toBe("the primary checkout has uncommitted work");
+    // Kept on the note, which says it: the panel adds no banner of its own.
+    expect(await run(["fix", s.repo, s.id, "sp1"], s.env)).toEqual({ error: "the primary checkout has uncommitted work", isOnNote: true });
     expect(noteOf(s).fix).toBeNull();
     expect(noteOf(s).fixError).toMatchObject({ why: "the primary checkout has uncommitted work" });
     expect((await run(["read", s.repo], s.env)).history[0].actions).toEqual(["fix"]);
@@ -179,6 +191,7 @@ describe("box.js fix", () => {
   test("no free name, no launcher, no space, an issue of another repo: nothing starts", async () => {
     const all = setup({ taken: ["fix/formatdate-throws-null-date", "fix/formatdate-throws-null-date-2", "fix/formatdate-throws-null-date-3", "chore/formatdate-throws-null-date", "chore/formatdate-throws-null-date-2", "chore/formatdate-throws-null-date-3"] });
     expect((await run(["fix", all.repo, all.id, "sp1"], all.env)).error).toStartWith('no free branch name for "formatDate throws on a null date"');
+    expect((await run(["fix", all.repo, all.id, "sp1"], all.env)).isOnNote).toBe(true);
     const none = setup({ hagent: false });
     expect((await run(["fix", none.repo, none.id, "sp1"], none.env)).error).toBe("the parallel-tickets launcher is not installed");
     const nowhere = setup();

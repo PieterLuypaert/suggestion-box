@@ -130,7 +130,7 @@ describe("the same note again", () => {
     expect(suggest(repo, box, [], note("Filed one")).out).toBe("Already filed as #812 (note 1, spotted 2×). Carry on with your task.");
     expect(suggest(repo, box, [], note("Binned one")).out).toBe("Already binned by the user (note 2). Carry on with your task.");
     expect(suggest(repo, box, [], note("Claimed one")).out).toBe("Note 3 is claimed solved and waits for the user to verify. Carry on with your task.");
-    expect(suggest(repo, box, [], note("Solved one")).out).toBe("Note 4 was solved on feat/x; reopened it, as you see it again.");
+    expect(suggest(repo, box, [], note("Solved one")).out).toBe("Note 4 was solved on feat/x; reopened it, as you see it again. Carry on with your task.");
     expect(suggest(repo, box, ["list"]).out).toContain("Solved one");
   });
 });

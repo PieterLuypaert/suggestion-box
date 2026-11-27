@@ -1,4 +1,6 @@
 // Fix in new tab: a filed issue started as a ticket through the parallel-tickets launcher.
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { fold, stateOf } from "../../mods/suggestion-box/events.js";
 import { allows, recordFix, startFix, withStaleFix } from "../../mods/suggestion-box/rules.js";
 import { claudeBranch, freeBranch, gateFor, launchFix } from "./fix.js";
@@ -31,14 +33,23 @@ export async function fix(project, id, space, env, now) {
   const title = view.filed?.title ?? view.title;
   const problem = view.filed?.sections?.problem ?? view.sections?.problem;
   const preferred = await claudeBranch({ title, problem }, tickets, env);
-  const named = freeBranch(project.repo.top, title, env, preferred);
-  const opened = named.error ? named : launchFix(project.repo.top, { space, ticket: view.issue.number, branch: named.branch }, env);
+  // The launcher runs from the project's main checkout, also when the panel shows a ticket's
+  // worktree: that is where it makes the new one from.
+  const home = mainCheckout(project.repo);
+  const named = freeBranch(home, title, env, preferred);
+  const opened = named.error ? named : launchFix(home, { space, ticket: view.issue.number, branch: named.branch }, env);
   update(project, id, ({ view: fresh }) => ({ note: recordFix(fresh, now.toISOString(), { ...opened, space }) }), { foldEvents: true });
-  return opened.error ? { error: opened.error } : { ok: true, ...opened };
+  // A launcher that failed is kept on the note, which says it: the panel then adds no banner.
+  return opened.error ? { error: opened.error, isOnNote: true } : { ok: true, ...opened };
 }
 
 function refusedFix(view) {
   if (view.fix?.starting) return `a fix for note ${view.number} is starting already; nothing started`;
   if (view.fix) return `note ${view.number} is already fixing in ${view.fix.branch}; nothing started`;
   return `note ${view.number} is ${stateOf(view)}${view.issue?.closed ? ` and issue #${view.issue.number} is closed` : ""}; nothing started`;
+}
+
+// The main checkout of the repo (the folder its .git is in), else the folder shown.
+function mainCheckout(repo) {
+  return repo.checkout && existsSync(join(repo.checkout, ".git")) ? repo.checkout : repo.top;
 }

@@ -1,7 +1,7 @@
 // Which box the panel shows: the focused space's folder, reading its box for every copy, the read
 // that shows while you move between tabs, the folder buttons act on, and notices.
 import { focused, setShared, shared, spaces } from "herdr";
-import { buttonsFor } from "./rules.js";
+import { buttonsFor, moveNotice } from "./rules.js";
 import { BLOCK, box, DATA, isShown, NOTICE_MS, READ_WAIT_MS, READING, sleep, WIGGLE_MS } from "./view-host.js";
 
 // The view's methods for this part, added to it in main.js.
@@ -98,15 +98,16 @@ export const reading = {
     const key = answer.project?.key;
     if (key && key === this.seenKey) this.noticeMoves(cx, answer);
     this.seenKey = key;
-    this.lastStates = new Map((answer.notes ?? []).map((note) => [note.id, note.state]));
+    // Filed and confirmed notes too: a claim on a filed issue, or a fix sent back, moves them.
+    this.lastStates = new Map([...(answer.notes ?? []), ...(answer.history ?? [])].map((note) => [note.id, note.state]));
   },
 
   noticeMoves(cx, answer) {
     for (const note of answer.notes ?? []) {
-      const was = this.lastStates?.get(note.id);
-      if (was !== "open" || note.state !== "to verify" || Date.now() < (this.mine?.get(note.id) ?? 0)) continue;
+      const text = moveNotice(note, this.lastStates?.get(note.id));
+      if (!text || Date.now() < (this.mine?.get(note.id) ?? 0)) continue;
       const editing = this.editor?.id === note.id ? " Your draft is kept." : this.expanded?.has(note.id) ? " Your view of it is kept." : "";
-      this.say(cx, `Note ${note.number} moved to To verify: ${note.solved?.by === "you" ? "you" : "an agent"} claimed it solved on ${note.solved?.branch ?? "a branch"}.${editing}`);
+      this.say(cx, `${text}${editing}`);
     }
   },
 

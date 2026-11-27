@@ -105,7 +105,7 @@ async function repeat(io, project, key, now) {
   store.addEvent(project.dir, note.id, { type: "spotted", at: now.toISOString(), from: origin(io, project.repo) });
   const seen = store.readNote(project.dir, note.id);
   const n = seen.number;
-  if (note.status === "solved") return say(io, `Note ${n} was solved on ${note.solved?.branch ?? "a branch"}; reopened it, as you see it again.`);
+  if (note.status === "solved") return say(io, `Note ${n} was solved on ${note.solved?.branch ?? "a branch"}; reopened it, as you see it again. ${CARRY_ON}`);
   if (stateOf(note) === "to verify") return say(io, `Note ${n} is claimed solved and waits for the user to verify. ${CARRY_ON}`);
   if (note.status === "filed") return say(io, `Already filed as #${note.issue?.number} (note ${n}, spotted ${seen.spotted}×). ${CARRY_ON}`);
   if (note.status === "binned") return say(io, `Already binned by the user (note ${n}). ${CARRY_ON}`);

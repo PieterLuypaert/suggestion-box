@@ -1,8 +1,9 @@
 // The panel: its state, what a click or a key does, the writes through box.js, and its draw.
-import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
+import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals, window } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
 import { FILTERS } from "./filters.js";
+import { SAID_NOT_SOLVED } from "./rules.js";
 import { canConfirm, claimKey, PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
@@ -13,7 +14,7 @@ const LABEL_OF = { file: "File issue", check: "Check", bin: "Bin", "mark-solved"
 function notSolvedReason(note) {
   const verify = note.verify;
   if (verify && !verify.error && verify.verdict !== "verified") return verify.why;
-  return "You said it is not solved.";
+  return SAID_NOT_SOLVED;
 }
 
 const FILTER_KEYS = ["1", "2", "3", "4"];
@@ -33,6 +34,8 @@ export const panelCopy = {
     this.selected = null;
     this.undo = null;
     this.checking = new Set();
+    // Checks that finished, until the read brings their answer.
+    this.checked = new Set();
     // The settings view's projects, each with its switch, read when the view opens.
     this.projects = null;
     // The note being filed, with its fields; one at a time.
@@ -97,6 +100,7 @@ export const panelCopy = {
   async actOn(name, note, cx) {
     const where = this.shownFolder();
     if (name === "close") return this.close();
+    if (name === "open-settings" && this.view !== "settings") name = "settings";
     if (name === "settings") {
       this.view = this.view === "settings" ? "list" : "settings";
       this.projects = null;
@@ -170,6 +174,7 @@ export const panelCopy = {
       try {
         const answer = await box(this.node, this.boxJs, ["check", folder, note.id, ...(note.check && !reuse ? ["--again"] : [])], CHECK_MS);
         ran = !answer.reused;
+        if (answer.check || answer.reused) this.checked.add(note.id);
         this.error = "";
       } catch (error) {
         this.error = `The check did not finish: ${error.message}`;
@@ -181,6 +186,14 @@ export const panelCopy = {
       cx.notify();
     });
     cx.notify();
+  },
+
+  // A check runs, or has just finished and the read that brings it has not landed yet: the editor
+  // waits for it rather than saying it did not finish.
+  isCheckingNote(note) {
+    if (this.checking.has(note.id)) return true;
+    if (note.check) this.checked.delete(note.id);
+    return this.checked.has(note.id);
   },
 
   showUndo(cx, note) {

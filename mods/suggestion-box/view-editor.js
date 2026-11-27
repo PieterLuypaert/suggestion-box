@@ -162,7 +162,7 @@ export const editing = {
     const note = this.noteById(editor.id);
     if (!note) return "The note is gone";
     const texts = this.textsOf(editor);
-    return offReason({ note, texts, target: editor.target, isChecking: this.checking.has(editor.id), isFiling: editor.isFiling, notGone: editor.notGone, fine: [...editor.fine] });
+    return offReason({ note, texts, target: editor.target, isChecking: this.isCheckingNote(note), isFiling: editor.isFiling, notGone: editor.notGone, fine: [...editor.fine] });
   },
 
   // Create issue: after the writes before it, so the draft it files is the one on disk too.
@@ -214,7 +214,8 @@ export const editing = {
     if (!note || this.offFor(editor)) return cx.notify();
     const texts = this.textsOf(editor);
     cx.write_to_clipboard(`${texts.title.trim()}\n\n${issueText(texts, { link: editor.link, ticket: note.from?.ticket ?? null })}`);
-    this.say(cx, `Copied note ${note.number} as an issue. Paste it in ${editor.target.kind}, then bin the note.`);
+    const where = editor.target.kind === "copy" ? "where the project's issues live" : `in ${editor.target.kind}`;
+    this.say(cx, `Copied note ${note.number} as an issue. Paste it ${where}, then bin the note.`);
     cx.notify();
   },
 
@@ -235,7 +236,7 @@ export const editing = {
     const editor = this.editor;
     const note = editor && this.noteById(editor.id);
     if (!note) return null;
-    const isChecking = this.checking.has(editor.id);
+    const isChecking = this.isCheckingNote(note);
     const texts = this.textsOf(editor);
     const labels = Object.fromEntries(SECTIONS.map((name) => [name, fieldLabel(note, name, texts.sections[name], { isChecking })]));
     const hits = scanTexts(texts).map((hit) => ({ ...hit, isFine: editor.fine.has(hit.text) }));
@@ -245,6 +246,7 @@ export const editing = {
       target: editor.target, line: targetLine(editor.target), similar: editor.similar,
       off: this.offFor(editor), error: editor.error, isFiling: editor.isFiling, notGone: editor.notGone,
       gone: isChecking ? null : note.check?.gone ?? null, checkError: isChecking ? null : note.check?.error ?? null,
+      checkMissing: !isChecking && !note.check,
       canCopy: Boolean(editor.target && editor.target.kind !== "github"), canStartOver: Boolean(draft),
     };
   },

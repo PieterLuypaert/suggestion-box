@@ -66,6 +66,27 @@ All notable changes to the suggestion box. The format follows
 
 ### Fixed
 
+- The ticket chip on a note (`#8504`) said "not a function" once its tab had closed, instead of
+  opening the ticket on GitHub. A test now catches any Herdr function a mod file calls without
+  importing it.
+- The header's Collecting switch did nothing while collecting was off everywhere; the header now
+  says "Off everywhere" and points to Settings, and the off line says it is off everywhere.
+- File issue led to a dead end without a GitHub repo, or without gh: the editor now offers Copy
+  issue there, as for a tracker outside GitHub, with the same scan for a public repo and the code
+  link.
+- A check that ended without an answer left the editor saying "check again" with no way to; it now
+  says so with Check again beside it.
+- Fix in new tab ran the launcher from the folder shown, a ticket's worktree too; it runs from the
+  project's main checkout, as the README says.
+- Undo right after Bin no longer throws away the note's check.
+- A claim on a filed issue, and a fix the watch sent back because it never landed, moved the note to
+  To verify without a word; both now say so.
+- A claim you turned down showed only "not verified"; its card now says why when the check gave a
+  reason.
+- A failed Fix in new tab was said twice, in a red line and on its card; a launcher's failure is
+  now said once, on the card under Needs you.
+- An agent that sees a solved note again is told to carry on with its task, as for every other
+  answer.
 - Mark solved on main (from the check's banner or a change on main) for a note from a ticket with
   its own commits found no commit of the fix, so the note waited to land forever. The change is now
   looked for where main and the note's commit met, and a note you marked solved on main itself has
