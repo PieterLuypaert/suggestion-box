@@ -66,7 +66,8 @@ The header says what waits for you, in the order the groups come: `shop · 1 to 
   the issue stayed open.
 - **Open**: the notes, newest first. Click a title for its four sections, the file to open it in
   Cursor at its line, the ticket to jump to its tab (or open it on GitHub). A note whose code
-  changed since the drop says so, with Mark solved.
+  changed since the drop says so, with Mark solved; for a note from a ticket with its own commits,
+  main only counts what changed there since the ticket left it.
 - **Check** (or `k`) asks your own Claude to check the note's four sections against the code (see
   below).
 - **File issue** (or `f`) turns the note into an editor and files it as a GitHub issue (see below).
@@ -153,11 +154,16 @@ confirm it, and opening it shows three proofs, each with a dot for how it stands
   diff of the note's file changes.
 - **Landed**: the branch's merged PR counts first, whatever the merge style; else the solving
   commit in the fetched main, else the same patch there (`git cherry`), for squash and rebase merges.
+  The commit an agent claimed on only counts when it came after the drop and is its branch's own
+  work, so a claim made before committing is never taken for the fix. A note you marked solved on
+  main itself (from the check's banner or a change there) has landed already.
 
 **Confirm solved** keeps the proofs as they stood and moves the note to the history, where it says
 `waiting to land` until the fix is in main, then `landed: PR #44 merged`. The box looks again every
 few minutes. Only when the PR is closed without a merge, or the branch is gone (asked of origin
 itself) with nothing in main, does the note come back to To verify with `the fix never landed`.
+A claim whose fix never landed leads with `Its fix never landed` and offers **Not solved** instead
+of Confirm.
 **Not solved** drops the claim with the check's reason (or yours), and the note is back where it
 was: open, or filed.
 
