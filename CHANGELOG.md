@@ -34,8 +34,11 @@ All notable changes to the suggestion box. The format follows
   waiting to land, in a claim's proofs and the history), green ready or landed, grey done. Links are
   plain text that underlines on hover instead of the theme's accent, which can be as orange as
   amber; Corrected is blue, and `seen 3×` is no longer amber.
-- The footer shows only the keys of the note you picked (↑↓ and enter are in its hover text), and
-  nothing when there is nothing to pick.
+- The footer shows only the keys of the note you picked (↑↓ and enter are in its hover text), "↑↓
+  pick a note" while none is picked, and nothing when there is nothing to pick.
+- A filed issue without Fix in new tab (no launcher, or issues in another repo) no longer says
+  "start the fix whenever you like"; a board error counts no more once GitHub shows the issue on a
+  board, and the header counts what was just filed, never saying "empty" above it.
 - Fix in new tab names the branch the way the repo's tickets are named: your own Claude proposes a
   type and three to five words (`fix/invoice-editor-duplicate-patch-save` rather than
   `fix/save-invoice-editor-can-send`), with the repo's earlier parallel tickets as examples.

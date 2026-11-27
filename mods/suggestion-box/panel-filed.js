@@ -1,7 +1,7 @@
 // A filed note: its issue, its boards, its fix, and once solved the words that close it.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { filedStep } from "./filed-step.js";
+import { filedStep, isOffBoard } from "./filed-step.js";
 import { actionsRow, card, link, plainButton, stepColor } from "./panel-parts.js";
 
 // A solved note in the history: where it was solved, and whether its fix landed yet.
@@ -44,7 +44,7 @@ export function needsYou(s, note, { saysBoard = true } = {}) {
   const isTooLate = Boolean(issue.closed) || note.solved?.landed?.state === "landed";
   const addToBoard = plainButton(t, `board:${note.id}`, "Add to board", (_e, cx) => s.act("board", note, cx));
   return v_flex().gap(4).text_size(12)
-    .when(Boolean(note.board?.error), (el) => el.child(saysBoard
+    .when(isOffBoard(note), (el) => el.child(saysBoard
       ? h_flex().gap(8).items_center()
         .child(div().flex_1().min_w(0).whitespace_normal().text_color(t.working).child(`Not on the board: ${note.board.error}`))
         .child(addToBoard)

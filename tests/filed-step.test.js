@@ -1,19 +1,36 @@
 // What a note just filed still needs, and the order Just filed shows them in.
 import { describe, expect, test } from "bun:test";
-import { byNextStep, filedGroups, filedStep, inHistory } from "../mods/suggestion-box/filed-step.js";
+import { byNextStep, filedGroups, filedStep, inHistory, isOffBoard } from "../mods/suggestion-box/filed-step.js";
 
-const filed = { id: "a", issue: { number: 812, boards: [{ title: "Shop", column: "Backlog" }] } };
+const filed = { id: "a", issue: { number: 812, boards: [{ title: "Shop", column: "Backlog" }] }, actions: ["fix"] };
+const offBoard = { id: "b", issue: { number: 813 }, board: { error: "run gh auth refresh -s project" }, actions: ["fix"] };
 
-test("ready: on its board, start the fix whenever you like", () => {
+test("ready: on its board, start the fix whenever you like, where Fix in new tab is offered", () => {
   expect(filedStep(filed)).toEqual({ kind: "ready", text: "On Shop › Backlog · start the fix whenever you like" });
-  expect(filedStep({ issue: { number: 3 } }).text).toBe("Filed · start the fix whenever you like");
+  expect(filedStep({ issue: { number: 3 }, actions: ["fix"] }).text).toBe("Filed · start the fix whenever you like");
+  expect(filedStep({ ...filed, actions: [] }).text).toBe("On Shop › Backlog");
+  expect(filedStep({ issue: { number: 3 } }).text).toBe("Filed");
 });
 
 test("needs you: a fix that did not start, one that never reported back, not on the board", () => {
   expect(filedStep({ ...filed, fixError: { why: "uncommitted work" } })).toEqual({ kind: "needs", text: "Fix in new tab did not start: uncommitted work" });
   expect(filedStep({ ...filed, fix: { starting: true, isStale: true } }).kind).toBe("needs");
-  expect(filedStep({ ...filed, board: { error: "run gh auth refresh -s project" } })).toEqual({ kind: "needs", text: "Not on the board: run gh auth refresh -s project", isBoard: true });
-  expect(filedStep({ ...filed, board: { error: "e" }, fixError: { why: "w" } }).isBoard).toBeUndefined();
+  expect(filedStep(offBoard)).toEqual({ kind: "needs", text: "Not on the board: run gh auth refresh -s project", isBoard: true });
+  expect(filedStep({ ...offBoard, fixError: { why: "w" } }).isBoard).toBeUndefined();
+});
+
+test("the board's failure counts until GitHub shows the issue on a board, or the issue closes", () => {
+  expect(isOffBoard(offBoard)).toBe(true);
+  expect(isOffBoard({ ...offBoard, issue: { number: 813, boards: [{ title: "Shop" }] } })).toBe(false);
+  expect(filedStep({ ...offBoard, issue: { number: 813, boards: [{ title: "Shop" }] } }).kind).toBe("ready");
+  expect(isOffBoard({ ...offBoard, issue: { number: 813, closed: { at: "t" } } })).toBe(false);
+});
+
+test("a solve you confirmed outranks a fix that failed or never answered before it", () => {
+  const confirmed = { branch: "fix/a", confirmed: { at: "t" } };
+  expect(filedStep({ ...filed, fixError: { why: "w" }, solved: confirmed }).kind).toBe("working");
+  expect(filedStep({ ...filed, fix: { starting: true, isStale: true }, solved: confirmed }).kind).toBe("working");
+  expect(filedStep({ ...offBoard, solved: confirmed }).kind).toBe("working");
 });
 
 test("under way, and done", () => {
@@ -32,7 +49,7 @@ test("a solved fix: waiting to land, landed but the issue still open, closed wit
 });
 
 test("what needs you comes first", () => {
-  const notes = [{ ...filed, id: "ready" }, { ...filed, id: "fixing", fix: { branch: "fix/x" } }, { ...filed, id: "needs", board: { error: "e" } }];
+  const notes = [{ ...filed, id: "ready" }, { ...filed, id: "fixing", fix: { branch: "fix/x" } }, { ...offBoard, id: "needs" }];
   expect(byNextStep(notes).map((n) => n.id)).toEqual(["needs", "fixing", "ready"]);
 });
 
