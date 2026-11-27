@@ -133,6 +133,7 @@ press **It is not solved**), or what the scan found.
   | The config without `project` or `status` | `tracker.repo` | as above | none |
   | The config, tracker on monday or asana | Copy issue puts the title and text on your clipboard | | |
   | No config | the `origin` repo | none | none |
+  | No GitHub repo, or no `gh` installed | Copy issue puts the title and text on your clipboard | | |
 
 - **The issue text** is always Problem, Evidence, Current situation and Desired situation. Under
   Evidence the box adds the code: the note's lines found on the default branch, linked so GitHub

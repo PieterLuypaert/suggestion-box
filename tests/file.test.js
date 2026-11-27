@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { searchWords } from "../cli/box/file.js";
+import { searchWords, targetFor } from "../cli/box/file.js";
 import { BIN, git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
 const CONFIG = `tracker:
@@ -85,6 +85,13 @@ describe("box.js target", () => {
     expect(answer.similar).toEqual([{ number: 12, title: "PDF export crashes", url: "https://github.com/acme/shop/issues/12" }]);
     const main = git(s.repo, "rev-parse", "main");
     expect(answer.link).toEqual({ url: `https://github.com/acme/shop/blob/${main}/src/invoices.ts#L40-L44`, embed: true });
+  });
+
+  test("without gh, or without a GitHub repo, Copy issue is the way: the box cannot create it", async () => {
+    const s = setup();
+    const noGh = await run(["target", s.repo, s.id], { ...s.env, SUGGESTION_BOX_GH: join(s.dir, "not-installed") });
+    expect(noGh.target).toMatchObject({ kind: "copy", why: "GitHub's gh is not installed here, so the box cannot create the issue: Copy issue puts it on your clipboard" });
+    expect(targetFor(s.repo, "gitlab.com/acme/shop", s.env)).toMatchObject({ kind: "copy", why: "This project has no GitHub repo to file in: Copy issue puts it on your clipboard" });
   });
 
   test("the config: its repo, label and board, with the board's title", async () => {

@@ -214,7 +214,8 @@ export const editing = {
     if (!note || this.offFor(editor)) return cx.notify();
     const texts = this.textsOf(editor);
     cx.write_to_clipboard(`${texts.title.trim()}\n\n${issueText(texts, { link: editor.link, ticket: note.from?.ticket ?? null })}`);
-    this.say(cx, `Copied note ${note.number} as an issue. Paste it in ${editor.target.kind}, then bin the note.`);
+    const where = editor.target.kind === "copy" ? "where the project's issues live" : `in ${editor.target.kind}`;
+    this.say(cx, `Copied note ${note.number} as an issue. Paste it ${where}, then bin the note.`);
     cx.notify();
   },
 
