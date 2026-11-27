@@ -113,6 +113,12 @@ export function plainButton(t, id, text, onClick, { isPrimary = false, isOff = f
     .child(text);
 }
 
+// The dot of a next step, the same in every group: amber needs you, blue under way (ANSI blue, as
+// the theme's accent can be orange), green ready or landed, grey done.
+export function stepColor(t, kind) {
+  return { needs: t.working, working: t.ansi4, ready: t.ansi2, done: t.dim }[kind];
+}
+
 export function chip(t, text, color) {
   return div().flex_none().px(6).rounded(8).text_size(11).border(1).border_color(color).text_color(color).child(text);
 }

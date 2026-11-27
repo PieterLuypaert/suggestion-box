@@ -2,7 +2,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { filedStep } from "./filed-step.js";
-import { actionsRow, card, link, plainButton } from "./panel-parts.js";
+import { actionsRow, card, link, plainButton, stepColor } from "./panel-parts.js";
 
 // A solved note in the history: where it was solved, and whether its fix landed yet.
 export function solvedLine(note) {
@@ -57,7 +57,7 @@ export function needsYou(s, note, { saysBoard = true } = {}) {
 export function filedCard(s, note) {
   const { t } = s;
   const step = filedStep(note);
-  const color = { needs: t.working, working: t.ansi4, ready: t.ansi2, done: t.dim }[step.kind];
+  const color = stepColor(t, step.kind);
   const issue = note.issue ?? {};
   return card(t, `filed:${note.id}`, { edge: step.kind === "needs" ? t.working : null })
     .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))

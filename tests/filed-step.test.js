@@ -1,6 +1,6 @@
 // What a note just filed still needs, and the order Just filed shows them in.
-import { expect, test } from "bun:test";
-import { byNextStep, filedStep } from "../mods/suggestion-box/filed-step.js";
+import { describe, expect, test } from "bun:test";
+import { byNextStep, filedGroups, filedStep, inHistory } from "../mods/suggestion-box/filed-step.js";
 
 const filed = { id: "a", issue: { number: 812, boards: [{ title: "Shop", column: "Backlog" }] } };
 
@@ -34,4 +34,26 @@ test("a solved fix: waiting to land, landed but the issue still open, closed wit
 test("what needs you comes first", () => {
   const notes = [{ ...filed, id: "ready" }, { ...filed, id: "fixing", fix: { branch: "fix/x" } }, { ...filed, id: "needs", board: { error: "e" } }];
   expect(byNextStep(notes).map((n) => n.id)).toEqual(["needs", "fixing", "ready"]);
+});
+
+describe("the list's filed groups", () => {
+  const ready = { ...filed, id: "ready", state: "filed" };
+  const working = { ...filed, id: "working", state: "filed", fix: { branch: "fix/a" } };
+  const stale = { ...filed, id: "stale", state: "filed", fix: { starting: true, isStale: true } };
+  const landedOpen = { ...filed, id: "landed", state: "filed", solved: { confirmed: { at: "t" }, landed: { state: "landed", how: "PR #9 merged" } } };
+  const binned = { id: "binned", state: "binned" };
+  const history = [ready, working, stale, landedOpen, binned];
+
+  test("needs you holds every filed note that needs you, also one filed long ago; just filed the rest of the new ones", () => {
+    const groups = filedGroups(history, new Set(["ready", "working", "stale"]));
+    expect(groups.needs.map((n) => n.id)).toEqual(["stale", "landed"]);
+    expect(groups.justFiled.map((n) => n.id)).toEqual(["working", "ready"]);
+    expect(filedGroups(history, null)).toEqual({ needs: [stale, landedOpen], justFiled: [] });
+    expect(filedGroups(undefined, new Set())).toEqual({ needs: [], justFiled: [] });
+  });
+
+  test("the history leaves out what the list shows", () => {
+    expect(inHistory(history, new Set(["ready"])).map((n) => n.id)).toEqual(["working", "binned"]);
+    expect(inHistory(history, new Set()).map((n) => n.id)).toEqual(["ready", "working", "binned"]);
+  });
 });

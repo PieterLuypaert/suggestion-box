@@ -56,8 +56,14 @@ notes, and a green ✓ for notes an agent claims solved. It wiggles once when a 
 the panel is shut. Click it or press `cmd-alt-s` and the panel opens on the right, like
 Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 
+The header says what waits for you, in the order the groups come: `shop · 1 to verify · 1 needs you
+· 3 open`.
+
 - **To verify**: notes claimed solved, with their three proofs, Confirm solved and Not solved (see
   below).
+- **Needs you**: a filed issue you have to act on, also one filed long ago: its fix did not start
+  or never reported back, it is not on the board (with **Add to board**), or its fix landed while
+  the issue stayed open.
 - **Open**: the notes, newest first. Click a title for its four sections, the file to open it in
   Cursor at its line, the ticket to jump to its tab (or open it on GitHub). A note whose code
   changed since the drop says so, with Mark solved.
@@ -66,9 +72,14 @@ Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 - **File issue** (or `f`) turns the note into an editor and files it as a GitHub issue (see below).
 - **Bin** takes a note away at once, with Undo for five seconds; the history keeps the last 30
   days of binned, solved and filed notes, with Restore and Reopen.
+- **Just filed**: the issues filed while the panel is open, each with its next step, until the
+  panel closes; then they are in the history.
 - **Collecting** in the header switches drops off and on for this project; the ⚙ for all projects.
+- One colour language: a dot or line in amber needs you, blue is under way, green is ready or
+  landed, grey is done. Links are plain text that underlines on hover.
 - Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `f` file, `k` check, `s` mark
-  solved, `x` bin, `u` undo, `c` confirm, `n` not solved, esc closes.
+  solved, `x` bin, `u` undo, `c` confirm, `n` not solved, esc closes. The footer shows the keys of
+  the note you picked.
 
 Each note's state allows a fixed set of actions (docs/plan.md section 6c), and the box refuses any
 other, also a click that races an agent's claim. All reading and writing goes through
@@ -124,8 +135,9 @@ press **It is not solved**), or what the scan found.
   and **Add to board** tries again; without the `project` scope it says `run gh auth refresh -s
   project`.
 - **Your draft** is kept in the note when you leave a field, close the editor or close the panel.
-- A filed note shows `Filed #812 ↗` until the panel closes, then sits in the history. Once it is
-  solved, the box gives you the words for the fix's PR, such as `Closes #812`, with Copy.
+- A filed note sits in **Just filed** with its next step until the panel closes, then in the
+  history; whenever it needs you, it shows under **Needs you**. Once it is solved, the box gives you
+  the words for the fix's PR, such as `Closes #812`, with Copy.
 
 ## Proving a solve
 

@@ -5,8 +5,9 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { age } from "./notes.js";
+import { filedStep, inHistory } from "./filed-step.js";
 import { filedLines } from "./panel-filed.js";
-import { actionButton, actionsRow, groupTitle, messageCard } from "./panel-parts.js";
+import { actionButton, actionsRow, groupTitle, messageCard, stepColor } from "./panel-parts.js";
 
 // A filed issue that was solved since counts as solved: its fix is what you look for.
 const isSolved = (note) => note.state === "solved" || Boolean(note.solved?.confirmed);
@@ -16,7 +17,7 @@ const ON_ROW = ["restore", "fix"];
 
 export function history(s) {
   const { t, answer } = s;
-  const notes = (answer?.history ?? []).filter((note) => !s.justFiled?.has(note.id));
+  const notes = inHistory(answer?.history, s.justFiled);
   if (!notes.length) return messageCard(t, "empty-history", "Nothing here yet", "Filed, solved and binned notes stay here for 30 days: Restore sits on a binned note, and opening a row shows Reopen and the rest.");
   const groups = [
     ["Solved", notes.filter(isSolved)],
@@ -49,9 +50,9 @@ function statusOf(t, note) {
     const landed = note.solved?.landed;
     const issue = note.issue ? `issue #${note.issue.number}` : null;
     if (landed?.state === "landed") return { color: t.ansi2, line: parts(`landed · ${landed.how}`, issue, note.age) };
-    if (landed?.state === "waiting") return { color: t.working, line: parts(`waiting to land · ${landed.how}`, issue, note.age) };
+    if (landed?.state === "waiting") return { color: stepColor(t, "working"), line: parts(`waiting to land · ${landed.how}`, issue, note.age) };
     // Confirmed before anything was known about landing: the watch still waits for it.
-    if (note.solved?.confirmed) return { color: t.working, line: parts(`waiting to land · solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age) };
+    if (note.solved?.confirmed) return { color: stepColor(t, "working"), line: parts(`waiting to land · solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age) };
     return { color: t.ansi2, line: parts(`solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age) };
   }
   if (isClosed(note)) {
@@ -62,7 +63,7 @@ function statusOf(t, note) {
     const issue = note.issue ?? {};
     const board = issue.boards?.length ? issue.boards.map((b) => (b.column ? `${b.title} › ${b.column}` : b.title)).join(", ") : note.board?.error ? "not on the board" : null;
     const fixing = note.fix?.branch ? `fixing in ${note.fix.branch}` : null;
-    return { color: t.accent, line: parts(`#${issue.number} open`, board, fixing, note.age) };
+    return { color: stepColor(t, filedStep(note).kind), line: parts(`#${issue.number} open`, board, fixing, note.age) };
   }
   return { color: t.dim, line: parts("binned", note.age) };
 }

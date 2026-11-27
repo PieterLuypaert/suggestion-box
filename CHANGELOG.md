@@ -26,6 +26,16 @@ All notable changes to the suggestion box. The format follows
 
 ### Changed
 
+- What needs you comes first: a Needs you group under To verify holds every filed issue you have to
+  act on, also one filed long ago that the history would hide (a fix that did not start or never
+  reported back, not on the board, a fix that landed while the issue stayed open), and the header
+  counts it: `shop · 1 to verify · 1 needs you · 3 open`. Just filed keeps the rest.
+- One colour language across the panel: amber only for what needs you, blue under way (also
+  waiting to land, in a claim's proofs and the history), green ready or landed, grey done. Links are
+  plain text that underlines on hover instead of the theme's accent, which can be as orange as
+  amber; Corrected is blue, and `seen 3×` is no longer amber.
+- The footer shows only the keys of the note you picked (↑↓ and enter are in its hover text), and
+  nothing when there is nothing to pick.
 - Fix in new tab names the branch the way the repo's tickets are named: your own Claude proposes a
   type and three to five words (`fix/invoice-editor-duplicate-patch-save` rather than
   `fix/save-invoice-editor-can-send`), with the repo's earlier parallel tickets as examples.

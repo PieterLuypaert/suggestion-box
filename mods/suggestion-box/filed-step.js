@@ -24,3 +24,18 @@ const ORDER = { needs: 0, working: 1, ready: 2, done: 3 };
 export function byNextStep(notes) {
   return [...notes].sort((a, b) => ORDER[filedStep(a).kind] - ORDER[filedStep(b).kind]);
 }
+
+// The filed notes the list shows: every one that needs you, also one filed long ago (the history
+// would hide it), and the rest of the ones just filed, in the order that asks for you first.
+export function filedGroups(history, justFiled) {
+  const filed = (history ?? []).filter((note) => note.state === "filed");
+  const needs = filed.filter((note) => filedStep(note).kind === "needs");
+  return { needs, justFiled: byNextStep(filed.filter((note) => justFiled?.has(note.id) && !needs.includes(note))) };
+}
+
+// The history leaves out what the list shows.
+export function inHistory(history, justFiled) {
+  const { needs, justFiled: rest } = filedGroups(history, justFiled);
+  const listed = new Set([...needs, ...rest].map((note) => note.id));
+  return (history ?? []).filter((note) => !listed.has(note.id));
+}
