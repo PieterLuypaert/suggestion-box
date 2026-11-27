@@ -6,11 +6,13 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { nameArgs, nameExamples, namePrompt, nameTypes, NAME_TIMEOUT_MS, readName } from "../../mods/suggestion-box/branch-name.js";
 import { filingTarget } from "../../mods/suggestion-box/config.js";
 import { branchCandidates, fixGate, lastLine, pickBranch, readLaunch } from "../../mods/suggestion-box/fix.js";
 import { githubRepo } from "../../mods/suggestion-box/issue.js";
 import { configText } from "./file.js";
 import { defaultRef } from "./changes.js";
+import { findClaude, inSnapshots, runClaude } from "./claude.js";
 
 // A launch fetches, makes a worktree and opens a tab: minutes at most.
 const LAUNCH_MS = 240000;
@@ -61,9 +63,30 @@ function launch(top, args, env, timeout) {
   return { code: result.status, stdout: result.stdout ?? "", stderr: (result.stderr ?? "") || (result.error ? result.error.message : "") };
 }
 
-// A free branch for the note: { branch } or { error }.
-export function freeBranch(top, title, env) {
-  const names = branchCandidates(title);
+// The person's Claude's name for the fix's branch, with the repo's tickets as examples, or null: the
+// box then names it from the title's words. It runs in an empty folder of its own, so no CLAUDE.md,
+// memory or project of theirs comes in; the folder goes also when the panel stops the run. Never
+// throws: the fix has started by now, and a name is never a reason for it to stop.
+export async function claudeBranch(ticket, records, env) {
+  try {
+    const claude = findClaude(env);
+    const examples = nameExamples(records);
+    const types = nameTypes(examples);
+    const question = namePrompt(ticket, examples, types);
+    const answer = readName(await inSnapshots((folder) => runClaude(claude, nameArgs(question), folder, NAME_TIMEOUT_MS)), types);
+    if (answer.error) process.stderr.write(`box.js: Claude did not name the branch, so the title does: ${answer.error}\n`);
+    return answer.branch ?? null;
+  } catch (error) {
+    process.stderr.write(`box.js: the branch is named from the title: ${error.message}\n`);
+    return null;
+  }
+}
+
+// A free branch for the note: { branch } or { error }. Claude's name first when there is one, with
+// -2 and -3 for a name that is taken, then the names from the title's words.
+export function freeBranch(top, title, env, preferred = null) {
+  const names = preferred ? [preferred, `${preferred}-2`, `${preferred}-3`] : [];
+  for (const name of branchCandidates(title)) if (!names.includes(name)) names.push(name);
   const answer = launch(top, ["branch", ...names], env, BRANCH_MS);
   const branch = pickBranch(answer.stdout);
   return branch ? { branch } : { error: answer.code === 1 ? `no free branch name for "${title}"; tried ${names.join(", ")}` : lastLine(answer.stderr, answer.stdout) };

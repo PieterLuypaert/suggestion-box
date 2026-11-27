@@ -597,10 +597,14 @@ Where it shows:
   it.
 
 What one click does:
-1. Picks the branch the way parallel-tickets names them: a type and three to five words from the
-   title, lowercase, no number: `fix/formatdate-throws-null-date`. The type is `fix`, or `docs`
-   or `chore` when the note is about those. `issues branch` checks the name: taken gets `-2`,
-   `ci:` or `invalid` gets another name.
+1. Picks the branch the way the repo's tickets are named: the person's Claude (Sonnet, no tools, an
+   empty folder) proposes a type and three to five words, lowercase, no number, with the titles and
+   branches of the repo's earlier parallel tickets (`<git-common-dir>/herdr-parallel-issues/*.json`)
+   as examples, leaving out `major/` and the names the box made from a title's words. The type is
+   a Conventional Commits one, or `cleanup` where the examples use it. A name that breaks those
+   rules, or no answer within 30 seconds, falls back to the title's words:
+   `fix/formatdate-throws-null-date`, `docs` or `chore` when the note is about those. `issues
+   branch` checks the name: taken gets `-2`, `ci:` or `invalid` gets another name.
 2. Runs, in a background terminal of herdr-core in the project's main checkout:
 
    ```

@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
-import { loginShell } from "../cli/box/fix.js";
+import { claudeBranch, loginShell } from "../cli/box/fix.js";
 import { branchCandidates, fixGate, fixType, lastLine, pickBranch, readLaunch } from "../mods/suggestion-box/fix.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
@@ -55,8 +55,9 @@ describe("when Fix in new tab shows", () => {
   });
 });
 
-// A filed note in a repo whose origin is on GitHub, and a stand-in launcher beside a hagent.
-function setup({ knowsSpace = true, hagent = true, taken = [], fail = "" } = {}) {
+// A filed note in a repo whose origin is on GitHub, a stand-in launcher beside a hagent, and a
+// stand-in claude that names the branch `name` (or fails without one), logging how it was asked.
+function setup({ knowsSpace = true, hagent = true, taken = [], fail = "", name = null } = {}) {
   const repo = makeRepo();
   git(repo, "update-ref", "refs/remotes/origin/main", "main");
   const box = join(tempDir(), "box");
@@ -78,7 +79,11 @@ esac
 `);
   chmodSync(launcher, 0o755);
   if (hagent) writeFileSync(join(dir, "hagent"), "#!/bin/sh\n");
-  const env = { SUGGESTION_BOX_HOME: box, SUGGESTION_BOX_LAUNCHER: launcher, SHELL: "/bin/sh", HOME: tempDir("home-") };
+  const claude = join(dir, "claude");
+  const said = name ? `echo '${JSON.stringify({ is_error: false, structured_output: { branch: name } })}'` : 'echo "stand-in: no name" >&2; exit 1';
+  writeFileSync(claude, `#!/bin/sh\n{ echo "cwd=$PWD"; for a in "$@"; do printf '%s\\n--\\n' "$a"; done; } > "${dir}/claude.log"\n${said}\n`);
+  chmodSync(claude, 0o755);
+  const env = { SUGGESTION_BOX_HOME: box, SUGGESTION_BOX_LAUNCHER: launcher, SUGGESTION_BOX_CLAUDE: claude, SHELL: "/bin/sh", HOME: tempDir("home-") };
   return { repo, box, file, dir, id: note.id, env };
 }
 
@@ -107,6 +112,40 @@ describe("box.js fix", () => {
     expect(noteOf(s).fix).toMatchObject({ branch: "fix/formatdate-throws-null-date-2", tab: "tb2", pane: "t2", space: "sp1" });
     const read = await run(["read", s.repo], s.env);
     expect(read.history[0].actions).toEqual([]);
+  });
+
+  test("Claude names the branch like the repo's own tickets; a taken name gets -2", async () => {
+    const s = setup({ name: "fix/null-due-date-breaks-export", taken: ["fix/null-due-date-breaks-export"] });
+    const records = join(s.repo, ".git", "herdr-parallel-issues");
+    mkdirSync(records, { recursive: true });
+    writeFileSync(join(records, "700.json"), JSON.stringify({ ticket: 700, repo: "acme/shop", title: "Thumbnails are made but never served", branch: "cleanup/unused-thumbnail-copies", launched_at: "2026-11-20T10:00:00Z" }));
+    writeFileSync(join(records, "701.json"), JSON.stringify({ ticket: 701, repo: "acme/shop", title: "Save on a document drops the last keystrokes", branch: "fix/save-document-drops-last-keystrokes", launched_at: "2026-11-21T10:00:00Z" }));
+    const answer = await run(["fix", s.repo, s.id, "sp1"], s.env);
+    expect(answer).toMatchObject({ ok: true, branch: "fix/null-due-date-breaks-export-2" });
+    const [branch, launch] = calls(s);
+    expect(branch).toStartWith(`${s.repo}|branch fix/null-due-date-breaks-export fix/null-due-date-breaks-export-2 fix/null-due-date-breaks-export-3 fix/formatdate-throws-null-date`);
+    expect(launch).toEndWith("--branch fix/null-due-date-breaks-export-2");
+    const asked = readFileSync(join(s.dir, "claude.log"), "utf8");
+    // An example the person named counts; the box's own title-words name does not.
+    expect(asked).toContain("- Thumbnails are made but never served → cleanup/unused-thumbnail-copies");
+    expect(asked).not.toContain("fix/save-document-drops-last-keystrokes");
+    expect(asked).toContain("one of: fix, feat, refactor, perf, docs, chore, ci, cleanup.");
+    expect(asked).toContain("Title: formatDate throws on a null date");
+    expect(asked).toContain("Problem: Invoices without a due date crash the PDF export.");
+    expect(asked).toContain("--tools\n--\n\n--\n");
+    expect(asked).not.toContain(`cwd=${s.repo}`);
+  });
+
+  test("naming never throws, also when claude cannot even start", async () => {
+    expect(await claudeBranch({ title: "formatDate throws on a null date" }, [], { SUGGESTION_BOX_CLAUDE: "/no\0such/claude" })).toBeNull();
+  });
+
+  test("a name that breaks the rules, or a Claude that fails: the title's words", async () => {
+    const wrong = setup({ name: "major/null-due-date" });
+    expect((await run(["fix", wrong.repo, wrong.id, "sp1"], wrong.env)).branch).toBe("fix/formatdate-throws-null-date");
+    const failing = setup();
+    expect((await run(["fix", failing.repo, failing.id, "sp1"], failing.env)).branch).toBe("fix/formatdate-throws-null-date");
+    expect(calls(failing)[0]).toStartWith(`${failing.repo}|branch fix/formatdate-throws-null-date `);
   });
 
   test("a ticket the launcher started for the issue another way is its fix: shown, and never a second one", async () => {

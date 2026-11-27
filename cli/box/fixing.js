@@ -1,15 +1,16 @@
 // Fix in new tab: a filed issue started as a ticket through the parallel-tickets launcher.
 import { fold, stateOf } from "../../mods/suggestion-box/events.js";
 import { allows, recordFix, startFix, withStaleFix } from "../../mods/suggestion-box/rules.js";
-import { freeBranch, gateFor, launchFix } from "./fix.js";
+import { claudeBranch, freeBranch, gateFor, launchFix } from "./fix.js";
 import { githubRepo } from "../../mods/suggestion-box/issue.js";
 import { ticketRecords } from "../shared/git.js";
 import { loadNote, update } from "./note-files.js";
 import { withTicket } from "./read.js";
 
-// Fix in new tab: a free branch, then `issues launch --space` opens the ticket's tab. The note
-// keeps the branch, so the fix never starts twice, or the launcher's last line when it failed.
-export function fix(project, id, space, env, now) {
+// Fix in new tab: a branch named like the repo's tickets, free, then `issues launch --space` opens the
+// ticket's tab. The note keeps the branch, so the fix never starts twice, or the launcher's last line
+// when it failed.
+export async function fix(project, id, space, env, now) {
   const loaded = loadNote(project.dir, id);
   if (!loaded) return { error: `there is no note ${id}` };
   const view = fold(loaded.note, loaded.events.map((e) => e.event));
@@ -27,7 +28,10 @@ export function fix(project, id, space, env, now) {
     return { note: startFix(current, at, space) };
   }, { foldEvents: true });
   if (started.error) return started;
-  const named = freeBranch(project.repo.top, view.filed?.title ?? view.title, env);
+  const title = view.filed?.title ?? view.title;
+  const problem = view.filed?.sections?.problem ?? view.sections?.problem;
+  const preferred = await claudeBranch({ title, problem }, tickets, env);
+  const named = freeBranch(project.repo.top, title, env, preferred);
   const opened = named.error ? named : launchFix(project.repo.top, { space, ticket: view.issue.number, branch: named.branch }, env);
   update(project, id, ({ view: fresh }) => ({ note: recordFix(fresh, now.toISOString(), { ...opened, space }) }), { foldEvents: true });
   return opened.error ? { error: opened.error } : { ok: true, ...opened };

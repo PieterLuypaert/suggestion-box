@@ -2,10 +2,10 @@
 import { expect, test } from "bun:test";
 import { byNextStep, filedStep } from "../mods/suggestion-box/filed-step.js";
 
-const filed = { id: "a", issue: { number: 812, boards: [{ title: "QIT", column: "Backlog" }] } };
+const filed = { id: "a", issue: { number: 812, boards: [{ title: "Shop", column: "Backlog" }] } };
 
 test("ready: on its board, start the fix whenever you like", () => {
-  expect(filedStep(filed)).toEqual({ kind: "ready", text: "On QIT › Backlog · start the fix whenever you like" });
+  expect(filedStep(filed)).toEqual({ kind: "ready", text: "On Shop › Backlog · start the fix whenever you like" });
   expect(filedStep({ issue: { number: 3 } }).text).toBe("Filed · start the fix whenever you like");
 });
 

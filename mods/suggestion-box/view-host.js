@@ -26,8 +26,9 @@ export const CHECK_MS = 240000;
 // cli/box/file.js). A filing the panel gives up on is found again by the next Create issue.
 export const FILE_MS = 330000;
 
-// Fix in new tab: issues branch (60 s at most), then issues launch (240 s at most).
-export const FIX_MS = 330000;
+// Fix in new tab: Claude names the branch (finding claude 10 s, its answer 30 s at most), issues
+// branch (60 s at most), then issues launch (240 s at most).
+export const FIX_MS = 360000;
 
 export const LOOKUP_MS = 200000;
 

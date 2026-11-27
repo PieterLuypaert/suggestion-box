@@ -157,8 +157,12 @@ start: through `issues launch` of the parallel-tickets launcher
 worktree and stack, the ticket's prompt (`/ship-issue <n>`) and the record behind
 `/parallel-tickets status` are the launcher's own; the box builds nothing by hand.
 
-- The branch is named as parallel-tickets names them: a type and the title's words, such as
-  `fix/formatdate-throws-null-date` (`docs/` or `chore/` when the note is about those). The
+- The branch is named the way your repo's tickets are: your own Claude (Sonnet, no tools, none of
+  your settings or memory, in an empty folder) proposes a type and three to five words, such as
+  `fix/format-date-throws-null`, with the titles and branches of the repo's earlier
+  parallel tickets as examples. The type is a Conventional Commits one (`fix`, `feat`, `refactor`,
+  `perf`, `docs`, `chore`, `ci`), or `cleanup` where your tickets use it. When Claude cannot, or
+  its name breaks those rules, the title's words name it (`fix/formatdate-throws-null-date`). The
   launcher's `issues branch` checks it; a name that is taken gets `-2`.
 - The launcher runs through your login shell from the project's main checkout, with
   `--space <id>`, so the tab opens in the space you are in, and the box stays where it is.
