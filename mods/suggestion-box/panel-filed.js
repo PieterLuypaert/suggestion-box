@@ -1,8 +1,8 @@
 // A filed note: its issue, its boards, its fix, and once solved the words that close it.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { filedStep } from "./filed-step.js";
-import { actionsRow, card, link, plainButton } from "./panel-parts.js";
+import { filedStep, isOffBoard } from "./filed-step.js";
+import { actionsRow, card, link, plainButton, stepColor } from "./panel-parts.js";
 
 // A solved note in the history: where it was solved, and whether its fix landed yet.
 export function solvedLine(note) {
@@ -23,7 +23,10 @@ export function filedLines(s, note, { withNeeds = true } = {}) {
       .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
     .when(Boolean(note.issue?.closed), (el) => el.child(div().text_color(t.muted).child(`Issue #${issue.number} closed`)))
     .when(Boolean(issue.boards?.length), (el) => el.child(div().text_color(t.muted).whitespace_normal().child(`On board ${issue.boards.map((b) => (b.column ? `${b.title} › ${b.column}` : b.title)).join(", ")}`)))
-    .when(Boolean(note.fix?.branch) && !note.issue?.closed, (el) => el.child(link(t, `fixing:${note.id}`, `Fixing in ${note.fix.branch} ↗`, (_e, cx) => s.act("jump-fix", note, cx))))
+    // The branch keeps to one line, whole or cut at its end, never broken at its slash.
+    .when(Boolean(note.fix?.branch) && !note.issue?.closed, (el) => el.child(v_flex().gap(2)
+      .child(h_flex().gap(6).items_center().child(div().text_color(t.muted).child("Being fixed in its own tab")).child(link(t, `fixing:${note.id}`, "Go to its tab ↗", (_e, cx) => s.act("jump-fix", note, cx))))
+      .child(div().truncate().text_color(t.muted).child(note.fix.branch))))
     .when(Boolean(note.fix?.starting) && !note.fix?.isStale, (el) => el.child(div().text_color(t.muted).child("A fix is starting in a new tab…")))
     .when(Boolean(note.fix?.isStale), (el) => el.child(div().text_color(t.working).whitespace_normal().child("A fix was starting but never reported back. Look for its tab before you start it again.")))
     .when(Boolean(note.fixError) && !note.fix, (el) => el.child(div().text_color(t.blocked).whitespace_normal().child(`Fix in new tab did not start: ${note.fixError.why}`)))
@@ -41,7 +44,7 @@ export function needsYou(s, note, { saysBoard = true } = {}) {
   const isTooLate = Boolean(issue.closed) || note.solved?.landed?.state === "landed";
   const addToBoard = plainButton(t, `board:${note.id}`, "Add to board", (_e, cx) => s.act("board", note, cx));
   return v_flex().gap(4).text_size(12)
-    .when(Boolean(note.board?.error), (el) => el.child(saysBoard
+    .when(isOffBoard(note), (el) => el.child(saysBoard
       ? h_flex().gap(8).items_center()
         .child(div().flex_1().min_w(0).whitespace_normal().text_color(t.working).child(`Not on the board: ${note.board.error}`))
         .child(addToBoard)
@@ -57,7 +60,7 @@ export function needsYou(s, note, { saysBoard = true } = {}) {
 export function filedCard(s, note) {
   const { t } = s;
   const step = filedStep(note);
-  const color = { needs: t.working, working: t.ansi4, ready: t.ansi2, done: t.dim }[step.kind];
+  const color = stepColor(t, step.kind);
   const issue = note.issue ?? {};
   return card(t, `filed:${note.id}`, { edge: step.kind === "needs" ? t.working : null })
     .child(div().font_medium().whitespace_normal().child(note.filed?.title ?? note.title))
@@ -70,6 +73,7 @@ export function filedCard(s, note) {
       .child(link(t, `issue:${note.id}`, `#${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
       .when(Boolean(note.fix?.branch) && !issue.closed, (el) => el.child(link(t, `fixing:${note.id}`, "Go to its tab ↗", (_e, cx) => s.act("jump-fix", note, cx))))
       .child(div().child(note.age)))
-    .child(needsYou(s, note, { saysBoard: false }))
+    // The board's failure is said once: in the first line, or here when something else came first.
+    .child(needsYou(s, note, { saysBoard: !step.isBoard }))
     .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "fix", isBusy: (a) => a === "fix" && Boolean(s.fixing?.has(note.id)) })));
 }

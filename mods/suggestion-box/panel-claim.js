@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { claimKey, claimVerdict } from "./proofs.js";
 import { filedLines, needsYou } from "./panel-filed.js";
-import { actionsRow, card, metaRow } from "./panel-parts.js";
+import { actionsRow, card, link, metaRow } from "./panel-parts.js";
 
 // Verdict first: what the three proofs add up to, each proof in a few words, the claim on one quiet
 // line, and the rest (the agent's words, Claude's answer, the diff, the issue) behind Details.
@@ -19,7 +19,7 @@ export function verifyCard(s, note) {
     .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
     .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed before, but ${claim.neverLanded.how}.`)))
     .child(verdictBlock(t, verdict))
-    .when(verdict.rows[1].state === "unknown" && !isVerifying, (el) => el.child(h_flex().child(div().id(`verify-again:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().tooltip("Your own Claude checks the fix, read-only").on_click((_e, cx) => s.act("verify-again", note, cx)).child("Check again"))))
+    .when(verdict.rows[1].state === "unknown" && !isVerifying, (el) => el.child(h_flex().child(link(t, `verify-again:${note.id}`, "Check again", (_e, cx) => s.act("verify-again", note, cx)).tooltip("Your own Claude checks the fix, read-only"))))
     .when(Boolean(note.issue), (el) => el.child(needsYou(s, note)))
     .child(metaRow(t)
       .child(div().flex_none().child(`note ${note.number} · by ${claim.by === "you" ? "you" : "an agent"}`))
@@ -27,13 +27,14 @@ export function verifyCard(s, note) {
       // the card ends in an ellipsis.
       .child(div().min_w(0).max_w_full().truncate().child(`on ${claim.branch ?? "a branch"}`))
       .when(Boolean(note.issue), (el) => el.child(div().flex_none().child(`issue #${note.issue.number}`))))
-    .child(div().id(`details:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(isOpen ? "Details ▴" : "Details ▾"))
+    .child(h_flex().child(link(t, `details:${note.id}`, isOpen ? "Details ▴" : "Details ▾", (_e, cx) => s.act("expand", note, cx))))
     .when(isOpen, (el) => el.child(details(s, note, found)))
     .child(actionsRow(s, note, { primary: "confirm" }));
 }
 
 const TONE = (t) => ({ fixed: t.ansi2, partly: t.working, "not-fixed": t.blocked, looking: t.dim, unchecked: t.muted });
-const DOT = (t) => ({ holds: t.ansi2, waiting: t.working, partial: t.working, missing: t.working, fails: t.blocked, looking: t.dim, unknown: t.dim });
+// Waiting to land is under way: blue, as in Just filed and the history.
+const DOT = (t) => ({ holds: t.ansi2, waiting: t.ansi4, partial: t.working, missing: t.working, fails: t.blocked, looking: t.dim, unknown: t.dim });
 const GLYPH = { fixed: "✓ ", "not-fixed": "✕ " };
 
 // The verdict in one line, then the three proofs in a few words each, a dot for how each stands.
@@ -115,7 +116,7 @@ function verifyState(t, note, isRunning) {
 function landedState(t, found) {
   if (!found || found.isLoading) return [t.dim, "Looking for its PR…"];
   if (found.error) return [t.dim, "Could not look"];
-  const color = { landed: t.ansi2, waiting: t.working, never: t.blocked }[found.landed.state];
+  const color = { landed: t.ansi2, waiting: t.ansi4, never: t.blocked }[found.landed.state];
   return [color, found.landed.state === "landed" ? `Landed: ${found.landed.how}` : found.landed.how];
 }
 
@@ -127,8 +128,8 @@ function commitList(s, note, change) {
     .child(h_flex().gap(8).items_center().text_size(11.5)
       .child(div().flex_none().font_family(s.mono).text_color(t.muted).child(commit.sha.slice(0, 7)))
       .child(div().flex_1().min_w(0).truncate().child(commit.subject))
-      .child(div().id(`open-at:${commit.sha}`).flex_none().text_color(t.accent).cursor_pointer().tooltip(`Open ${commit.path ?? change.path} as this commit has it`)
-        .on_click((_e, cx) => s.act("open-at", { sha: commit.at ?? commit.sha, path: commit.path ?? change.path, line: firstNewLine(commit.lines) }, cx)).child("Open")))
+      .child(link(t, `open-at:${commit.sha}`, "Open", (_e, cx) => s.act("open-at", { sha: commit.at ?? commit.sha, path: commit.path ?? change.path, line: firstNewLine(commit.lines) }, cx))
+        .tooltip(`Open ${commit.path ?? change.path} as this commit has it`)))
     .child(v_flex().rounded(4).border(1).border_color(t.border).bg(t.background).py(2).font_family(s.mono).text_size(11)
       .children(commit.lines.slice(0, MAX_LINES).map((line) => div().px(6).whitespace_normal()
         .when(line.kind === "-", (el) => el.text_color(t.blocked))

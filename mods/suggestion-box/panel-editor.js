@@ -53,7 +53,7 @@ function field(t, label, input, chipEl, isEmpty) {
 function sectionField(s, note, ed, name) {
   const { t } = s;
   const label = ed.labels[name];
-  const colors = { checking: t.dim, "not-checked": t.dim, checked: t.ansi2, corrected: t.accent, agent: t.muted, unsure: t.working };
+  const colors = { checking: t.dim, "not-checked": t.dim, checked: t.ansi2, corrected: t.ansi4, agent: t.muted, unsure: t.working };
   const input = Textarea.new(ed.fields[name]).w_full().px(8).py(6).rounded(6).border(1).border_color(t.border).bg(t.background).text_size(12.5);
   return field(t, SECTION_LABELS[name], input, label ? chip(t, FIELD_LABELS[label.label], colors[label.label]) : null, !ed.texts.sections[name].trim())
     .when(Boolean(label?.swap), (el) => el.child(link(t, `swap:${note.id}:${name}`, label.swap === "agent" ? "Use the agent's text" : "Use Claude's text", (_e, cx) => s.act("editor-swap", { section: name, to: label.swap }, cx))))

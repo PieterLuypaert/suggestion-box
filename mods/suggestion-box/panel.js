@@ -5,7 +5,7 @@ import { div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { verifyCard } from "./panel-claim.js";
 import { editorCard } from "./panel-editor.js";
-import { byNextStep, filedStep } from "./filed-step.js";
+import { filedGroups, inHistory } from "./filed-step.js";
 import { filedCard } from "./panel-filed.js";
 import { history } from "./panel-history.js";
 import { noteCard } from "./panel-note.js";
@@ -54,7 +54,10 @@ function header(s) {
   const { t, answer } = s;
   const name = answer?.project?.name ?? "";
   const counts = answer?.counts;
-  const sum = counts ? [counts.open ? `${counts.open} open` : "", counts.toVerify ? `${counts.toVerify} to verify` : ""].filter(Boolean).join(" · ") || "empty" : "";
+  const filed = filedGroups(answer?.history, s.justFiled);
+  const needs = filed.needs.length;
+  // In the order the groups come: what asks for you first.
+  const sum = counts ? [counts.toVerify ? `${counts.toVerify} to verify` : "", needs ? `${needs} need${needs === 1 ? "s" : ""} you` : "", counts.open ? `${counts.open} open` : "", filed.justFiled.length ? `${filed.justFiled.length} just filed` : ""].filter(Boolean).join(" · ") || "empty" : "";
   const title = s.view === "settings" ? "Suggestion box · Settings" : s.view === "history" ? "Suggestion box · History" : "Suggestion box";
   const isOn = Boolean(s.collecting?.project);
   return v_flex().flex_none().pl(14).pr(6).py(8).gap(4).border_b(1).border_color(t.border)
@@ -73,13 +76,6 @@ function offLine(s) {
     .child(`Collecting is off for ${s.answer?.project?.name}: its new sessions never hear of the box, and an agent that is already running is told to carry on.`);
 }
 
-// Just filed, what needs you first, and the group says how many do.
-function justFiled(t, notes, draw) {
-  if (!notes.length) return [];
-  const needs = notes.filter((note) => filedStep(note).kind === "needs").length;
-  return [groupTitle(t, `JUST FILED · ${notes.length}${needs ? ` · ${needs} NEED${needs === 1 ? "S" : ""} YOU` : ""}`), ...byNextStep(notes).map(draw)];
-}
-
 function groups(s) {
   const { t, answer } = s;
   if (s.noProject) return messageCard(t, "no-box", "No box here", s.noProject);
@@ -87,18 +83,21 @@ function groups(s) {
   if (!answer.project) return messageCard(t, "no-box", "No box here", "No git repo in this space, so there is no box here.");
   const toVerify = answer.notes.filter((n) => n.state === "to verify");
   const open = answer.notes.filter((n) => n.state === "open");
-  const filed = (answer.history ?? []).filter((n) => n.state === "filed" && s.justFiled?.has(n.id));
-  if (!toVerify.length && !open.length && !filed.length && !s.undo) {
+  const filed = filedGroups(answer.history, s.justFiled);
+  if (!toVerify.length && !open.length && !filed.needs.length && !filed.justFiled.length && !s.undo) {
     return (answer.history ?? []).length
       ? messageCard(t, "empty", `Nothing open in ${answer.project.name}'s box`, "Filed, solved and binned notes are in the history, below. Agents drop a new note here when they spot a problem outside their ticket.", { withBox: true })
       : messageCard(t, "empty", `Nothing in ${answer.project.name}'s box yet`, "Agents drop a note here when they spot a problem outside their ticket. You check it against the code, file it as an issue, or bin it.", { withBox: true });
   }
   const group = (name, notes, draw) => notes.length ? [groupTitle(t, `${name.toUpperCase()} · ${notes.length}`), ...notes.map(draw)] : [];
+  // What asks for you first: claims to verify, then filed issues that need you (also old ones), then
+  // the open notes, then the rest of the issues just filed.
   return v_flex().gap(8).children([
     ...group("To verify", toVerify, (n) => verifyCard(s, n)),
+    ...group("Needs you", filed.needs, (n) => filedCard(s, n)),
     ...(s.undo ? [undoRow(s, s.undo)] : []),
     ...group("Open", open, (n) => (s.editor?.id === n.id ? editorCard(s, n, s.editor) : noteCard(s, n))),
-    ...justFiled(t, filed, (n) => filedCard(s, n)),
+    ...group("Just filed", filed.justFiled, (n) => filedCard(s, n)),
   ]);
 }
 
@@ -110,24 +109,36 @@ function undoRow(s, note) {
       .hover((st) => st.bg(t.hover)).on_click((_e, cx) => s.act("undo", note, cx)).child("Undo"));
 }
 
-// The keys of the note you picked, so the line fits: only what that note can do.
+// The keys of the note you picked, so the line fits: only what that note can do. Picking and opening
+// are in its hover text, and with nothing to pick there is no hint at all.
 const KEYS = { file: "f file", check: "k check", "mark-solved": "s solved", bin: "x bin", confirm: "c confirm", "not-solved": "n not solved" };
 
 function hintsFor(s) {
-  if (s.view !== "list") return "esc back";
-  if (s.editor) return "esc leaves a field · again closes, the draft is kept";
+  if (s.view !== "list") return { text: "esc back" };
+  if (s.editor) return { text: "esc leaves a field · again closes, the draft is kept" };
   // The keys reach the notes of the list: To verify and Open.
-  const note = (s.answer?.notes ?? []).find((one) => one.id === s.selected && (one.state === "open" || one.state === "to verify"));
-  return ["↑↓ pick", note ? "enter open" : null, ...(note?.actions ?? []).map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean).join(" · ");
+  const notes = (s.answer?.notes ?? []).filter((one) => one.state === "open" || one.state === "to verify");
+  const note = notes.find((one) => one.id === s.selected);
+  const keys = [...(note?.actions ?? []).map((a) => KEYS[a]).filter(Boolean), s.undo ? "u undo" : null].filter(Boolean);
+  return {
+    text: keys.length ? keys.join(" · ") : notes.length ? "↑↓ pick a note" : "",
+    tip: notes.length ? "↑↓ picks a note · enter opens it · esc closes the panel" : null,
+  };
 }
 
 function footer(s) {
   const { t, answer } = s;
-  const past = answer?.history ?? [];
+  // What the history shows: the list keeps what needs you and what was just filed.
+  const past = inHistory(answer?.history, s.justFiled);
   const count = (state) => past.filter((n) => n.state === state).length;
   return h_flex().flex_none().h(30).px(12).gap(8).items_center().border_t(1).border_color(t.border).text_size(11.5).text_color(t.dim)
     .child(div().id("history").flex_none().cursor_pointer().hover((st) => st.text_color(t.foreground)).on_click((_e, cx) => s.act("history", null, cx))
       .tooltip(s.view !== "list" ? "Back to the notes" : `${count("filed")} filed · ${count("solved")} solved · ${count("binned")} binned in the last 30 days`)
-      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.filter((n) => !s.justFiled?.has(n.id)).length} ▸`))
-    .child(div().flex_1().min_w(0).truncate().text_right().child(hintsFor(s)));
+      .child(s.view !== "list" ? "◂ Back to the notes" : `History · ${past.length} ▸`))
+    .child(keyHints(s));
+}
+
+function keyHints(s) {
+  const { text, tip } = hintsFor(s);
+  return div().id("keys").flex_1().min_w(0).truncate().text_right().when(Boolean(tip), (el) => el.tooltip(tip)).child(text);
 }
