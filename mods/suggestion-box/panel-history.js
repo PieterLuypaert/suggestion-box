@@ -1,13 +1,17 @@
-// The history: the notes of the last 30 days that are done, by state: solved, filed and binned. Each
+// The history: the notes of the last 30 days that are done, by state: solved, filed (the issue still
+// open on GitHub), closed (the issue closed on GitHub) and binned. Each
 // is a compact row (a dot, its title, one line on how it stands); a click opens the rest. Restore and
 // Fix in new tab stay on the row, as the actions a finished note most often needs.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
+import { age } from "./notes.js";
 import { filedLines } from "./panel-filed.js";
 import { actionButton, actionsRow, groupTitle, messageCard } from "./panel-parts.js";
 
 // A filed issue that was solved since counts as solved: its fix is what you look for.
 const isSolved = (note) => note.state === "solved" || Boolean(note.solved?.confirmed);
+// A filed issue closed on GitHub stands apart from the ones still open there.
+const isClosed = (note) => note.state === "filed" && !isSolved(note) && Boolean(note.issue?.closed);
 const ON_ROW = ["restore", "fix"];
 
 export function history(s) {
@@ -16,7 +20,8 @@ export function history(s) {
   if (!notes.length) return messageCard(t, "empty-history", "Nothing here yet", "Filed, solved and binned notes stay here for 30 days, with Restore and Reopen.");
   const groups = [
     ["Solved", notes.filter(isSolved)],
-    ["Filed", notes.filter((note) => note.state === "filed" && !isSolved(note))],
+    ["Filed · still open", notes.filter((note) => note.state === "filed" && !isSolved(note) && !isClosed(note))],
+    ["Closed on GitHub", notes.filter(isClosed)],
     ["Binned", notes.filter((note) => note.state === "binned")],
   ];
   return v_flex().gap(4).children(groups.flatMap(([name, list]) => (list.length ? [groupTitle(t, `${name.toUpperCase()} · ${list.length}`), ...list.map((note) => pastRow(s, note))] : [])));
@@ -47,11 +52,15 @@ function statusOf(t, note) {
     if (landed?.state === "waiting") return { color: t.working, line: parts(`waiting to land · ${landed.how}`, issue, note.age) };
     return { color: t.ansi2, line: parts(`solved on ${note.solved?.branch ?? "a branch"}`, issue, note.age) };
   }
+  if (isClosed(note)) {
+    const at = note.issue.closed.at && !Number.isNaN(Date.parse(note.issue.closed.at)) ? age(note.issue.closed.at, Date.now()) : null;
+    return { color: t.dim, line: parts(`#${note.issue.number} closed${at ? (at === "now" ? " just now" : ` ${at} ago`) : ""}`, note.fix?.branch ? `fixed in ${note.fix.branch}` : null) };
+  }
   if (note.state === "filed") {
     const issue = note.issue ?? {};
     const board = issue.boards?.length ? issue.boards.map((b) => (b.column ? `${b.title} › ${b.column}` : b.title)).join(", ") : note.board?.error ? "not on the board" : null;
     const fixing = note.fix?.branch ? `fixing in ${note.fix.branch}` : null;
-    return { color: issue.closed ? t.dim : t.accent, line: parts(`#${issue.number}${issue.closed ? " closed" : ""}`, board, fixing, note.age) };
+    return { color: t.accent, line: parts(`#${issue.number} open`, board, fixing, note.age) };
   }
   return { color: t.dim, line: parts("binned", note.age) };
 }
