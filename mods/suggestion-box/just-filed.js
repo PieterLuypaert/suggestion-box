@@ -1,5 +1,5 @@
 // The notes filed while the panel is open, per project. Kept in the app's storage, so a reload of the
-// mod (an update) or of the app keeps them in sight; they go to the history when the panel closes,
+// mod (an update) or of the app keeps them in sight; they go to Filed when the panel closes,
 // when another project shows, and after two hours at the latest.
 const JUST_FILED = "suggestion-box.just-filed";
 

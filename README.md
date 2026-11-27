@@ -57,29 +57,41 @@ the panel is shut. Click it or press `cmd-alt-s` and the panel opens on the righ
 Quarterdeck: one right-hand panel shows at a time, whichever opened last.
 
 The header says what waits for you, in the order the groups come: `shop · 1 to verify · 1 needs you
-· 3 open`.
+· 3 open`. Under it, four filters, each with its count:
+
+- **Now**, where the panel opens: what waits for you, below.
+- **Filed**: every issue still open on GitHub, also one whose fix is solved or landed.
+- **Done**: solved notes and issues closed on GitHub, the last 30 days.
+- **Binned**: binned notes, the last 30 days.
+
+Filed, Done and Binned show one quiet line per note: a dot, its title, and a word on how it stands
+(`needs you`, `starting`, `fixing`, `ready`, `waiting to land`, `solved`, `landed`, `closed`). A
+click opens its details and its buttons: Fix in new tab, Restore, Reopen. Now holds:
 
 - **To verify**: notes claimed solved, with their three proofs, Confirm solved and Not solved (see
   below).
 - **Needs you**: a filed issue you have to act on, also one filed long ago: its fix did not start
   or never reported back, it is not on the board (with **Add to board**), or its fix landed while
   the issue stayed open.
-- **Open**: the notes, newest first. Click a title for its four sections, the file to open it in
+- **Open**: the notes, newest first. The one you picked (the newest until you pick another) is a
+  card with its buttons; the others are one quiet line each, amber when one asks for a look. Click
+  a card's title for its four sections, the file to open it in
   Cursor at its line, the ticket to jump to its tab (or open it on GitHub). A note whose code
   changed since the drop says so, with Mark solved; for a note from a ticket with its own commits,
   main only counts what changed there since the ticket left it.
 - **Check** (or `k`) asks your own Claude to check the note's four sections against the code (see
   below).
 - **File issue** (or `f`) turns the note into an editor and files it as a GitHub issue (see below).
-- **Bin** takes a note away at once, with Undo for five seconds; the history keeps the last 30
-  days of binned, solved and filed notes, with Restore and Reopen.
+- **Bin** takes a note away at once, with Undo for five seconds; Binned keeps it for 30 days, with
+  Restore.
 - **Just filed**: the issues filed while the panel is open, each with its next step, until the
-  panel closes; then they are in the history.
+  panel closes; then they are under Filed.
 - **Collecting** in the header switches drops off and on for this project; the ⚙ for all projects.
 - One colour language: a dot or line in amber needs you, blue is under way, green is ready or
   landed, grey is done. Links are plain text that underlines on hover.
 - Keys, once the panel has the keyboard: ↑ ↓ pick, enter opens, `f` file, `k` check, `s` mark
-  solved, `x` bin, `u` undo, `c` confirm, `n` not solved, esc closes. The footer shows the keys of
+  solved, `x` bin, `u` undo, `c` confirm, `n` not solved, `1` to `4` pick a filter, esc goes back
+  to Now, and there closes. The footer shows the keys of
   the note you picked.
 
 Each note's state allows a fixed set of actions (docs/plan.md section 6c), and the box refuses any
@@ -136,9 +148,9 @@ press **It is not solved**), or what the scan found.
   and **Add to board** tries again; without the `project` scope it says `run gh auth refresh -s
   project`.
 - **Your draft** is kept in the note when you leave a field, close the editor or close the panel.
-- A filed note sits in **Just filed** with its next step until the panel closes, then in the
-  history; whenever it needs you, it shows under **Needs you**. Once it is solved, the box gives you
-  the words for the fix's PR, such as `Closes #812`, with Copy.
+- A filed note sits in **Just filed** with its next step until the panel closes, then under
+  **Filed**; whenever it needs you, it shows under **Needs you**. Once it is solved, the box gives
+  you the words for the fix's PR, such as `Closes #812`, with Copy.
 
 ## Proving a solve
 
@@ -160,7 +172,7 @@ confirm it, and opening it shows three proofs, each with a dot for how it stands
   note you marked solved on main itself (from the check's banner or a change there) has landed
   already.
 
-**Confirm solved** keeps the proofs as they stood and moves the note to the history, where it says
+**Confirm solved** keeps the proofs as they stood and moves the note to **Done**, where it says
 `waiting to land` until the fix is in main, then `landed: PR #44 merged`. The box looks again every
 few minutes. Only when the PR is closed without a merge, or the branch is gone (asked of origin
 itself) with nothing in main, does the note come back to To verify with `the fix never landed`.

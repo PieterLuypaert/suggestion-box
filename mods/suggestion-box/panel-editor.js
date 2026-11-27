@@ -15,7 +15,7 @@ const FIELD_LABELS = { checking: "Checking…", "not-checked": "Not checked", ch
 export function editorCard(s, note, ed) {
   const { t } = s;
   const act = (name, what = note) => (_e, cx) => s.act(`editor-${name}`, what, cx);
-  return v_flex().id(`editor:${note.id}`).px(12).py(10).gap(8).rounded(8).border(1).border_color(t.input).bg(t.raised)
+  return v_flex().id(`editor:${note.id}`).px(16).py(14).gap(12).rounded(8).border(1).border_color(t.input).bg(t.raised)
     .child(h_flex().gap(8).items_center().text_size(11.5).text_color(t.muted)
       .child(div().flex_1().min_w(0).truncate().child(`Filing note ${note.number}`))
       .when(ed.canStartOver, (el) => el.child(link(t, `start-over:${note.id}`, "Start over", act("start-over")))))
@@ -34,7 +34,7 @@ export function editorCard(s, note, ed) {
     .when(Boolean(ed.similar?.length), (el) => el.child(v_flex().gap(2).text_size(11.5)
       .child(div().text_color(t.dim).child("Similar open issues"))
       .children((ed.similar ?? []).map((issue) => link(t, `similar:${issue.number}`, `#${issue.number} ${issue.title} ↗`, (_e, cx) => s.act("open-url", issue, cx), t.foreground)))))
-    .child(h_flex().gap(6).justify_end()
+    .child(h_flex().gap(8).justify_end()
       .child(plainButton(t, `cancel:${note.id}`, "Cancel", act("cancel")))
       .child(ed.canCopy
         ? plainButton(t, `copy-issue:${note.id}`, "Copy issue", act("copy"), { isPrimary: true, isOff: Boolean(ed.off) })
@@ -44,7 +44,7 @@ export function editorCard(s, note, ed) {
 }
 
 function field(t, label, input, chipEl, isEmpty) {
-  return v_flex().gap(3)
+  return v_flex().gap(4)
     .child(h_flex().gap(6).items_center().child(div().text_size(10.5).font_medium().text_color(t.dim).child(label.toUpperCase())).when(Boolean(chipEl), (el) => el.child(chipEl)))
     .child(input)
     .when(isEmpty, (el) => el.child(div().text_size(11.5).text_color(t.working).child("Fill this in before creating")));

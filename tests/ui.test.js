@@ -42,9 +42,10 @@ const scenes = {
   button: `button({ t, counts: { open: 2, toVerify: 1 }, isOn: true, isOff: false, isDim: false, why: "Suggestion box", isWiggling: true, onToggle: () => {} })`,
   "button off and dim": `button({ t, counts: null, isOn: false, isOff: true, isDim: true, why: "No git repo", isWiggling: false, onToggle: () => {} })`,
   "panel with every kind of note": `panel({ ...base, expanded: new Set(["n2", "n3"]), selected: "n2", undo: { id: "u", title: "A binned note" }, notice: "Note 7 moved to To verify.", error: "Could not read the box" })`,
-  "panel with the check: verdicts, the gone banner, a failure, one running": `panel({ ...base, expanded: new Set(["n4"]), checking: new Set(["n2"]) })`,
+  "panel with the check: verdicts, the gone banner, a failure, one running": `panel({ ...base, selected: "n4", expanded: new Set(["n4"]), checking: new Set(["n2"]) })`,
   "panel with collecting off": `panel({ ...base, collecting: { all: false, project: false } })`,
-  "panel history": `panel({ ...base, view: "history" })`,
+  "panel filter: filed": `panel({ ...base, filter: "filed" })`,
+  "panel filter: binned": `panel({ ...base, filter: "binned" })`,
   "panel empty": `panel({ ...base, answer: { ...answer, notes: [], history: [], counts: { open: 0, toVerify: 0 } } })`,
   "panel settings: collecting everywhere and per project": `panel({ ...base, view: "settings", projects })`,
   "panel settings: off everywhere": `panel({ ...base, view: "settings", projects: { ...projects, all: false } })`,
@@ -53,14 +54,17 @@ const scenes = {
   "panel with the editor: labels, the scan, the target, similar issues": `panel({ ...base, expanded: new Set(["n4"]), justFiled: new Set(["h4"]), editor: editor({ hits: [{ kind: "a GitHub token", text: "ghp_abcdefghijklmnopqrstuvwxyz0123456789", blocking: true }, { kind: "an email address", text: "jan@acme.be", blocking: false, isFine: false }, { kind: "a home path", text: "/Users/jan", blocking: false, isFine: true }], similar: [{ number: 12, title: "PDF export crashes", url: "u" }], off: "Remove a GitHub token: ghp_abcdefgh…", canStartOver: true }) })`,
   "panel with the editor: checking, the gone banner, a failed filing": `panel({ ...base, editor: editor({ isChecking: true, labels: { problem: { label: "checking" }, evidence: { label: "checking" }, current: { label: "checking" }, desired: { label: "checking" } }, gone: { on: "main", why: "formatDate returns a dash now" }, similar: null, off: "Waiting for the check", error: "gh could not create the issue: HTTP 410" }) })`,
   "panel with the editor: not solved after all, copy for monday, not checked": `panel({ ...base, editor: editor({ gone: { on: "main", why: "it looks fixed" }, notGone: { reason: "" }, reason, canCopy: true, checkError: "Claude took longer than 90 seconds", line: "This project's tracker is monday: Copy issue puts it on your clipboard", off: null }) })`,
-  "panel history with filed notes": `panel({ ...base, view: "history" })`,
+  "panel filter: done, empty": `panel({ ...base, filter: "done", answer: { ...answer, history: [] } })`,
   "panel with just filed notes: Fix in new tab, a fix running, one starting": `panel({ ...base, justFiled: new Set(["h4", "h6", "h3", "h10"]), fixing: new Set(["h4"]) })`,
   "panel with the three proofs: found, running, never landed": `panel({ ...base, expanded: new Set(["n1", "n6"]), proofs: new Map([["n1:", proofsFound], ["n6:", { isLoading: true }]]), verifying: new Set(["n6:"]) })`,
   "panel with a long claim, a fix in another file and a long answer": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], solved: { ...answer.notes[0].solved, branch: "fix/invoice-drawer-reopens-on-the-next-customer-page-after-leaving" }, verify: { verdict: "verified", why: "index.tsx line 25 adds a useEffect whose cleanup calls hideInvoiceDrawer. The store's actions object is created once, so the reference is stable and the cleanup runs only on unmount.", test: { found: true, assertsFix: true } } }] }, proofs: new Map([["n1:", { change: { ref: "r", path: "src/store.ts", commits: [], elsewhere: [{ sha: "415d818b35aa", subject: "fix: hide the invoice drawer when its page unmounts", files: ["apps/web/src/invoice-drawer-mobile/index.tsx", "apps/web/src/invoice-drawer-mobile/index.test.tsx", "a.ts", "b.ts"] }] }, landed: { state: "waiting", how: "no PR yet" } }]]) })`,
   "panel with a claim that looks fixed, details open": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [answer.notes[0]] }, proofs: new Map([["n1:", { ...proofsFound, landed: { state: "landed", how: "PR #44 merged" } }]]) })`,
   "panel with claims: waiting to land, not fixed, still looking, a check that failed": `panel({ ...base, answer: { ...answer, notes: [answer.notes[0], { ...answer.notes[1], verify: { verdict: "not_fixed", why: "still throws" } }, { ...answer.notes[0], id: "n7", number: 7, verify: null }, { ...answer.notes[0], id: "n8", number: 8, verify: null }] }, proofs: new Map([["n1:", proofsFound], ["n6:", proofsFound], ["n7:", { isLoading: true }], ["n8:", proofsFound]]), verifying: new Set(["n7:"]), verifyAsked: new Set(["n7:", "n8:"]), verifyFailed: new Set(["n8:"]) })`,
-  "panel history by state, one row open": `panel({ ...base, view: "history", expanded: new Set(["h3"]) })`,
-  "panel history with a fix's branch, its row open": `panel({ ...base, view: "history", expanded: new Set(["h6"]) })`,
+  "panel filter: done, one row open": `panel({ ...base, filter: "done", expanded: new Set(["h2"]) })`,
+  "panel filter: filed, a fix starting from its row": `panel({ ...base, filter: "filed", expanded: new Set(["h4"]), fixing: new Set(["h4"]) })`,
+  "panel with the editor and another note picked": `panel({ ...base, selected: "n3", editor: editor({}) })`,
+  "panel filter: filed, a landed issue still open, its row open": `panel({ ...base, filter: "filed", expanded: new Set(["h12"]), answer: { ...answer, history: [...answer.history, { id: "h12", number: 16, title: "Totals skip the discount", state: "filed", issue: { number: 816, url: "u" }, solved: { branch: "fix/totals-discount", confirmed: { at: "t" }, landed: { state: "landed", how: "PR #41 merged" } }, age: "3d", actions: [] }] } })`,
+  "panel filter: filed, a fix's branch, its row open": `panel({ ...base, filter: "filed", expanded: new Set(["h6"]) })`,
   "panel with the proofs failing": `panel({ ...base, expanded: new Set(["n1"]), answer: { ...answer, notes: [{ ...answer.notes[0], verify: { error: "Claude took longer than 90 seconds" } }] }, proofs: new Map([["n1:", { change: { why: "feat/8511-groups is not here, not even fetched" }, landed: { state: "never", how: "its branch is gone, with no merged PR and no same change in main" } }]]) })`,
   "panel without a project": `panel({ ...base, answer: null, noProject: "No git repo in this space, so there is no box here." })`,
   "panel with a picked claim that never landed": `panel({ ...base, selected: "n1", answer: { ...answer, notes: [answer.notes[0]] }, proofs: new Map([["n1:", { change: { commits: [] }, landed: { state: "never", how: "PR #44 was closed without merging" } }]]) })`,
@@ -70,25 +74,34 @@ const scenes = {
 // The words some scenes must draw, and must not: Herdr prints the element tree it built.
 const words = {
   "panel with every kind of note": {
-    has: ["shop · 1 to verify · 2 need you · 2 open", "TO VERIFY · 2", "NEEDS YOU · 2", "OPEN · 4", "s solved · x bin · u undo", "seen 3×"],
-    hasNot: ["JUST FILED", "↑↓ pick"],
+    has: ["shop · 1 to verify · 2 need you · 2 open", "Now", "8", "Filed", "4", "Done", "5", "Binned", "TO VERIFY · 2", "NEEDS YOU · 2", "OPEN · 4", "s solved · x bin · u undo", "seen 3×", "A note that came back", "A checked note"],
+    hasNot: ["JUST FILED", "↑↓ pick", "History"],
   },
   "panel with just filed notes: Fix in new tab, a fix running, one starting": {
     has: ["shop · 1 to verify · 2 need you · 2 open · 3 just filed", "NEEDS YOU · 2", "JUST FILED · 3", "Being fixed in its own tab", "Closed on GitHub", "Not on the board: run gh auth refresh -s project", "↑↓ pick a note"],
     hasNot: ["NEED YOU", "NEEDS YOU · 3"],
   },
-  "panel history by state, one row open": {
-    has: ["SOLVED · 3", "FILED · STILL OPEN · 2", "CLOSED ON GITHUB · 2", "BINNED · 1", "◂ Back to the notes", "esc back"],
-    hasNot: ["Totals round each line instead of the sum", "A fix that never answered"],
+  "panel filter: done, one row open": {
+    has: ["Stale cache key", "landed · 2d", "waiting to land · 1h", "closed · 3d", "Landed: PR #40 merged · 2d", "The key has the currency now.", "Reopen", "esc back to Now"],
+    hasNot: ["README env vars", "Totals round each line instead of the sum", "A fix that never answered", "Unused export in utils/money.ts", "TO VERIFY"],
   },
+  "panel filter: filed": {
+    has: ["Totals round each line instead of the sum", "needs you · now", "fixing · now", "starting · now", "A fix that never answered", "README env vars", "waiting to land · 6d"],
+    hasNot: ["Stale cache key", "Old cache header", "Fix in new tab"],
+  },
+  "panel filter: binned": { has: ["Unused export in utils/money.ts", "1d"], hasNot: ["Restore", "Stale cache key"] },
+  "panel filter: filed, a fix starting from its row": { has: ["Starting the tab…"] },
+  "panel with the editor and another note picked": { has: ["Filing note 4"], hasNot: ["Mark solved", "File issue"] },
+  "panel filter: filed, a landed issue still open, its row open": { has: ["needs you · 3d", "The fix landed (PR #41 merged), but the issue is still open: close it on GitHub · 3d"], hasNot: ["solved · landed: PR #41 merged"] },
+  "panel filter: done, empty": { has: ["Nothing done yet"], hasNot: ["Stale cache key"] },
   "panel with only what needs you: an old issue whose fix landed": {
-    has: ["shop · 1 needs you", "NEEDS YOU · 1", "The fix landed (PR #41 merged), but the issue is still open: close it on GitHub", "History · 1 ▸"],
-    hasNot: ["Nothing open", "↑↓", "OPEN ·"],
+    has: ["shop · 1 needs you", "NEEDS YOU · 1", "The fix landed (PR #41 merged), but the issue is still open: close it on GitHub"],
+    hasNot: ["Nothing waits", "↑↓", "OPEN ·"],
   },
-  "panel empty": { has: ["shop · empty", "Nothing in shop's box yet", "History · 0 ▸"], hasNot: ["↑↓", "NEEDS YOU"] },
+  "panel empty": { has: ["shop · nothing waits", "Nothing in shop's box yet", "Now", "0"], hasNot: ["↑↓", "NEEDS YOU", "History"] },
   "panel with a picked claim that never landed": { has: ["n not solved", "Not solved"], hasNot: ["c confirm", "Confirm solved"] },
   "panel with the proofs failing": { has: ["Not solved", "✕ Its fix never landed"], hasNot: ["Confirm solved", "0 of 3 proofs hold"] },
-  "panel history with a fix's branch, its row open": { has: ["Being fixed in its own tab", "Go to its tab ↗", "fix/fee-rounding-trials"], hasNot: ["Fixing in"] },
+  "panel filter: filed, a fix's branch, its row open": { has: ["Being fixed in its own tab", "Go to its tab ↗", "fix/fee-rounding-trials"], hasNot: ["Fixing in"] },
 };
 
 function sceneMod(name, draw) {
@@ -199,7 +212,7 @@ export default class Scene extends View {
 // opening a note, Settings and the history, the editor (open, its view, a draft, closing), the
 // folder buttons act on, Just filed, and a full draw. Its report must not change when the code is
 // moved around.
-const SMOKE = `REPORT {"answer":true,"shown":"/tmp/shop","expanded":1,"settings":"settings","back":"list","editor":true,"fields":"title,problem,evidence,current,desired","off":"Waiting for the check","line":"Looking up where it goes…","draft":null,"edited":"Another title","closed":false,"justFiled":"n1","drawn":true}`;
+const SMOKE = `REPORT {"answer":true,"shown":"/tmp/shop","expanded":1,"settings":"settings","back":"list/done","editor":true,"fields":"title,problem,evidence,current,desired","off":"Waiting for the check","line":"Looking up where it goes…","draft":null,"edited":"Another title","closed":false,"justFiled":"n1","drawn":true}`;
 
 describe.skipIf(!HERDR)("the panel's own methods", () => {
   test("run by Herdr's engine, with the same outcome as before any move", () => {
@@ -228,8 +241,8 @@ export default class Smoke extends Box {
     r.expanded = this.expanded.size;
     this.act("settings", null, cx);
     r.settings = this.view;
-    this.act("history", null, cx);
-    r.back = this.view;
+    this.act("filter", "done", cx);
+    r.back = this.view + "/" + this.filter;
     this.openEditor(cx, note);
     r.editor = Boolean(this.editor);
     const view = this.editorView();

@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { checkedSummary } from "./check.js";
 import { SECTION_LABELS, SECTIONS } from "./notes.js";
-import { actionsRow, card, chip, link, metaRow } from "./panel-parts.js";
+import { actionsRow, card, chip, link, metaRow, quietRow } from "./panel-parts.js";
 
 export function noteCard(s, note) {
   const { t } = s;
@@ -25,6 +25,16 @@ export function noteCard(s, note) {
     .when(hasGoneBanner(s, note), (el) => el.child(goneBanner(s, note)))
     .when(isOpen || isChecking(s, note), (el) => el.child(sections(t, note, isChecking(s, note))))
     .when(note.actions.length > 0, (el) => el.child(actionsRow(s, note, { primary: "file", isBusy: (a) => a === "check" && isChecking(s, note), leave: hasGoneBanner(s, note) ? ["bin"] : [] })));
+}
+
+// An open note that is not the picked one: one quiet line, amber when it asks for a look (its code
+// changed, it came back, a claim on it was turned down, the check says it is gone). A click picks it,
+// and it opens as its card.
+export function openRow(s, note) {
+  const { t } = s;
+  const checking = isChecking(s, note);
+  const asks = Boolean(note.changed || note.reopened || note.notVerified || note.check?.gone || note.check?.error);
+  return quietRow(t, `row:${note.id}`, { color: checking ? t.ansi4 : asks ? t.working : t.dim, title: note.title, right: checking ? "checking…" : note.age, onClick: (_e, cx) => s.act("pick", note, cx), tip: "Open this note" });
 }
 
 // The check says the problem is gone: its banner holds Mark solved and Bin.
@@ -63,12 +73,12 @@ function sections(t, note, isBusy = false) {
 function goneBanner(s, note) {
   const { t } = s;
   const gone = note.check.gone;
-  return v_flex().gap(6).px(10).py(8).rounded(6).border(1).border_color(t.working).bg(t.chrome)
+  return v_flex().gap(8).px(12).py(10).rounded(6).border(1).border_color(t.working).bg(t.chrome)
     .child(div().text_size(12.5).whitespace_normal().child(`Looks solved on ${gone.on}: ${gone.why}`))
     .child(h_flex().gap(6).items_center()
-      .child(div().id(`gone-bin:${note.id}`).flex_none().h(24).px(8).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
+      .child(div().id(`gone-bin:${note.id}`).flex_none().h(28).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted).cursor_pointer()
         .hover((st) => st.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => s.act("bin", note, cx)).child("Bin"))
       .child(div().flex_1())
-      .child(div().id(`gone-solved:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
+      .child(div().id(`gone-solved:${note.id}`).flex_none().h(28).px(10).flex().items_center().rounded(6).text_size(12).font_medium().cursor_pointer()
         .bg(t.solid).text_color(t.solid_foreground).on_click((_e, cx) => s.act("mark-solved-gone", note, cx)).child("Mark solved")));
 }

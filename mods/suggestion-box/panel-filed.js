@@ -4,7 +4,7 @@ import { h_flex, v_flex } from "gpui-base";
 import { filedStep, isOffBoard } from "./filed-step.js";
 import { actionsRow, card, link, plainButton, stepColor } from "./panel-parts.js";
 
-// A solved note in the history: where it was solved, and whether its fix landed yet.
+// A solved filed note: where it was solved, and whether its fix landed yet.
 export function solvedLine(note) {
   const landed = note.solved?.landed;
   if (landed?.state === "landed") return `Solved · landed: ${landed.how}`;
@@ -13,14 +13,14 @@ export function solvedLine(note) {
 
 // A filed note: its issue, how the board step went, and once solved the words that close it. With
 // withNeeds false the lines that need you (needsYou below) are left out, for a card that shows them
-// already.
-export function filedLines(s, note, { withNeeds = true } = {}) {
+// already; with withSolve false the solve line, for a row whose first line says it.
+export function filedLines(s, note, { withNeeds = true, withSolve = true } = {}) {
   const { t } = s;
   const issue = note.issue ?? {};
   return v_flex().gap(4).text_size(12)
     .child(h_flex().gap(8).items_center()
       .child(link(t, `issue:${note.id}`, `Filed #${issue.number} ↗`, (_e, cx) => s.act("open-url", note, cx)))
-      .when(Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
+      .when(withSolve && Boolean(note.solved?.confirmed), (el) => el.child(div().text_color(t.muted).child(solvedLine(note).replace(/^Solved/, "solved")))))
     .when(Boolean(note.issue?.closed), (el) => el.child(div().text_color(t.muted).child(`Issue #${issue.number} closed`)))
     .when(Boolean(issue.boards?.length), (el) => el.child(div().text_color(t.muted).whitespace_normal().child(`On board ${issue.boards.map((b) => (b.column ? `${b.title} › ${b.column}` : b.title)).join(", ")}`)))
     // The branch keeps to one line, whole or cut at its end, never broken at its slash.

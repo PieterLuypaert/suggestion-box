@@ -8,10 +8,10 @@ All notable changes to the suggestion box. The format follows
 
 ### Added
 
-- One card design across the panel, as Settings' Collecting everywhere card: every note, claim, filed
-  note, history entry and project is a raised card with its title, a calm line under it and its
-  buttons; the main action is filled and last, Bin sits quiet on the far left; the header takes two
-  lines so the project's name is never cut off; the footer shows only the keys of the picked note.
+- One card design across the panel, as Settings' Collecting everywhere card: a claim, a filed note,
+  the picked open note and a project are raised cards with their title, a calm line under it and
+  their buttons; the main action is filled and last, Bin sits quiet on the far left; the header
+  gives the project's name a line of its own, so it is never cut off.
 - A pixel icon for the box, as Parrot has: a wooden box with a note going into its slot, in colour,
   grey while collecting is off, and larger in an empty box.
 - A checked note says who checked it, when and what it found ("Checked by your Claude · 2m ago · 3
@@ -26,13 +26,21 @@ All notable changes to the suggestion box. The format follows
 
 ### Changed
 
+- Filters on the main screen instead of a History page: Now (what waits for you), Filed (issues
+  still open on GitHub), Done (solved and closed, the last 30 days) and Binned, as tabs with their
+  counts under the header; keys 1 to 4 pick them, esc goes back to Now.
+- Quiet rows: Filed, Done and Binned show one line per note (a dot, its title, a word on how it
+  stands), and a click opens its details and buttons. In Now, the open note you picked is a card
+  with its buttons and the others are one line each, so a full box stays readable.
+- More room everywhere in the panel: around the header, the filters, the rows and the cards, and
+  between their lines and buttons; buttons are a little taller.
 - What needs you comes first: a Needs you group under To verify holds every filed issue you have to
-  act on, also one filed long ago that the history would hide (a fix that did not start or never
-  reported back, not on the board, a fix that landed while the issue stayed open), and the header
-  counts it: `shop · 1 to verify · 1 needs you · 3 open`. Just filed keeps the rest.
+  act on, also one filed long ago (a fix that did not start or never reported back, not on the
+  board, a fix that landed while the issue stayed open), and the header counts it: `shop · 1 to
+  verify · 1 needs you · 3 open`. Just filed keeps the rest.
 - One colour language across the panel: amber only for what needs you, blue under way (also
-  waiting to land, in a claim's proofs and the history), green ready or landed, grey done. Links are
-  plain text that underlines on hover instead of the theme's accent, which can be as orange as
+  waiting to land, in a claim's proofs and under Done), green ready or landed, grey done. Links
+  are plain text that underlines on hover instead of the theme's accent, which can be as orange as
   amber; Corrected is blue, and `seen 3×` is no longer amber.
 - The footer shows only the keys of the note you picked (↑↓ and enter are in its hover text), "↑↓
   pick a note" while none is picked, and nothing when there is nothing to pick.
@@ -47,8 +55,6 @@ All notable changes to the suggestion box. The format follows
   ("Looks fixed · 3 of 3 proofs hold", "Your Claude says it is not fixed", "Looks fixed, but it never
   landed"), each proof in a few words under it, and the claim, its commits and its issue under
   Details. Claude's independent check starts by itself, one claim at a time.
-- The history is compact rows by state: Solved, Filed · still open, Closed on GitHub and Binned, each
-  row a dot and one line on how it stands; a click opens its details and the rest of its buttons.
 - Just filed leads each card with what it still needs and a dot: amber when it needs you, blue while
   its fix is under way, green when it is ready for a fix, grey once closed (with the PR that fixed
   it). What needs you comes first, and the group title counts it.

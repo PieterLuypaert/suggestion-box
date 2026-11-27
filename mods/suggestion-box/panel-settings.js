@@ -11,8 +11,8 @@ export function settingsView(s) {
   if (!found) return div().px(8).py(10).text_size(12).text_color(t.dim).child("Looking at your spaces…");
   if (found.error) return div().px(8).py(10).text_size(12).text_color(t.blocked).whitespace_normal().child(`Could not list the projects: ${found.error}`);
   const isAll = found.all !== false;
-  return v_flex().gap(8)
-    .child(v_flex().gap(6).px(12).py(10).rounded(8).bg(t.raised)
+  return v_flex().gap(12)
+    .child(v_flex().gap(8).px(16).py(14).rounded(8).bg(t.raised)
       .child(h_flex().gap(8).items_center()
         .child(div().flex_1().font_medium().child("Collecting everywhere"))
         .child(toggle(t, "collect-all", isAll ? "On" : "Off", isAll, "Turn the box on or off for every project", (_e, cx) => s.act("collect-all", null, cx))))
@@ -30,7 +30,7 @@ function projectRow(s, project, isAll) {
   const counts = project.counts ?? {};
   const words = [counts.toVerify ? `${counts.toVerify} to verify` : "", counts.open ? `${counts.open} open` : "", counts.filed ? `${counts.filed} filed` : ""].filter(Boolean).join(" · ") || "no notes";
   const isOn = isAll && project.isOn;
-  return h_flex().id(`project:${project.key}`).px(12).py(10).gap(10).items_center().rounded(8).bg(t.raised).border(1).border_color(project.isHere ? t.input : t.raised)
+  return h_flex().id(`project:${project.key}`).px(16).py(14).gap(12).items_center().rounded(8).bg(t.raised).border(1).border_color(project.isHere ? t.input : t.raised)
     .when(!isAll, (el) => el.opacity(0.5))
     .child(v_flex().flex_1().min_w(0).gap(2)
       .child(h_flex().gap(6).items_center()

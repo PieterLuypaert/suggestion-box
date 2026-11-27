@@ -2,6 +2,7 @@
 import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
+import { FILTERS } from "./filters.js";
 import { canConfirm, claimKey, PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
@@ -15,10 +16,15 @@ function notSolvedReason(note) {
   return "You said it is not solved.";
 }
 
+const FILTER_KEYS = ["1", "2", "3", "4"];
+const AZERTY_KEYS = ["&", "é", "\"", "'"];
+
 // The view's methods for this part, added to it in main.js.
 export const panelCopy = {
   initPanel(cx) {
     this.view = "list";
+    // The filter shown: now, filed, done or binned. Now each time the panel opens.
+    this.filter = "now";
     this.expanded = new Set();
     // Notes the person just acted on, until when: their own move is no news.
     this.mine = new Map();
@@ -52,11 +58,12 @@ export const panelCopy = {
       }
     });
     // Hiding the panel does not close this copy: when it goes, the draft is kept in the note and
-    // what was just filed moves to the history.
+    // what was just filed moves to Filed.
     cx.timer.every(SHOWN_MS, (cx) => {
       const shown = isShown(BLOCK);
       if (this.wasShown && !shown) {
         this.closeEditor(cx);
+        this.filter = "now";
         this.justFiled.clear();
         this.proofs.clear();
         this.verifyAsked.clear();
@@ -95,7 +102,16 @@ export const panelCopy = {
       this.projects = null;
       if (this.view === "settings") this.loadProjects(cx);
     }
-    if (name === "history") this.view = this.view === "list" ? "history" : "list";
+    if (name === "filter") {
+      this.view = "list";
+      this.filter = note;
+    }
+    // A row in Open: it becomes the card, with its buttons. A note being filed closes, its draft
+    // kept, so one card shows at a time.
+    if (name === "pick") {
+      this.selected = note.id;
+      if (this.editor && this.editor.id !== note.id && !this.editor.isFiling) this.closeEditor(cx);
+    }
     if (name === "expand") this.toggleExpanded(note, cx);
     if (name === "verify-again") return this.verifyClaim(cx, note, { again: true });
     if (name === "open-at") return this.openAt(note);
@@ -108,7 +124,10 @@ export const panelCopy = {
     if (name === "collect-project") return this.write(cx, ["collecting", where, note.isOn ? "off" : "on", "--key", note.key], (cx) => this.loadProjects(cx));
     if (name === "undo") return this.unbin(cx);
     if (name === "check") return this.check(cx, note);
-    if (name === "file") return this.openEditor(cx, note);
+    if (name === "file") {
+      this.selected = note.id;
+      return this.openEditor(cx, note);
+    }
     if (name === "open-url") return this.openUrl(note);
     if (name === "copy") return this.copyCloses(cx, note);
     if (name === "board") return this.write(cx, ["board", where, note.id]);
@@ -263,10 +282,20 @@ export const panelCopy = {
     }
     const m = e.modifiers ?? {};
     if (m.platform || m.control || m.alt) return;
-    // Settings and the history show no notes: their keys do nothing there, but esc goes back.
-    if (this.view !== "list") {
+    // Keys 1 to 4 pick a filter, also from Settings; on an AZERTY keyboard the same keys say & é " '.
+    const filter = FILTERS[FILTER_KEYS.indexOf(e.key)] ?? FILTERS[AZERTY_KEYS.indexOf(e.key)];
+    if (filter && this.answer()?.project) {
+      this.view = "list";
+      this.filter = filter;
+      cx.stop_propagation();
+      return cx.notify();
+    }
+    // Settings and the filters after Now show no notes to pick: their keys do nothing there, but
+    // esc goes back to Now.
+    if (this.view !== "list" || this.filter !== "now") {
       if (e.key !== "escape") return;
       this.view = "list";
+      this.filter = "now";
       cx.stop_propagation();
       return cx.notify();
     }
@@ -275,7 +304,10 @@ export const panelCopy = {
     const note = notes[at] ?? null;
     const k = e.key;
     const can = (action) => Boolean(note?.actions.includes(action)) && (action !== "confirm" || canConfirm(this.proofs.get(claimKey(note))));
-    if (k === "down" || k === "up") this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
+    if (k === "down" || k === "up") {
+      this.selected = notes[Math.max(0, Math.min(notes.length - 1, at + (k === "down" ? 1 : -1)))]?.id ?? null;
+      if (this.editor && this.editor.id !== this.selected && !this.editor.isFiling) this.closeEditor(cx);
+    }
     else if (k === "enter" && note) this.toggleExpanded(note, cx);
     else if (k === "s" && can("mark-solved")) this.act("mark-solved", note, cx);
     else if (k === "x" && can("bin")) this.act("bin", note, cx);
@@ -295,7 +327,7 @@ export const panelCopy = {
     const here = this.here();
     this.watchMoves(cx);
     const key = this.answer()?.project?.key ?? here.none ?? null;
-    // Another project sends what was just filed to the history, also through a moment without a
+    // Another project sends what was just filed to Filed, also through a moment without a
     // project in between (another space being read); the first draw after a reload is no switch.
     const project = this.answer()?.project?.key ?? null;
     if (project) {
@@ -306,6 +338,7 @@ export const panelCopy = {
       this.panelKey = key;
       this.expanded.clear();
       this.selected = null;
+      this.filter = "now";
       this.proofs.clear();
       this.verifyAsked.clear();
       this.verifyFailed.clear();
@@ -325,12 +358,15 @@ export const panelCopy = {
         cx.notify();
       });
     }
+    // The open note that shows as picked is the one the keys act on: the newest, until you pick.
+    if (!this.ordered().some((note) => note.id === this.selected)) this.selected = (this.answer()?.notes ?? []).find((note) => note.state === "open")?.id ?? null;
     // A claim leads with its verdict, so its proofs load as soon as it shows; Claude's check once.
     for (const note of (this.answer()?.notes ?? []).filter((one) => one.state === "to verify")) this.ensureProofs(cx, note);
     const state = {
       t,
       answer: this.answer(),
       view: this.view,
+      filter: this.filter,
       expanded: this.expanded,
       selected: this.selected,
       undo: this.undo,

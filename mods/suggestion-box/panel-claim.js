@@ -34,13 +34,13 @@ export function verifyCard(s, note) {
 }
 
 const TONE = (t) => ({ fixed: t.ansi2, partly: t.working, "not-fixed": t.blocked, looking: t.dim, unchecked: t.muted });
-// Waiting to land is under way: blue, as in Just filed and the history.
+// Waiting to land is under way: blue, as in Just filed and the filters.
 const DOT = (t) => ({ holds: t.ansi2, waiting: t.ansi4, partial: t.working, missing: t.working, fails: t.blocked, looking: t.dim, unknown: t.dim });
 const GLYPH = { fixed: "✓ ", "not-fixed": "✕ " };
 
 // The verdict in one line, then the three proofs in a few words each, a dot for how each stands.
 function verdictBlock(t, verdict) {
-  return v_flex().gap(4)
+  return v_flex().gap(6)
     .child(div().text_size(13).font_medium().text_color(TONE(t)[verdict.tone]).whitespace_normal().child(`${GLYPH[verdict.tone] ?? ""}${verdict.text}`))
     .child(v_flex().gap(3).pl(2).children(verdict.rows.map((row) => h_flex().gap(8).items_center().text_size(12)
       .child(div().flex_none().size(7).rounded(4).bg(DOT(t)[row.state]))
