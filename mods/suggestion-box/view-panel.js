@@ -99,6 +99,7 @@ export const panelCopy = {
   async actOn(name, note, cx) {
     const where = this.shownFolder();
     if (name === "close") return this.close();
+    if (name === "open-settings" && this.view !== "settings") name = "settings";
     if (name === "settings") {
       this.view = this.view === "settings" ? "list" : "settings";
       this.projects = null;

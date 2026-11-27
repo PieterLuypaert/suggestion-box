@@ -76,7 +76,7 @@ function header(s, counts, filter) {
       .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted).child([name, sum].filter(Boolean).join(" · ")))
       // Off everywhere, this project's own switch would change nothing: the header says so and
       // points to Settings, where it is turned back on.
-      .when(Boolean(s.collecting) && s.collecting?.all === false, (row) => row.child(link(t, "collect-everywhere", "Off everywhere", (_e, cx) => s.act("settings", null, cx), t.muted).tooltip("Collecting is off for every project: Settings (⚙) turns it back on")))
+      .when(Boolean(s.collecting) && s.collecting?.all === false, (row) => row.child(link(t, "collect-everywhere", "Off everywhere", (_e, cx) => s.act("open-settings", null, cx), t.muted).tooltip("Collecting is off for every project: Settings (⚙) turns it back on")))
       .when(Boolean(s.collecting) && s.collecting?.all !== false, (row) => row.child(toggle(t, "collect", `Collecting ${isOn ? "on" : "off"}`, isOn, isOn ? `Agents in ${name} drop notes here; switch off and they never hear of the box` : `Agents in ${name} never hear of the box; switch on to collect notes`, (_e, cx) => s.act("collect", null, cx))))))
     .when(Boolean(answer?.project) && s.view !== "settings", (el) => el.child(filterTabs(s, counts, filter)));
 }
