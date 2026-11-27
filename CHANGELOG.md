@@ -37,7 +37,9 @@ All notable changes to the suggestion box. The format follows
   it). What needs you comes first, and the group title counts it.
 - A merged PR shows within a minute while the panel is open: a claim's proofs are looked at again
   every 30 seconds until its fix landed, and the watch of fixes and filed issues runs every minute
-  (every five while the panel is closed) and at once when the panel opens.
+  (every five while the panel is closed) and at once when the panel opens. Claims are looked at one
+  at a time, and looks within 20 seconds share one fetch, so the box never fetches over and over in
+  a repo where agents fetch too.
 
 ### Fixed
 
