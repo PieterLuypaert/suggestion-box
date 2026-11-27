@@ -1,5 +1,5 @@
 // The panel: its state, what a click or a key does, the writes through box.js, and its draw.
-import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
+import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals, window } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
 import { FILTERS } from "./filters.js";
