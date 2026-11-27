@@ -84,7 +84,7 @@ const TIPS = {
   fix: "Start this issue as a ticket in a new tab, through the parallel-tickets launcher",
 };
 
-function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
+export function actionButton(t, note, action, act, isPrimary = false, isBusy = false) {
   if (isBusy) {
     return div().id(`${action}:${note.id}`).flex_none().h(24).px(10).flex().items_center().rounded(6).text_size(12).text_color(t.muted)
       .border(1).border_color(t.border).child(h_flex().gap(6).items_center().child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900)).child(BUSY[action] ?? "Working…"));

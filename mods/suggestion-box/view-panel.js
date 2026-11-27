@@ -2,6 +2,7 @@
 import { checking, exec, focused, nextCommand, notify, run, settings, spaces, terminals } from "herdr";
 import { panel } from "./panel.js";
 import { JustFiled } from "./just-filed.js";
+import { PROOFS_REFRESH_MS } from "./proofs.js";
 import { BLOCK, box, CHECK_MS, EDITORS, isShown, SHOWN_MS, sleep, UNDO_MS } from "./view-host.js";
 
 // What a button is called, for the line that says it failed.
@@ -32,7 +33,12 @@ export const panelCopy = {
     this.editor = null;
     // Proofs 1 and 3 of each claim opened since the panel showed, and the claims Claude is checking.
     this.proofs = new Map();
+    // The claims whose independent check this panel asked for: once each while it is open.
+    this.verifyAsked = new Set();
+    // The claims Claude is checking right now; the others wait their turn.
     this.verifying = new Set();
+    // The claims whose check did not finish (no answer kept): their card offers Check again.
+    this.verifyFailed = new Set();
     // Notes whose fix is starting in a new tab.
     this.fixing = new Set();
     // Notes filed while the panel is open stay in sight until it closes (see just-filed.js).
@@ -53,9 +59,14 @@ export const panelCopy = {
         this.closeEditor(cx);
         this.justFiled.clear();
         this.proofs.clear();
+        this.verifyAsked.clear();
+        this.verifyFailed.clear();
         cx.notify();
       }
       this.wasShown = shown;
+    });
+    cx.timer.every(PROOFS_REFRESH_MS, (cx) => {
+      if (isShown(BLOCK) && (this.answer()?.notes ?? []).some((note) => note.state === "to verify")) cx.notify();
     });
   },
 
@@ -117,11 +128,6 @@ export const panelCopy = {
     this.selected = note.id;
     if (this.expanded.has(note.id)) return this.expanded.delete(note.id);
     this.expanded.add(note.id);
-    // A claim opened: its proofs, and Claude's independent check of it (kept while it holds).
-    if (note.state === "to verify") {
-      this.loadProofs(cx, note);
-      this.verifyClaim(cx, note);
-    }
   },
 
   change(cx, action, note, branch = note.changed?.on) {
@@ -301,6 +307,8 @@ export const panelCopy = {
       this.expanded.clear();
       this.selected = null;
       this.proofs.clear();
+      this.verifyAsked.clear();
+      this.verifyFailed.clear();
       if (this.view === "settings") {
         this.projects = null;
         cx.spawn(async (cx) => this.loadProjects(cx));
@@ -317,6 +325,8 @@ export const panelCopy = {
         cx.notify();
       });
     }
+    // A claim leads with its verdict, so its proofs load as soon as it shows; Claude's check once.
+    for (const note of (this.answer()?.notes ?? []).filter((one) => one.state === "to verify")) this.ensureProofs(cx, note);
     const state = {
       t,
       answer: this.answer(),
@@ -328,6 +338,8 @@ export const panelCopy = {
       editor: this.editorView(),
       proofs: this.proofs,
       verifying: this.verifying,
+      verifyAsked: this.verifyAsked,
+      verifyFailed: this.verifyFailed,
       fixing: this.fixing,
       mono: settings()?.font || "Menlo",
       justFiled: this.justFiled.for(this.answer()?.project?.key),

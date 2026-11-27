@@ -2,9 +2,9 @@
 // read-only snapshots of the code in a temporary folder, and the person's own `claude -p` run in that
 // folder, which keeps every CLAUDE.md, memory and setting of theirs out of it.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 const SNAPSHOT_MS = 45000;
 
@@ -21,12 +21,26 @@ export function snapshot(top, ref, dir) {
   if (unpack.status !== 0) throw new Error(`could not unpack the snapshot of ${ref}: ${unpack.stderr?.trim() || "tar took too long"}`);
 }
 
+// A fetch of the checkout younger than this counts as fresh: while the panel looks at claims every
+// half minute and the watch every minute, they share one fetch, and the box never fetches over and
+// over in a repo where agents fetch too.
+export const FETCH_FRESH_MS = 20000;
+
 // Fetches origin, never waiting on a prompt for a password or a host key, for 20 seconds at most.
 // Without origin or offline the check reads what was fetched last.
-export function fetch(top) {
+export function fetch(top, { now = Date.now() } = {}) {
+  if (now - lastFetch(top) < FETCH_FRESH_MS) return true;
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=10" };
   const result = spawnSync("git", ["-C", top, "fetch", "--quiet", "origin"], { env, timeout: 20000, encoding: "utf8" });
   return result.status === 0;
+}
+
+// When the checkout last fetched (FETCH_HEAD's time), or 0 when it never did.
+function lastFetch(top) {
+  const path = spawnSync("git", ["-C", top, "rev-parse", "--git-path", "FETCH_HEAD"], { encoding: "utf8" }).stdout?.trim();
+  if (!path) return 0;
+  const file = isAbsolute(path) ? path : join(top, path);
+  return existsSync(file) ? statSync(file).mtimeMs : 0;
 }
 
 // claude, wherever it is: SUGGESTION_BOX_CLAUDE (the tests' stand-in), the PATH, the usual places,

@@ -6,8 +6,9 @@ import { chmodSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "../cli/box.js";
 import { changeProof, landedProof } from "../cli/box/proofs.js";
+import { fetch, FETCH_FRESH_MS } from "../cli/box/claude.js";
 import { parseHunks } from "../mods/suggestion-box/lines.js";
-import { landedState, mapRange, pickPr, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
+import { changeRow, claimKey, claimVerdict, landedState, mapRange, pickPr, PROOFS_REFRESH_MS, proofsDue, readVerify, touchingLines, verifyArgs, verifyHolds, verifyPrompt } from "../mods/suggestion-box/proofs.js";
 import { git, makeRepo, NOTE, suggest, tempDir } from "./helpers.js";
 
 const BRANCH = "feat/8504-group-records";
@@ -121,6 +122,23 @@ function setup({ verify = { verdict: "verified", why: "formatDate returns a dash
   const file = join(folder, readdirSync(folder).find((n) => n.endsWith(".json")));
   return { repo, bare, box, dir, file, id: JSON.parse(readFileSync(file, "utf8")).id, env: { SUGGESTION_BOX_HOME: box, SUGGESTION_BOX_CLAUDE: claude } };
 }
+
+describe("one fetch for the looks close together", () => {
+  test("a fetch younger than 20 seconds is used again, an older one is fetched anew", () => {
+    const s = setup();
+    const before = git(s.repo, "rev-parse", "origin/main").trim();
+    const other = join(tempDir("other-"), "shop");
+    git(s.repo, "clone", "-q", s.bare, other);
+    writeFileSync(join(other, "later.txt"), "later\n");
+    git(other, "add", ".");
+    git(other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "later");
+    git(other, "push", "-q", "origin", "HEAD:main");
+    expect(fetch(s.repo)).toBe(true);
+    expect(git(s.repo, "rev-parse", "origin/main").trim()).toBe(before);
+    expect(fetch(s.repo, { now: Date.now() + FETCH_FRESH_MS + 1000 })).toBe(true);
+    expect(git(s.repo, "rev-parse", "origin/main").trim()).not.toBe(before);
+  });
+});
 
 // Rewrites lines of src/invoices.ts (1-based) and commits.
 function edit(repo, message, change) {
@@ -458,5 +476,60 @@ describe("box.js proofs, verify, confirm and watch", () => {
     const shown = await run(["show", s.repo, fix, "src/invoices.ts", "42"], s.env);
     expect(readFileSync(shown.file, "utf8")).toContain("line 42 fixed");
     expect(shown.line).toBe(42);
+  });
+});
+
+describe("the verdict a claim's card leads with", () => {
+  const change = { change: { path: "src/store.ts", commits: [{ sha: "415d818b35aa", path: "src/add-event/index.tsx" }], elsewhere: [] } };
+  const landedAs = (state, how) => ({ ...change, landed: { state, how } });
+  const verified = { verdict: "verified", why: "w", test: { found: true, assertsFix: true } };
+
+  test("all three hold, or the fix still waits to land", () => {
+    expect(claimVerdict({ found: landedAs("landed", "PR #10178 merged"), verify: verified })).toMatchObject({ tone: "fixed", text: "Looks fixed · 3 of 3 proofs hold" });
+    const waiting = claimVerdict({ found: landedAs("waiting", "PR #44 is open"), verify: verified });
+    expect(waiting).toMatchObject({ tone: "fixed", text: "Looks fixed · waiting to land" });
+    expect(waiting.rows.map((r) => [r.name, r.text, r.state])).toEqual([["Change", "415d818 · index.tsx", "holds"], ["Claude", "Verified", "holds"], ["Landed", "PR #44 is open", "waiting"]]);
+  });
+
+  test("not fixed, partly, never landed, no commit found", () => {
+    expect(claimVerdict({ found: landedAs("waiting", "no PR yet"), verify: { verdict: "not_fixed", why: "w" } }).tone).toBe("not-fixed");
+    expect(claimVerdict({ found: landedAs("waiting", "no PR yet"), verify: { verdict: "partly", why: "w" } }).text).toBe("Partly fixed, says your Claude");
+    expect(claimVerdict({ found: landedAs("never", "PR #44 was closed without merging"), verify: verified }).text).toBe("Looks fixed, but it never landed");
+    expect(claimVerdict({ found: { change: { commits: [], elsewhere: [] }, landed: { state: "waiting", how: "no PR yet" } }, verify: verified }).text).toBe("Verified, but no commit of the fix was found");
+  });
+
+  test("still looking: a check running or waiting its turn; one that never ran or failed is not checked", () => {
+    expect(claimVerdict({ found: { isLoading: true }, verify: null }).tone).toBe("looking");
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null, isVerifying: true }).text).toBe("Looking at the proofs…");
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null, isQueued: true }).rows[1]).toEqual({ name: "Claude", text: "waiting its turn…", state: "looking" });
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: null })).toMatchObject({ tone: "unchecked", text: "2 of 3 proofs hold · not checked by your Claude" });
+    expect(claimVerdict({ found: landedAs("landed", "PR #1 merged"), verify: { error: "timeout" } })).toMatchObject({ tone: "unchecked", text: "2 of 3 proofs hold · not checked by your Claude" });
+  });
+
+  test("verified, but the other proofs could not be looked up", () => {
+    expect(claimVerdict({ found: { error: "gh failed" }, verify: verified })).toMatchObject({ tone: "partly", text: "Verified by your Claude, but the change or its PR could not be looked up" });
+  });
+
+  test("a claim's own key: a new claim on the same note is another key", () => {
+    expect(claimKey({ id: "n1", solved: { at: "a" } })).not.toBe(claimKey({ id: "n1", solved: { at: "b" } }));
+  });
+
+  test("proofs are looked at again every half minute until the fix landed", () => {
+    const at = 1_000_000;
+    const waiting = { change: {}, landed: { state: "waiting", how: "PR #3 is open" }, at };
+    expect(proofsDue(undefined, at)).toBe(true);
+    expect(proofsDue(waiting, at + 10000)).toBe(false);
+    // Due a little before the next half-minute beat, so a late beat never skips a round.
+    expect(proofsDue(waiting, at + PROOFS_REFRESH_MS - 5000)).toBe(true);
+    expect(proofsDue(waiting, at + PROOFS_REFRESH_MS + 1)).toBe(true);
+    expect(proofsDue({ ...waiting, isRefreshing: true }, at + PROOFS_REFRESH_MS + 1)).toBe(false);
+    expect(proofsDue({ isLoading: true }, at + PROOFS_REFRESH_MS + 1)).toBe(false);
+    expect(proofsDue({ ...waiting, landed: { state: "landed", how: "PR #3 merged" } }, at + 10 * PROOFS_REFRESH_MS)).toBe(false);
+    expect(proofsDue({ error: "gh failed", at }, at + PROOFS_REFRESH_MS + 1)).toBe(true);
+  });
+
+  test("a fix in another file names that file, and how many more", () => {
+    const elsewhere = { change: { commits: [], elsewhere: [{ sha: "8f329a2aaaa", files: ["a/index.tsx", "a/index.test.tsx"] }] }, landed: { state: "waiting", how: "no PR yet" } };
+    expect(changeRow(elsewhere)).toEqual({ name: "Change", text: "8f329a2 · index.tsx +1", state: "holds" });
   });
 });

@@ -1,41 +1,80 @@
 // A claim waiting to be verified, with its three proofs: the change, the independent check, landed.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { filedLines } from "./panel-filed.js";
-import { actionsRow, card, chip, metaRow } from "./panel-parts.js";
+import { claimKey, claimVerdict } from "./proofs.js";
+import { filedLines, needsYou } from "./panel-filed.js";
+import { actionsRow, card, metaRow } from "./panel-parts.js";
 
+// Verdict first: what the three proofs add up to, each proof in a few words, the claim on one quiet
+// line, and the rest (the agent's words, Claude's answer, the diff, the issue) behind Details.
 export function verifyCard(s, note) {
   const { t } = s;
   const claim = note.solved ?? {};
   const isOpen = s.expanded.has(note.id);
+  const key = claimKey(note);
+  const found = s.proofs?.get(key) ?? null;
+  const isVerifying = isChecking(s, note);
+  const verdict = claimVerdict({ found, verify: note.verify, isVerifying, isQueued: !isVerifying && !s.verifyAsked?.has(key) });
   return card(t, `note:${note.id}`, { isSelected: s.selected === note.id, edge: t.ansi2 })
     .child(div().id(`title:${note.id}`).font_medium().whitespace_normal().cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(note.title))
+    .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed before, but ${claim.neverLanded.how}.`)))
+    .child(verdictBlock(t, verdict))
+    .when(verdict.rows[1].state === "unknown" && !isVerifying, (el) => el.child(h_flex().child(div().id(`verify-again:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().tooltip("Your own Claude checks the fix, read-only").on_click((_e, cx) => s.act("verify-again", note, cx)).child("Check again"))))
+    .when(Boolean(note.issue), (el) => el.child(needsYou(s, note)))
     .child(metaRow(t)
-      .child(div().flex_none().child(`note ${note.number} · claimed by ${claim.by === "you" ? "you" : "an agent"}`))
+      .child(div().flex_none().child(`note ${note.number} · by ${claim.by === "you" ? "you" : "an agent"}`))
       // The branch stays whole: it moves to the next line as one piece, and only a branch wider than
       // the card ends in an ellipsis.
       .child(div().min_w(0).max_w_full().truncate().child(`on ${claim.branch ?? "a branch"}`))
-      .when(Boolean(claim.neverLanded), (el) => el.child(chip(t, "the fix never landed", t.blocked))))
-    .when(Boolean(claim.neverLanded), (el) => el.child(div().text_size(12).text_color(t.blocked).whitespace_normal().child(`It was confirmed, but ${claim.neverLanded.how}.`)))
-    .when(Boolean(note.issue), (el) => el.child(filedLines(s, note)))
+      .when(Boolean(note.issue), (el) => el.child(div().flex_none().child(`issue #${note.issue.number}`))))
+    .child(div().id(`details:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child(isOpen ? "Details ▴" : "Details ▾"))
+    .when(isOpen, (el) => el.child(details(s, note, found)))
+    .child(actionsRow(s, note, { primary: "confirm" }));
+}
+
+const TONE = (t) => ({ fixed: t.ansi2, partly: t.working, "not-fixed": t.blocked, looking: t.dim, unchecked: t.muted });
+const DOT = (t) => ({ holds: t.ansi2, waiting: t.working, partial: t.working, missing: t.working, fails: t.blocked, looking: t.dim, unknown: t.dim });
+const GLYPH = { fixed: "✓ ", "not-fixed": "✕ " };
+
+// The verdict in one line, then the three proofs in a few words each, a dot for how each stands.
+function verdictBlock(t, verdict) {
+  return v_flex().gap(4)
+    .child(div().text_size(13).font_medium().text_color(TONE(t)[verdict.tone]).whitespace_normal().child(`${GLYPH[verdict.tone] ?? ""}${verdict.text}`))
+    .child(v_flex().gap(3).pl(2).children(verdict.rows.map((row) => h_flex().gap(8).items_center().text_size(12)
+      .child(div().flex_none().size(7).rounded(4).bg(DOT(t)[row.state]))
+      .child(div().flex_none().w(52).text_color(t.muted).child(row.name))
+      .child(div().flex_1().min_w(0).truncate().child(row.text)))));
+}
+
+// Behind Details: the agent's own words, Claude's answer, the change line by line, and the issue.
+function details(s, note, found) {
+  const { t } = s;
+  const claim = note.solved ?? {};
+  return v_flex().gap(10).pt(2)
     .child(v_flex().gap(2).pl(8).border_l(2).border_color(t.border).text_size(12)
       .child(div().whitespace_normal().child(claim.how ?? ""))
       .when(Boolean(claim.proof), (el) => el.child(div().whitespace_normal().text_color(t.muted).child(`proof: ${claim.proof}`))))
-    .when(isOpen, (el) => el.child(proofList(s, note)))
-    .when(!isOpen, (el) => el.child(div().id(`show-proofs:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("expand", note, cx)).child("Show the three proofs")))
-    .child(actionsRow(s, note, { primary: "confirm" }));
+    .child(proofList(s, note))
+    .when(Boolean(note.issue), (el) => el.child(filedLines(s, note, { withNeeds: false })));
+}
+
+// Whether Claude is checking this claim: while its check runs, and after it until the read brings
+// its answer, so the card never offers Check again in between.
+function isChecking(s, note) {
+  const key = claimKey(note);
+  if (s.verifying?.has(key)) return true;
+  return Boolean(s.verifyAsked?.has(key)) && !note.verify && !s.verifyFailed?.has(key);
 }
 
 // The three proofs of a claim (docs/plan.md section 6b), each with a dot that says how it stands.
 function proofList(s, note) {
   const { t } = s;
-  const found = s.proofs?.get(note.id) ?? null;
+  const found = s.proofs?.get(claimKey(note)) ?? null;
   return v_flex().gap(8).pt(2)
     .child(proofRow(t, "The change", ...changeState(t, found))
       .when(Boolean(found?.change?.commits?.length), (el) => el.child(commitList(s, note, found.change)))
       .when(!found?.change?.commits?.length && Boolean(found?.change?.elsewhere?.length), (el) => el.child(elsewhereList(s, found.change))))
-    .child(proofRow(t, "Independent check", ...verifyState(t, note, s.verifying?.has(note.id)))
-      .when(Boolean(note.verify?.error) && !s.verifying?.has(note.id), (el) => el.child(h_flex().child(div().id(`verify-again:${note.id}`).text_size(11.5).text_color(t.accent).cursor_pointer().on_click((_e, cx) => s.act("verify-again", note, cx)).child("Check again")))))
+    .child(proofRow(t, "Independent check", ...verifyState(t, note, isChecking(s, note))))
     .child(proofRow(t, "Landed", ...landedState(t, found)));
 }
 

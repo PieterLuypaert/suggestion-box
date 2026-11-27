@@ -24,8 +24,30 @@ All notable changes to the suggestion box. The format follows
   projects of your open spaces and every project with notes, each with its notes and On or Off in
   words, and what a switch does written above them.
 
+### Changed
+
+- A claim to verify leads with its verdict: one coloured line with what its three proofs add up to
+  ("Looks fixed · 3 of 3 proofs hold", "Your Claude says it is not fixed", "Looks fixed, but it never
+  landed"), each proof in a few words under it, and the claim, its commits and its issue under
+  Details. Claude's independent check starts by itself, one claim at a time.
+- The history is compact rows by state: Solved, Filed · still open, Closed on GitHub and Binned, each
+  row a dot and one line on how it stands; a click opens its details and the rest of its buttons.
+- Just filed leads each card with what it still needs and a dot: amber when it needs you, blue while
+  its fix is under way, green when it is ready for a fix, grey once closed (with the PR that fixed
+  it). What needs you comes first, and the group title counts it.
+- A merged PR shows within a minute while the panel is open: a claim's proofs are looked at again
+  every 30 seconds until its fix landed, and the watch of fixes and filed issues runs every minute
+  (every five while the panel is closed) and at once when the panel opens. Claims are looked at one
+  at a time, and looks within 20 seconds share one fetch, so the box never fetches over and over in
+  a repo where agents fetch too.
+
 ### Fixed
 
+- A new claim on a note never shows the proofs of the claim before it.
+- A check the panel started by itself that fails reads "not checked" with Check again on the card,
+  never as an error you did not ask for.
+- The words that close an issue with the fix's PR are no longer offered once the issue closed or the
+  fix landed, and a fix confirmed before its landing was known reads "waiting to land".
 - Text that fits the panel: a claim's branch stays whole, the proofs put their answer under their
   name at full width, and the footer no longer cuts off its keys.
 - Moving between tabs of a project no longer flashes the panel or closes what you opened; every
