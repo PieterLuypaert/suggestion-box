@@ -50,7 +50,9 @@ export function targetFor(top, key, env) {
   if (!repo) return { ...target, kind: "copy", why: "This project has no GitHub repo to file in: Copy issue puts it on your clipboard" };
   // GitHub's own spelling of the repo: a code link only shows as code when it matches.
   const asked = gh(["repo", "view", repo, "--json", "visibility,nameWithOwner"], { env });
-  if (asked.isMissing) return { ...target, kind: "copy", why: "GitHub's gh is not installed here, so the box cannot create the issue: Copy issue puts it on your clipboard" };
+  // The repo is still known: its code link, and the scan that treats a repo of unknown visibility
+  // as public, still apply to what is copied.
+  if (asked.isMissing) return { ...target, kind: "copy", codeRepo: githubRepo(key), why: "GitHub's gh is not installed here, so the box cannot create the issue: Copy issue puts it on your clipboard" };
   const view = json(asked);
   target.visibility = view?.visibility ? String(view.visibility).toLowerCase() : null;
   if (view?.nameWithOwner) target.repo = view.nameWithOwner;

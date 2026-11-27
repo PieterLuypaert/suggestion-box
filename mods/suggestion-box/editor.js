@@ -60,8 +60,9 @@ export function scanTexts({ title, sections }) {
   return scan([title, ...SECTIONS.map((name) => sections?.[name] ?? "")].join("\n"));
 }
 
-// Only a repo GitHub says is private or internal counts as closed; an unknown one is treated as public.
-export const isPublicTarget = (target) => target?.kind === "github" && !["private", "internal"].includes(target.visibility);
+// Only a repo GitHub says is private or internal counts as closed; an unknown one is treated as public,
+// also a GitHub repo whose issue is copied because gh is not there to create it.
+export const isPublicTarget = (target) => (target?.kind === "github" || (target?.kind === "copy" && Boolean(target.repo))) && !["private", "internal"].includes(target.visibility);
 
 // Why Create issue (or Copy issue, for a tracker outside GitHub) is off, or null when it can go.
 // `notGone` is set once the person said the problem is not solved after the check said it was.
