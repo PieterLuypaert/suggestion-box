@@ -4,6 +4,15 @@ import { box, CHECK_MS, EDITORS, PROOFS_MS } from "./view-host.js";
 
 // The view's methods for this part, added to it in main.js.
 export const proving = {
+  // Proofs 1 and 3 as soon as a claim shows, and Claude's check of it once while the panel is open
+  // (the check itself is kept and reused while the code it read stays the same).
+  ensureProofs(cx, note) {
+    if (!this.proofs.has(note.id)) this.loadProofs(cx, note);
+    if (this.verifyAsked.has(note.id)) return;
+    this.verifyAsked.add(note.id);
+    this.verifyClaim(cx, note);
+  },
+
   loadProofs(cx, note) {
     if (!this.boxJs || this.proofs.get(note.id)?.isLoading) return;
     if (this.proofs.has(note.id) && !this.proofs.get(note.id).error) return;

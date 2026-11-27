@@ -32,6 +32,8 @@ export const panelCopy = {
     this.editor = null;
     // Proofs 1 and 3 of each claim opened since the panel showed, and the claims Claude is checking.
     this.proofs = new Map();
+    // The claims whose independent check this panel asked for: once each while it is open.
+    this.verifyAsked = new Set();
     this.verifying = new Set();
     // Notes whose fix is starting in a new tab.
     this.fixing = new Set();
@@ -53,6 +55,7 @@ export const panelCopy = {
         this.closeEditor(cx);
         this.justFiled.clear();
         this.proofs.clear();
+        this.verifyAsked.clear();
         cx.notify();
       }
       this.wasShown = shown;
@@ -301,6 +304,7 @@ export const panelCopy = {
       this.expanded.clear();
       this.selected = null;
       this.proofs.clear();
+      this.verifyAsked.clear();
       if (this.view === "settings") {
         this.projects = null;
         cx.spawn(async (cx) => this.loadProjects(cx));
@@ -317,6 +321,8 @@ export const panelCopy = {
         cx.notify();
       });
     }
+    // A claim leads with its verdict, so its proofs load as soon as it shows; Claude's check once.
+    for (const note of (this.answer()?.notes ?? []).filter((one) => one.state === "to verify")) this.ensureProofs(cx, note);
     const state = {
       t,
       answer: this.answer(),
